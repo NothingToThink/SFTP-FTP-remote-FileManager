@@ -4,9 +4,7 @@ namespace Core.Interfaces.Protocol;
 
 public interface IQuery
 {
-    Task<List<FileItem>> GetFiles(string path);
-    Task<Stream> GetFile(string path);
-    Task<List<string>> GetDirectories(string path);
-    Task<OperationStatus> ChangeDirectory(string path);
-    Task<OperationStatus> ChangeFile(string path);
+    Task<QueryResult<List<FileItem>>> GetFiles(string path);
+    Task<QueryResult<Stream>> GetFile(string path);
+    Task<QueryResult<List<string>>> GetDirectories(string path);
 }

@@ -11,4 +11,6 @@ public interface ICommand
     Task<OperationStatus> CreateDir(string remotePath);
     Task<OperationStatus> DeleteDir(string remotePath);
     Task<OperationStatus> RenameDir(string oldName, string newName);
+    Task<OperationStatus> ChangeDirectory(string path);
+    Task<OperationStatus> ChangeFile(string path);
 }
