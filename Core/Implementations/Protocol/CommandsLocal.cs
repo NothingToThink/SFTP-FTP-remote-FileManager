@@ -358,7 +358,7 @@ public class CommandsLocal : IMethod
                 Status = new OperationStatus
                 {
                     Code = 0, 
-                    Message = "files opened",
+                    Message = "file recieved",
                     IsSuccess = true
                 }
             });
@@ -370,7 +370,7 @@ public class CommandsLocal : IMethod
                 Status = new OperationStatus
                 {
                     Code = 1, 
-                    Message = e.Message + " files not received",
+                    Message = e.Message + " file not received",
                     IsSuccess = false
                 }
             });
@@ -407,7 +407,7 @@ public class CommandsLocal : IMethod
                 Status = new OperationStatus
                 {
                     Code = 1, 
-                    Message = e.Message + " files not received",
+                    Message = e.Message + " directories not received",
                     IsSuccess = false
                 }
             });
