@@ -3,7 +3,7 @@ using Core.Models;
 
 namespace Core.Interfaces.Factory;
 
-public interface IRouterFactory
+public interface IConnectionFactory
 {
     IMethod CreateMethod(HostProfile profile);
 }
