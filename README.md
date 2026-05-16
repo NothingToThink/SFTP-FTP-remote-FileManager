@@ -1,5 +1,7 @@
 Файловый менеджер с интерфейсом под SFTP/FTP.
 
+![Скриншот](screenshot_15.png)
+
 Сборка под Windows:
 запустить `build_exe.bat`
 
