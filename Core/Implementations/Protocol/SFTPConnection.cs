@@ -8,17 +8,21 @@ namespace Core.Implementations.Protocol;
 
 public class SftpConnection : IConnection
 {
-    private SftpClient? _client;
+    private SftpClient _client;
     private string _currentDirectory = "/";
 
-    public Task<OperationStatus> Connect(HostProfile profile)
+    public SftpConnection(HostProfile profile)
     {
-        try
-        {
-            _client = new SftpClient(profile.Host, profile.Port,
+        _client = new SftpClient(profile.Host, profile.Port,
                 profile.AuthData.Username,
                 profile.AuthData.Password ?? throw new InvalidOperationException("Only password auth nowadays")
             );
+    }
+
+    public Task<OperationStatus> Connect()
+    {
+        try
+        {
             _client.Connect();
             return Task.FromResult(new OperationStatus
             {
@@ -40,11 +44,9 @@ public class SftpConnection : IConnection
     {
         try
         {
-            if (_client is { IsConnected: true })
+            if (_client.IsConnected)
             {
                 _client.Disconnect();
-                _client.Dispose();
-                _client = null;
             }
 
             return Task.FromResult(new OperationStatus
@@ -63,13 +65,13 @@ public class SftpConnection : IConnection
         }
     }
 
-    public bool IsConnected => _client?.IsConnected ?? false;
+    public bool IsConnected => _client.IsConnected;
 
     public Task<QueryResult<List<FileItem>>> GetFiles(string path)
     {
         try
         {
-            var files = _client!.ListDirectory(path)
+            var files = _client.ListDirectory(path)
                 .Where(f => f.Name != "." && f.Name != "..") // в Filezilla точка передается, хз надо ли нам 
                 .Select(file => new FileItem
                 {
@@ -100,7 +102,7 @@ public class SftpConnection : IConnection
         try
         {
             var memoryStream = new MemoryStream();
-            _client!.DownloadFile(path, memoryStream);
+            _client.DownloadFile(path, memoryStream);
             memoryStream.Position = 0;
 
             return Task.FromResult(new QueryResult<Stream>
@@ -123,7 +125,7 @@ public class SftpConnection : IConnection
     {
         try
         {
-            var dirs = _client!.ListDirectory(path)
+            var dirs = _client.ListDirectory(path)
                 .Where(f => f.IsDirectory && f.Name != "." && f.Name != "..")
                 .Select(f => f.FullName)
                 .ToList();
@@ -149,7 +151,7 @@ public class SftpConnection : IConnection
         try
         {
             if (content.CanSeek) content.Position = 0;
-            _client!.UploadFile(content, remotePath, true);
+            _client.UploadFile(content, remotePath, true);
 
             return Task.FromResult(new OperationStatus
             {
@@ -171,7 +173,7 @@ public class SftpConnection : IConnection
     {
         try
         {
-            using var stream = _client!.Create(remotePath);
+            using var stream = _client.Create(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -192,7 +194,7 @@ public class SftpConnection : IConnection
     {
         try
         {
-            _client!.DeleteFile(remotePath);
+            _client.DeleteFile(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -213,7 +215,7 @@ public class SftpConnection : IConnection
     {
         try
         {
-            _client!.RenameFile(oldName, newName);
+            _client.RenameFile(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -234,7 +236,7 @@ public class SftpConnection : IConnection
     {
         try
         {
-            _client!.CreateDirectory(remotePath);
+            _client.CreateDirectory(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -274,7 +276,7 @@ public class SftpConnection : IConnection
 
     private void DeleteDirectoryRecursive(string path)
     {
-        foreach (var entry in _client!.ListDirectory(path))
+        foreach (var entry in _client.ListDirectory(path))
         {
             if (entry.Name is "." or "..") continue;
 
@@ -290,7 +292,7 @@ public class SftpConnection : IConnection
     {
         try
         {
-            _client!.RenameFile(oldName, newName);
+            _client.RenameFile(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -311,7 +313,7 @@ public class SftpConnection : IConnection
     {
         try
         {
-            _client!.ChangeDirectory(path);
+            _client.ChangeDirectory(path);
             _currentDirectory = _client.WorkingDirectory;
             return Task.FromResult(new OperationStatus
             {
@@ -333,7 +335,7 @@ public class SftpConnection : IConnection
     {
         try
         {
-            if (!_client!.Exists(path))
+            if (!_client.Exists(path))
             {
                 return Task.FromResult(new OperationStatus
                 {

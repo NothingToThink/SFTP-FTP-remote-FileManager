@@ -12,15 +12,16 @@ public class ConnectionFactory : IConnectionFactory
         //нужно добавить enum в Protocol вместо string
         //и вообще раз у нас IConnection - connection, то стоит в нём получать на вход HostProfile,
         //и не делать IConnection.Connect(HostProfile)
-        if (profile.Protocol == "local")
+        switch (profile.Protocol.ToLower())
         {
-            return new LocalConnection();
-            // return new LocalConnection(profile);
+            case "local":
+                return new LocalConnection();
+            case "ftp":
+                return new FtpConnection(profile);
+            case "sftp":
+                return new SftpConnection(profile);
+            default:
+                throw new ArgumentOutOfRangeException($"Unknown protocol: {profile.Protocol}");
         }
-        if (profile.Protocol == "ftp")
-        {
-            return new FtpConnection();
-        }
-        return new SftpConnection();
     }
 }

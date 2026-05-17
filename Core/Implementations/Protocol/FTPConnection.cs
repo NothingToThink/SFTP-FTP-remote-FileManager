@@ -8,18 +8,22 @@ namespace Core.Implementations.Protocol;
 
 public class FtpConnection : IConnection
 {
-    private FtpClient? _client;
+    private FtpClient _client;
     private string _currentDirectory = "/";
 
-    public Task<OperationStatus> Connect(HostProfile profile)
+    public FtpConnection(HostProfile profile)
     {
-        try
-        {
-            _client = new FtpClient(profile.Host,
+        _client = new FtpClient(profile.Host,
             new NetworkCredential(
                 profile.AuthData.Username,
                 profile.AuthData.Password
             ));
+    }
+
+    public Task<OperationStatus> Connect()
+    {
+        try
+        {
             _client.Connect();
             return Task.FromResult(new OperationStatus
             {
@@ -41,11 +45,9 @@ public class FtpConnection : IConnection
     {
         try
         {
-            if (_client is { IsConnected: true })
+            if (_client.IsConnected)
             {
                 _client.Disconnect();
-                _client.Dispose();
-                _client = null;
             }
 
             return Task.FromResult(new OperationStatus
@@ -64,13 +66,13 @@ public class FtpConnection : IConnection
         }
     }
 
-    public bool IsConnected => _client?.IsConnected ?? false;
+    public bool IsConnected => _client.IsConnected;
 
     public Task<QueryResult<List<FileItem>>> GetFiles(string path)
     {
         try
         {
-            var files = _client!.GetListing(path)
+            var files = _client.GetListing(path)
                 .Where(f => f.Name != "." && f.Name != "..") // в Filezilla точка передается, хз надо ли нам 
                 .Select(file => new FileItem
                 {
@@ -100,7 +102,7 @@ public class FtpConnection : IConnection
     {
         try
         {
-            using var ftpStream = _client!.OpenRead(path);
+            using var ftpStream = _client.OpenRead(path);
             var memoryStream = new MemoryStream();
             ftpStream.CopyTo(memoryStream);
             memoryStream.Position = 0;
@@ -125,7 +127,7 @@ public class FtpConnection : IConnection
     {
         try
         {
-            var dirs = _client!.GetListing(path)
+            var dirs = _client.GetListing(path)
                 .Where(f => f.Type == FtpObjectType.Directory && f.Name != "." && f.Name != "..")
                 .Select(f => f.FullName)
                 .ToList();
@@ -151,7 +153,7 @@ public class FtpConnection : IConnection
         try
         {
             if (content.CanSeek) content.Position = 0;
-            _client!.UploadStream(content, remotePath);
+            _client.UploadStream(content, remotePath);
 
             return Task.FromResult(new OperationStatus
             {
@@ -173,7 +175,7 @@ public class FtpConnection : IConnection
     {
         try
         {
-            using var stream = _client!.OpenWrite(remotePath);
+            using var stream = _client.OpenWrite(remotePath);
             stream.Close();
             return Task.FromResult(new OperationStatus
             {
@@ -195,7 +197,7 @@ public class FtpConnection : IConnection
     {
         try
         {
-            _client!.DeleteFile(remotePath);
+            _client.DeleteFile(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -216,7 +218,7 @@ public class FtpConnection : IConnection
     {
         try
         {
-            _client!.Rename(oldName, newName);
+            _client.Rename(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -238,7 +240,7 @@ public class FtpConnection : IConnection
 
         try
         {
-            _client!.CreateDirectory(remotePath);
+            _client.CreateDirectory(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -278,7 +280,7 @@ public class FtpConnection : IConnection
 
     private void DeleteDirectoryRecursive(string path)
     {
-        foreach (var entry in _client!.GetListing(path))
+        foreach (var entry in _client.GetListing(path))
         {
             if (entry.Name is "." or "..") continue;
 
@@ -294,7 +296,7 @@ public class FtpConnection : IConnection
     {
         try
         {
-            _client!.Rename(oldName, newName);
+            _client.Rename(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -315,7 +317,7 @@ public class FtpConnection : IConnection
     {
         try
         {
-            _client!.SetWorkingDirectory(path);
+            _client.SetWorkingDirectory(path);
             _currentDirectory = _client.GetWorkingDirectory();
             return Task.FromResult(new OperationStatus
             {
@@ -338,7 +340,7 @@ public class FtpConnection : IConnection
 
         try
         {
-            if (!_client!.FileExists(path))
+            if (!_client.FileExists(path))
             {
                 return Task.FromResult(new OperationStatus
                 {

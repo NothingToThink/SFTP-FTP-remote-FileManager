@@ -1,4 +1,3 @@
-using System.Dynamic;
 using Core.Interfaces.Protocol;
 using Core.Models;
 
@@ -9,6 +8,7 @@ public class LocalConnection : IConnection
     private readonly string _rootPath;
     private string _currentPath = "";
     private bool _isConnected = false;
+
     public LocalConnection(string rootFolder = "tmp")
     {
         _rootPath = Path.GetFullPath(rootFolder);
@@ -37,7 +37,7 @@ public class LocalConnection : IConnection
         return fullPath;
     }
 
-    public Task<OperationStatus> Connect(HostProfile profile)
+    public Task<OperationStatus> Connect()
     {
         _isConnected = true;
         return Task.FromResult(new OperationStatus
