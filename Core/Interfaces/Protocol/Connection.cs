@@ -31,4 +31,5 @@ public abstract class Connection : IQuery, ICommand, IDisposable
     }
 
     protected abstract void DisposeCore();
+    public abstract Task<QueryResult<string>> GetWorkingDirectory();
 }

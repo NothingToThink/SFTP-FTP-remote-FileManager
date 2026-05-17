@@ -1,29 +1,27 @@
-using System.Net;
 using Core.Interfaces.Protocol;
 using Core.Models;
 using Core.Models.Credentials;
-using FluentFTP;
+using Renci.SshNet;
+using Renci.SshNet.Sftp;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsFtp : Connection
+public class SftpConnection : Connection
 {
-    private readonly FtpClient _client;
+    private readonly SftpClient _client;
+    public override bool IsConnected =>  _client.IsConnected;
 
-    public CommandsFtp(HostProfile profile)
+    public SftpConnection(HostProfile profile)
     {
         _client = profile.Auth switch
         {
-            PasswordAuth(var user, var pwd) 
-                => new FtpClient(profile.Host, new NetworkCredential(user, pwd), profile.EffectivePort),
-            
-            AnonymousAuth 
-                => new FtpClient(profile.Host, new NetworkCredential("anonymous", "anonymous@example.com"), profile.EffectivePort),
-            
-            KeyAuth 
-                => throw new InvalidOperationException("Key authentication is not supported by FTP. Use SFTP instead."),
-            
-            _ => throw new ArgumentOutOfRangeException(nameof(profile.Auth))
+            PasswordAuth(var user, var pwd)
+                => new SftpClient(profile.Host, profile.EffectivePort, user, pwd),
+            KeyAuth(var user, var keyPath, var passphrase)
+                => new SftpClient(profile.Host, profile.EffectivePort, user, BuildKeySource(keyPath, passphrase)),
+            AnonymousAuth
+                => throw new InvalidOperationException("Anonymous authentication doesn't supported by sftp authentication"),
+            _ => throw new  ArgumentOutOfRangeException(nameof(profile.Auth))
         };
     }
     
@@ -48,6 +46,12 @@ public class CommandsFtp : Connection
         }
     }
 
+    private static IPrivateKeySource[] BuildKeySource(string keyPath, string? passphrase)
+    {
+        var key = passphrase is null ? new PrivateKeyFile(keyPath) : new PrivateKeyFile(keyPath, passphrase);
+        return [key];
+    }
+    
     public override Task<OperationStatus> Disconnect()
     {
         try
@@ -55,7 +59,6 @@ public class CommandsFtp : Connection
             if (_client is { IsConnected: true })
             {
                 _client.Disconnect();
-                _client.Dispose();
             }
 
             return Task.FromResult(new OperationStatus
@@ -73,22 +76,20 @@ public class CommandsFtp : Connection
             });
         }
     }
-
-    public override bool IsConnected => _client.IsConnected;
-
+    
     public override Task<QueryResult<List<FileItem>>> GetFiles(string path)
     {
         try
         {
-            var files = _client.GetListing(path)
+            var files = _client.ListDirectory(path)
                 .Where(f => f.Name != "." && f.Name != "..") // в Filezilla точка передается, хз надо ли нам 
                 .Select(file => new FileItem
                 {
                     Name = file.Name,
-                    Size = file.Size,
-                    LastModified = file.Modified,
-                    IsDirectory = file.Type == FtpObjectType.Directory,
-                    Permissions = GetPermissionsString(file.Chmod),
+                    Size = file.Length,
+                    LastModified = file.LastWriteTime,
+                    IsDirectory = file.IsDirectory,
+                    Permissions = GetPermissionsString(file.Attributes),
                 }).ToList();
             return Task.FromResult(new QueryResult<List<FileItem>>
             {
@@ -110,9 +111,8 @@ public class CommandsFtp : Connection
     {
         try
         {
-            using var ftpStream = _client.OpenRead(path);
             var memoryStream = new MemoryStream();
-            ftpStream.CopyTo(memoryStream);
+            _client.DownloadFile(path, memoryStream);
             memoryStream.Position = 0;
 
             return Task.FromResult(new QueryResult<Stream>
@@ -130,13 +130,13 @@ public class CommandsFtp : Connection
             });
         }
     }
-    
+
     public override Task<QueryResult<List<string>>> GetDirectories(string path)
     {
         try
         {
-            var dirs = _client.GetListing(path)
-                .Where(f => f.Type == FtpObjectType.Directory && f.Name != "." && f.Name != "..")
+            var dirs = _client.ListDirectory(path)
+                .Where(f => f.IsDirectory && f.Name != "." && f.Name != "..")
                 .Select(f => f.FullName)
                 .ToList();
 
@@ -156,12 +156,33 @@ public class CommandsFtp : Connection
         }
     }
 
+    public override Task<QueryResult<string>> GetWorkingDirectory()
+    {
+        try
+        {
+            return Task.FromResult(new QueryResult<string>
+            {
+                Data = _client.WorkingDirectory,
+                Status = new OperationStatus { Code = 0, Message = "Working directory received" }
+            });
+        }
+        catch (Exception e)
+        {
+            return Task.FromResult(new QueryResult<string>
+            {
+                Data = null,
+                Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive working directory" }
+            });
+        }
+    }
+    
+    
     public override Task<OperationStatus> SaveFile(string remotePath, Stream content)
     {
         try
         {
             if (content.CanSeek) content.Position = 0;
-            _client.UploadStream(content, remotePath);
+            _client.UploadFile(content, remotePath, true);
 
             return Task.FromResult(new OperationStatus
             {
@@ -183,8 +204,7 @@ public class CommandsFtp : Connection
     {
         try
         {
-            using var stream = _client.OpenWrite(remotePath);
-            stream.Close();
+            using var stream = _client.Create(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -226,7 +246,7 @@ public class CommandsFtp : Connection
     {
         try
         {
-            _client.Rename(oldName, newName);
+            _client.RenameFile(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -245,7 +265,6 @@ public class CommandsFtp : Connection
 
     public override Task<OperationStatus> CreateDir(string remotePath)
     {
-        
         try
         {
             _client.CreateDirectory(remotePath);
@@ -288,11 +307,11 @@ public class CommandsFtp : Connection
 
     private void DeleteDirectoryRecursive(string path)
     {
-        foreach (var entry in _client.GetListing(path))
+        foreach (var entry in _client.ListDirectory(path))
         {
             if (entry.Name is "." or "..") continue;
 
-            if (entry.Type == FtpObjectType.Directory)
+            if (entry.IsDirectory)
                 DeleteDirectoryRecursive(entry.FullName);
             else
                 _client.DeleteFile(entry.FullName);
@@ -304,7 +323,7 @@ public class CommandsFtp : Connection
     {
         try
         {
-            _client.Rename(oldName, newName);
+            _client.RenameFile(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -325,11 +344,11 @@ public class CommandsFtp : Connection
     {
         try
         {
-            _client.SetWorkingDirectory(path);
+            _client.ChangeDirectory(path);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
-                Message = $"Changed directory to {_client.GetWorkingDirectory()}"
+                Message = $"Changed directory to {_client.WorkingDirectory}"
             });
         }
         catch (Exception e)
@@ -341,13 +360,12 @@ public class CommandsFtp : Connection
             });
         }
     }
-    
+
     public override Task<OperationStatus> ChangeFile(string path)
     {
-        
         try
         {
-            if (!_client.FileExists(path))
+            if (!_client.Exists(path))
             {
                 return Task.FromResult(new OperationStatus
                 {
@@ -356,7 +374,8 @@ public class CommandsFtp : Connection
                 });
             }
 
-            if (_client.GetObjectInfo(path).Type == FtpObjectType.Directory)
+            var attrs = _client.GetAttributes(path);
+            if (attrs.IsDirectory)
             {
                 return Task.FromResult(new OperationStatus
                 {
@@ -381,32 +400,20 @@ public class CommandsFtp : Connection
         }
     }
 
-    private static string GetPermissionsString(int chmod)
+    private static string GetPermissionsString(SftpFileAttributes attrs)
     {
-        bool ownerRead = (chmod & 0x100) != 0;
-        bool ownerWrite = (chmod & 0x80) != 0;
-        bool ownerExecute = (chmod & 0x40) != 0;
-
-        bool groupRead = (chmod & 0x20) != 0;
-        bool groupWrite = (chmod & 0x10) != 0;
-        bool groupExecute = (chmod & 0x08) != 0;
-
-        bool othersRead = (chmod & 0x04) != 0;
-        bool othersWrite = (chmod & 0x02) != 0;
-        bool othersExecute = (chmod & 0x01) != 0;
-
         return ""
-               + (ownerRead ? "r" : "-")
-               + (ownerWrite ? "w" : "-")
-               + (ownerExecute ? "x" : "-")
-               + (groupRead ? "r" : "-")
-               + (groupWrite ? "w" : "-")
-               + (groupExecute ? "x" : "-")
-               + (othersRead ? "r" : "-")
-               + (othersWrite ? "w" : "-")
-               + (othersExecute ? "x" : "-");
+               + (attrs.OwnerCanRead ? "r" : "-")
+               + (attrs.OwnerCanWrite ? "w" : "-")
+               + (attrs.OwnerCanExecute ? "x" : "-")
+               + (attrs.GroupCanRead ? "r" : "-")
+               + (attrs.GroupCanWrite ? "w" : "-")
+               + (attrs.GroupCanExecute ? "x" : "-")
+               + (attrs.OthersCanRead ? "r" : "-")
+               + (attrs.OthersCanWrite ? "w" : "-")
+               + (attrs.OthersCanExecute ? "x" : "-");
     }
-
+    
     protected override void DisposeCore()
     {
         _client.Dispose();
