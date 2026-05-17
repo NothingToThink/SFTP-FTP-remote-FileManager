@@ -6,10 +6,10 @@ using Renci.SshNet.Sftp;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsSftp : IConnection
+public class CommandsSftp : Connection
 {
     private readonly SftpClient _client;
-    public bool IsConnected =>  _client.IsConnected;
+    public override bool IsConnected =>  _client.IsConnected;
 
     public CommandsSftp(HostProfile profile)
     {
@@ -25,7 +25,7 @@ public class CommandsSftp : IConnection
         };
     }
     
-    public Task<OperationStatus> Connect(HostProfile profile)
+    public override Task<OperationStatus> Connect()
     {
         try
         {
@@ -52,14 +52,13 @@ public class CommandsSftp : IConnection
         return [key];
     }
     
-    public Task<OperationStatus> Disconnect()
+    public override Task<OperationStatus> Disconnect()
     {
         try
         {
             if (_client is { IsConnected: true })
             {
                 _client.Disconnect();
-                _client.Dispose();
             }
 
             return Task.FromResult(new OperationStatus
@@ -78,7 +77,7 @@ public class CommandsSftp : IConnection
         }
     }
     
-    public Task<QueryResult<List<FileItem>>> GetFiles(string path)
+    public override Task<QueryResult<List<FileItem>>> GetFiles(string path)
     {
         try
         {
@@ -108,7 +107,7 @@ public class CommandsSftp : IConnection
         }
     }
 
-    public Task<QueryResult<Stream>> GetFile(string path)
+    public override Task<QueryResult<Stream>> GetFile(string path)
     {
         try
         {
@@ -132,7 +131,7 @@ public class CommandsSftp : IConnection
         }
     }
 
-    public Task<QueryResult<List<string>>> GetDirectories(string path)
+    public override Task<QueryResult<List<string>>> GetDirectories(string path)
     {
         try
         {
@@ -157,7 +156,7 @@ public class CommandsSftp : IConnection
         }
     }
 
-    public Task<OperationStatus> SaveFile(string remotePath, Stream content)
+    public override Task<OperationStatus> SaveFile(string remotePath, Stream content)
     {
         try
         {
@@ -180,7 +179,7 @@ public class CommandsSftp : IConnection
         }
     }
 
-    public Task<OperationStatus> CreateFile(string remotePath)
+    public override Task<OperationStatus> CreateFile(string remotePath)
     {
         try
         {
@@ -201,7 +200,7 @@ public class CommandsSftp : IConnection
         }
     }
 
-    public Task<OperationStatus> DeleteFile(string remotePath)
+    public override Task<OperationStatus> DeleteFile(string remotePath)
     {
         try
         {
@@ -222,7 +221,7 @@ public class CommandsSftp : IConnection
         }
     }
 
-    public Task<OperationStatus> RenameFile(string oldName, string newName)
+    public override Task<OperationStatus> RenameFile(string oldName, string newName)
     {
         try
         {
@@ -243,7 +242,7 @@ public class CommandsSftp : IConnection
         }
     }
 
-    public Task<OperationStatus> CreateDir(string remotePath)
+    public override Task<OperationStatus> CreateDir(string remotePath)
     {
         try
         {
@@ -264,7 +263,7 @@ public class CommandsSftp : IConnection
         }
     }
 
-    public Task<OperationStatus> DeleteDir(string remotePath)
+    public override Task<OperationStatus> DeleteDir(string remotePath)
     {
         try
         {
@@ -299,7 +298,7 @@ public class CommandsSftp : IConnection
         _client.DeleteDirectory(path);
     }
 
-    public Task<OperationStatus> RenameDir(string oldName, string newName)
+    public override Task<OperationStatus> RenameDir(string oldName, string newName)
     {
         try
         {
@@ -320,7 +319,7 @@ public class CommandsSftp : IConnection
         }
     }
 
-    public Task<OperationStatus> ChangeDirectory(string path)
+    public override Task<OperationStatus> ChangeDirectory(string path)
     {
         try
         {
@@ -341,7 +340,7 @@ public class CommandsSftp : IConnection
         }
     }
 
-    public Task<OperationStatus> ChangeFile(string path)
+    public override Task<OperationStatus> ChangeFile(string path)
     {
         try
         {
@@ -393,10 +392,8 @@ public class CommandsSftp : IConnection
                + (attrs.OthersCanWrite ? "w" : "-")
                + (attrs.OthersCanExecute ? "x" : "-");
     }
-
     
-    
-    public void Dispose()
+    protected override void DisposeCore()
     {
         _client.Dispose();
     }

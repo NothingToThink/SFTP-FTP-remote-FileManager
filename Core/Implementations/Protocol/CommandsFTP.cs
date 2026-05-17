@@ -6,7 +6,7 @@ using FluentFTP;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsFtp : IConnection
+public class CommandsFtp : Connection
 {
     private readonly FtpClient _client;
 
@@ -27,7 +27,7 @@ public class CommandsFtp : IConnection
         };
     }
     
-    public Task<OperationStatus> Connect(HostProfile profile)
+    public override Task<OperationStatus> Connect()
     {
         try
         {
@@ -48,7 +48,7 @@ public class CommandsFtp : IConnection
         }
     }
 
-    public Task<OperationStatus> Disconnect()
+    public override Task<OperationStatus> Disconnect()
     {
         try
         {
@@ -74,9 +74,9 @@ public class CommandsFtp : IConnection
         }
     }
 
-    public bool IsConnected => _client.IsConnected;
+    public override bool IsConnected => _client.IsConnected;
 
-    public Task<QueryResult<List<FileItem>>> GetFiles(string path)
+    public override Task<QueryResult<List<FileItem>>> GetFiles(string path)
     {
         try
         {
@@ -106,7 +106,7 @@ public class CommandsFtp : IConnection
         }
     }
 
-    public Task<QueryResult<Stream>> GetFile(string path)
+    public override Task<QueryResult<Stream>> GetFile(string path)
     {
         try
         {
@@ -131,7 +131,7 @@ public class CommandsFtp : IConnection
         }
     }
     
-    public Task<QueryResult<List<string>>> GetDirectories(string path)
+    public override Task<QueryResult<List<string>>> GetDirectories(string path)
     {
         try
         {
@@ -156,7 +156,7 @@ public class CommandsFtp : IConnection
         }
     }
 
-    public Task<OperationStatus> SaveFile(string remotePath, Stream content)
+    public override Task<OperationStatus> SaveFile(string remotePath, Stream content)
     {
         try
         {
@@ -179,7 +179,7 @@ public class CommandsFtp : IConnection
         }
     }
 
-    public Task<OperationStatus> CreateFile(string remotePath)
+    public override Task<OperationStatus> CreateFile(string remotePath)
     {
         try
         {
@@ -201,7 +201,7 @@ public class CommandsFtp : IConnection
         }
     }
 
-    public Task<OperationStatus> DeleteFile(string remotePath)
+    public override Task<OperationStatus> DeleteFile(string remotePath)
     {
         try
         {
@@ -222,7 +222,7 @@ public class CommandsFtp : IConnection
         }
     }
 
-    public Task<OperationStatus> RenameFile(string oldName, string newName)
+    public override Task<OperationStatus> RenameFile(string oldName, string newName)
     {
         try
         {
@@ -243,7 +243,7 @@ public class CommandsFtp : IConnection
         }
     }
 
-    public Task<OperationStatus> CreateDir(string remotePath)
+    public override Task<OperationStatus> CreateDir(string remotePath)
     {
         
         try
@@ -265,7 +265,7 @@ public class CommandsFtp : IConnection
         }
     }
 
-    public Task<OperationStatus> DeleteDir(string remotePath)
+    public override Task<OperationStatus> DeleteDir(string remotePath)
     {
         try
         {
@@ -300,7 +300,7 @@ public class CommandsFtp : IConnection
         _client.DeleteDirectory(path);
     }
 
-    public Task<OperationStatus> RenameDir(string oldName, string newName)
+    public override Task<OperationStatus> RenameDir(string oldName, string newName)
     {
         try
         {
@@ -321,7 +321,7 @@ public class CommandsFtp : IConnection
         }
     }
 
-    public Task<OperationStatus> ChangeDirectory(string path)
+    public override Task<OperationStatus> ChangeDirectory(string path)
     {
         try
         {
@@ -342,7 +342,7 @@ public class CommandsFtp : IConnection
         }
     }
     
-    public Task<OperationStatus> ChangeFile(string path)
+    public override Task<OperationStatus> ChangeFile(string path)
     {
         
         try
@@ -407,7 +407,7 @@ public class CommandsFtp : IConnection
                + (othersExecute ? "x" : "-");
     }
 
-    public void Dispose()
+    protected override void DisposeCore()
     {
         _client.Dispose();
     }
