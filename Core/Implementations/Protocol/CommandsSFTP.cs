@@ -6,26 +6,29 @@ using Renci.SshNet.Sftp;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsSftp : IMethod
+public class CommandsSftp : IConnection
 {
-    private SftpClient? _client;
-    public bool IsConnected =>  _client?.IsConnected ?? false;
-    
+    private readonly SftpClient _client;
+    public bool IsConnected =>  _client.IsConnected;
+
+    public CommandsSftp(HostProfile profile)
+    {
+        _client = profile.Auth switch
+        {
+            PasswordAuth(var user, var pwd)
+                => new SftpClient(profile.Host, profile.EffectivePort, user, pwd),
+            KeyAuth(var user, var keyPath, var passphrase)
+                => new SftpClient(profile.Host, profile.EffectivePort, user, BuildKeySource(keyPath, passphrase)),
+            AnonymousAuth
+                => throw new InvalidOperationException("Anonymous authentication doesn't supported by sftp authentication"),
+            _ => throw new  ArgumentOutOfRangeException(nameof(profile.Auth))
+        };
+    }
     
     public Task<OperationStatus> Connect(HostProfile profile)
     {
         try
         {
-            _client = profile.Auth switch
-            {
-                PasswordAuth(var user, var pwd)
-                    => new SftpClient(profile.Host, profile.EffectivePort, user, pwd),
-                KeyAuth(var user, var keyPath, var passphrase)
-                    => new SftpClient(profile.Host, profile.EffectivePort, user, BuildKeySource(keyPath, passphrase)),
-                AnonymousAuth
-                    => throw new InvalidOperationException("Anonymous authentication doesn't supported by sftp authentication"),
-                _ => throw new  ArgumentOutOfRangeException(nameof(profile.Auth))
-            };
             _client.Connect();
             return Task.FromResult(new OperationStatus
             {
@@ -57,7 +60,6 @@ public class CommandsSftp : IMethod
             {
                 _client.Disconnect();
                 _client.Dispose();
-                _client = null;
             }
 
             return Task.FromResult(new OperationStatus
@@ -80,7 +82,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            var files = _client!.ListDirectory(path)
+            var files = _client.ListDirectory(path)
                 .Where(f => f.Name != "." && f.Name != "..") // в Filezilla точка передается, хз надо ли нам 
                 .Select(file => new FileItem
                 {
@@ -111,7 +113,7 @@ public class CommandsSftp : IMethod
         try
         {
             var memoryStream = new MemoryStream();
-            _client!.DownloadFile(path, memoryStream);
+            _client.DownloadFile(path, memoryStream);
             memoryStream.Position = 0;
 
             return Task.FromResult(new QueryResult<Stream>
@@ -134,7 +136,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            var dirs = _client!.ListDirectory(path)
+            var dirs = _client.ListDirectory(path)
                 .Where(f => f.IsDirectory && f.Name != "." && f.Name != "..")
                 .Select(f => f.FullName)
                 .ToList();
@@ -160,7 +162,7 @@ public class CommandsSftp : IMethod
         try
         {
             if (content.CanSeek) content.Position = 0;
-            _client!.UploadFile(content, remotePath, true);
+            _client.UploadFile(content, remotePath, true);
 
             return Task.FromResult(new OperationStatus
             {
@@ -182,7 +184,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            using var stream = _client!.Create(remotePath);
+            using var stream = _client.Create(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -203,7 +205,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            _client!.DeleteFile(remotePath);
+            _client.DeleteFile(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -224,7 +226,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            _client!.RenameFile(oldName, newName);
+            _client.RenameFile(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -245,7 +247,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            _client!.CreateDirectory(remotePath);
+            _client.CreateDirectory(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -285,7 +287,7 @@ public class CommandsSftp : IMethod
 
     private void DeleteDirectoryRecursive(string path)
     {
-        foreach (var entry in _client!.ListDirectory(path))
+        foreach (var entry in _client.ListDirectory(path))
         {
             if (entry.Name is "." or "..") continue;
 
@@ -301,7 +303,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            _client!.RenameFile(oldName, newName);
+            _client.RenameFile(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -343,7 +345,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            if (!_client!.Exists(path))
+            if (!_client.Exists(path))
             {
                 return Task.FromResult(new OperationStatus
                 {
@@ -396,6 +398,6 @@ public class CommandsSftp : IMethod
     
     public void Dispose()
     {
-        _client?.Dispose();
+        _client.Dispose();
     }
 }
