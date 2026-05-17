@@ -5,7 +5,7 @@ using Core.Models.Credentials;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsLocal : IConnection
+public class CommandsLocal : Connection
 {
     private readonly string _rootPath;
     private string _currentPath = "";
@@ -38,7 +38,7 @@ public class CommandsLocal : IConnection
         return fullPath;
     }
 
-    public Task<OperationStatus> Connect(HostProfile profile)
+    public override Task<OperationStatus> Connect()
     {
         _isConnected = true;
         return Task.FromResult(new OperationStatus
@@ -49,7 +49,7 @@ public class CommandsLocal : IConnection
         });
     }
 
-    public Task<OperationStatus> Disconnect()
+    public override Task<OperationStatus> Disconnect()
     {
         _isConnected = false;
         return Task.FromResult(new OperationStatus
@@ -60,21 +60,21 @@ public class CommandsLocal : IConnection
         });
     }
 
-    public bool IsConnected  => _isConnected;
+    public override bool IsConnected  => _isConnected;
 
-    public async Task<OperationStatus> SaveFile (string remotePath, Stream content)
+    public override async Task<OperationStatus> SaveFile (string remotePath, Stream content)
     {
         try
         {
             var localPath = GetLocalPath(remotePath);
             Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-            using (var fileStream = new FileStream(
-                localPath, 
-                FileMode.Create, 
-                FileAccess.Write, 
-                FileShare.None, 
-                4096, 
-                useAsync: true))
+            await using (var fileStream = new FileStream(
+                             localPath, 
+                             FileMode.Create, 
+                             FileAccess.Write, 
+                             FileShare.None, 
+                             4096, 
+                             useAsync: true))
             {
                 await content.CopyToAsync(fileStream);
             }
@@ -96,7 +96,7 @@ public class CommandsLocal : IConnection
         }
     }
 
-    public Task<OperationStatus> CreateFile (string remotePath)
+    public override Task<OperationStatus> CreateFile (string remotePath)
     {
         try
         {
@@ -120,7 +120,7 @@ public class CommandsLocal : IConnection
         }
     }
 
-    public Task<OperationStatus> DeleteFile (string remotePath)
+    public override Task<OperationStatus> DeleteFile (string remotePath)
     {
         try
         {
@@ -148,7 +148,7 @@ public class CommandsLocal : IConnection
         }
     }
 
-    public Task<OperationStatus> RenameFile (string oldName, string newName)
+    public override Task<OperationStatus> RenameFile (string oldName, string newName)
     {
         try
         {
@@ -173,7 +173,7 @@ public class CommandsLocal : IConnection
         }
     }
 
-    public Task<OperationStatus> CreateDir (string remotePath)
+    public override Task<OperationStatus> CreateDir (string remotePath)
     {
         try
         {
@@ -197,7 +197,7 @@ public class CommandsLocal : IConnection
         }
     }
 
-    public Task<OperationStatus> DeleteDir (string remotePath)
+    public override Task<OperationStatus> DeleteDir (string remotePath)
     {
         try
         {
@@ -225,7 +225,7 @@ public class CommandsLocal : IConnection
         }
     }
 
-    public Task<OperationStatus> RenameDir (string oldName, string newName)
+    public override Task<OperationStatus> RenameDir (string oldName, string newName)
     {
         try
         {
@@ -250,7 +250,7 @@ public class CommandsLocal : IConnection
         }
     }
 
-    public Task<OperationStatus> ChangeDirectory (string path)
+    public override Task<OperationStatus> ChangeDirectory (string path)
     {
         try
         {
@@ -279,7 +279,7 @@ public class CommandsLocal : IConnection
         }
     }
 
-    public Task<OperationStatus> ChangeFile(string path)
+    public override Task<OperationStatus> ChangeFile(string path)
     {
         return Task.FromResult(new OperationStatus
         {
@@ -288,8 +288,9 @@ public class CommandsLocal : IConnection
             IsSuccess = true
         });
     }
+    
 
-    public Task<QueryResult<List<FileItem>>> GetFiles(string path)
+    public override Task<QueryResult<List<FileItem>>> GetFiles(string path)
     {
         try {
             var localPath = GetLocalPath(path);
@@ -346,7 +347,7 @@ public class CommandsLocal : IConnection
         return $"{r}{w}{x}{r}{w}{x}{r}{w}{x}";
     }
 
-    public Task<QueryResult<Stream>> GetFile(string path)
+    public override Task<QueryResult<Stream>> GetFile(string path)
     {
         try
         {
@@ -378,7 +379,7 @@ public class CommandsLocal : IConnection
         }
     }
 
-    public Task<QueryResult<List<string>>> GetDirectories(string path)
+    public override Task<QueryResult<List<string>>> GetDirectories(string path)
     {
         try
         {
@@ -414,9 +415,10 @@ public class CommandsLocal : IConnection
             });
         }
     }
+    
 
-    public void Dispose()
+    protected override void DisposeCore()
     {
-        // TODO release managed resources here
+        
     }
 }
