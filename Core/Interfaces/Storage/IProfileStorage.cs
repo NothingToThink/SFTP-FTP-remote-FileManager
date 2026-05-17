@@ -1,4 +1,5 @@
 using Core.Models;
+using Core.Models.Credentials;
 
 namespace Core.Interfaces.Storage;
 
