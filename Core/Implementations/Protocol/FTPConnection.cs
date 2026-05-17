@@ -1,24 +1,29 @@
 using Core.Interfaces.Protocol;
 using Core.Models;
 
-using Renci.SshNet;
-using Renci.SshNet.Sftp;
+using System.Net;
+using FluentFTP;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsSftp : IMethod
+public class FtpConnection : IConnection
 {
-    private SftpClient? _client;
+    private FtpClient _client;
     private string _currentDirectory = "/";
 
-    public Task<OperationStatus> Connect(HostProfile profile)
+    public FtpConnection(HostProfile profile)
+    {
+        _client = new FtpClient(profile.Host,
+            new NetworkCredential(
+                profile.AuthData.Username,
+                profile.AuthData.Password
+            ));
+    }
+
+    public Task<OperationStatus> Connect()
     {
         try
         {
-            _client = new SftpClient(profile.Host, profile.Port,
-                profile.AuthData.Username,
-                profile.AuthData.Password ?? throw new InvalidOperationException("Only password auth nowadays")
-            );
             _client.Connect();
             return Task.FromResult(new OperationStatus
             {
@@ -40,11 +45,9 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            if (_client is { IsConnected: true })
+            if (_client.IsConnected)
             {
                 _client.Disconnect();
-                _client.Dispose();
-                _client = null;
             }
 
             return Task.FromResult(new OperationStatus
@@ -63,21 +66,21 @@ public class CommandsSftp : IMethod
         }
     }
 
-    public bool IsConnected => _client?.IsConnected ?? false;
+    public bool IsConnected => _client.IsConnected;
 
     public Task<QueryResult<List<FileItem>>> GetFiles(string path)
     {
         try
         {
-            var files = _client!.ListDirectory(path)
+            var files = _client.GetListing(path)
                 .Where(f => f.Name != "." && f.Name != "..") // в Filezilla точка передается, хз надо ли нам 
                 .Select(file => new FileItem
                 {
                     Name = file.Name,
-                    Size = file.Length,
-                    LastModified = file.LastWriteTime,
-                    IsDirectory = file.IsDirectory,
-                    Permissions = GetPermissionsString(file.Attributes),
+                    Size = file.Size,
+                    LastModified = file.Modified,
+                    IsDirectory = file.Type == FtpObjectType.Directory,
+                    Permissions = GetPermissionsString(file.Chmod),
                 }).ToList();
             return Task.FromResult(new QueryResult<List<FileItem>>
             {
@@ -99,8 +102,9 @@ public class CommandsSftp : IMethod
     {
         try
         {
+            using var ftpStream = _client.OpenRead(path);
             var memoryStream = new MemoryStream();
-            _client!.DownloadFile(path, memoryStream);
+            ftpStream.CopyTo(memoryStream);
             memoryStream.Position = 0;
 
             return Task.FromResult(new QueryResult<Stream>
@@ -123,8 +127,8 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            var dirs = _client!.ListDirectory(path)
-                .Where(f => f.IsDirectory && f.Name != "." && f.Name != "..")
+            var dirs = _client.GetListing(path)
+                .Where(f => f.Type == FtpObjectType.Directory && f.Name != "." && f.Name != "..")
                 .Select(f => f.FullName)
                 .ToList();
 
@@ -149,7 +153,7 @@ public class CommandsSftp : IMethod
         try
         {
             if (content.CanSeek) content.Position = 0;
-            _client!.UploadFile(content, remotePath, true);
+            _client.UploadStream(content, remotePath);
 
             return Task.FromResult(new OperationStatus
             {
@@ -171,7 +175,8 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            using var stream = _client!.Create(remotePath);
+            using var stream = _client.OpenWrite(remotePath);
+            stream.Close();
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -192,7 +197,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            _client!.DeleteFile(remotePath);
+            _client.DeleteFile(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -213,7 +218,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            _client!.RenameFile(oldName, newName);
+            _client.Rename(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -232,9 +237,10 @@ public class CommandsSftp : IMethod
 
     public Task<OperationStatus> CreateDir(string remotePath)
     {
+
         try
         {
-            _client!.CreateDirectory(remotePath);
+            _client.CreateDirectory(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -274,11 +280,11 @@ public class CommandsSftp : IMethod
 
     private void DeleteDirectoryRecursive(string path)
     {
-        foreach (var entry in _client!.ListDirectory(path))
+        foreach (var entry in _client.GetListing(path))
         {
             if (entry.Name is "." or "..") continue;
 
-            if (entry.IsDirectory)
+            if (entry.Type == FtpObjectType.Directory)
                 DeleteDirectoryRecursive(entry.FullName);
             else
                 _client.DeleteFile(entry.FullName);
@@ -290,7 +296,7 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            _client!.RenameFile(oldName, newName);
+            _client.Rename(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -311,8 +317,8 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            _client!.ChangeDirectory(path);
-            _currentDirectory = _client.WorkingDirectory;
+            _client.SetWorkingDirectory(path);
+            _currentDirectory = _client.GetWorkingDirectory();
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -331,9 +337,10 @@ public class CommandsSftp : IMethod
 
     public Task<OperationStatus> ChangeFile(string path)
     {
+
         try
         {
-            if (!_client!.Exists(path))
+            if (!_client.FileExists(path))
             {
                 return Task.FromResult(new OperationStatus
                 {
@@ -342,8 +349,7 @@ public class CommandsSftp : IMethod
                 });
             }
 
-            var attrs = _client.GetAttributes(path);
-            if (attrs.IsDirectory)
+            if (_client.GetObjectInfo(path).Type == FtpObjectType.Directory)
             {
                 return Task.FromResult(new OperationStatus
                 {
@@ -368,17 +374,29 @@ public class CommandsSftp : IMethod
         }
     }
 
-    private static string GetPermissionsString(SftpFileAttributes attrs)
+    private static string GetPermissionsString(int chmod)
     {
+        bool ownerRead = (chmod & 0x100) != 0;
+        bool ownerWrite = (chmod & 0x80) != 0;
+        bool ownerExecute = (chmod & 0x40) != 0;
+
+        bool groupRead = (chmod & 0x20) != 0;
+        bool groupWrite = (chmod & 0x10) != 0;
+        bool groupExecute = (chmod & 0x08) != 0;
+
+        bool othersRead = (chmod & 0x04) != 0;
+        bool othersWrite = (chmod & 0x02) != 0;
+        bool othersExecute = (chmod & 0x01) != 0;
+
         return ""
-               + (attrs.OwnerCanRead ? "r" : "-")
-               + (attrs.OwnerCanWrite ? "w" : "-")
-               + (attrs.OwnerCanExecute ? "x" : "-")
-               + (attrs.GroupCanRead ? "r" : "-")
-               + (attrs.GroupCanWrite ? "w" : "-")
-               + (attrs.GroupCanExecute ? "x" : "-")
-               + (attrs.OthersCanRead ? "r" : "-")
-               + (attrs.OthersCanWrite ? "w" : "-")
-               + (attrs.OthersCanExecute ? "x" : "-");
+               + (ownerRead ? "r" : "-")
+               + (ownerWrite ? "w" : "-")
+               + (ownerExecute ? "x" : "-")
+               + (groupRead ? "r" : "-")
+               + (groupWrite ? "w" : "-")
+               + (groupExecute ? "x" : "-")
+               + (othersRead ? "r" : "-")
+               + (othersWrite ? "w" : "-")
+               + (othersExecute ? "x" : "-");
     }
 }

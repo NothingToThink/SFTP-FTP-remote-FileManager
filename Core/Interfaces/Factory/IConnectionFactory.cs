@@ -5,5 +5,5 @@ namespace Core.Interfaces.Factory;
 
 public interface IConnectionFactory
 {
-    IMethod CreateMethod(HostProfile profile);
+    IConnection CreateConnection(HostProfile profile);
 }

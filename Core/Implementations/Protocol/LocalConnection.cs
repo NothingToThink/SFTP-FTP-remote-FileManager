@@ -1,15 +1,15 @@
-using System.Dynamic;
 using Core.Interfaces.Protocol;
 using Core.Models;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsLocal : IMethod
+public class LocalConnection : IConnection
 {
     private readonly string _rootPath;
     private string _currentPath = "";
     private bool _isConnected = false;
-    public CommandsLocal(string rootFolder = "tmp")
+
+    public LocalConnection(string rootFolder = "tmp")
     {
         _rootPath = Path.GetFullPath(rootFolder);
         if (!Directory.Exists(_rootPath))
@@ -37,7 +37,7 @@ public class CommandsLocal : IMethod
         return fullPath;
     }
 
-    public Task<OperationStatus> Connect(HostProfile profile)
+    public Task<OperationStatus> Connect()
     {
         _isConnected = true;
         return Task.FromResult(new OperationStatus

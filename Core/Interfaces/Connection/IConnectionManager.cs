@@ -7,5 +7,5 @@ public interface IConnectionManager
 {
     Task CreateConnection(HostProfile profile);
     Task<IReadOnlyList<HostProfile>> GetProfilesList();
-    Task<IMethod> GetConnection(HostProfile profile);
+    Task<IConnection> GetConnection(HostProfile profile);
 }

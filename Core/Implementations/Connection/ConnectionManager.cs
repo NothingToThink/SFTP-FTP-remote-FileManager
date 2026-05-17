@@ -15,7 +15,7 @@ public class ConnectionManager : IConnectionManager
     private IProfileStorage _storage;
     private IConnectionFactory _connectionFactory;
     //для этого реально record нужен в HostProfile
-    private ConcurrentDictionary<HostProfile, IMethod> _hostProfileToConnection = new();
+    private ConcurrentDictionary<HostProfile, IConnection> _hostProfileToConnection = new();
     private Task Initialization { get; }
     private ConnectionManager (IProfileStorage storage, IConnectionFactory connectionFactory)
     {
@@ -62,9 +62,9 @@ public class ConnectionManager : IConnectionManager
     {
         return Task.FromResult<IReadOnlyList<HostProfile>>(_hostProfileToConnection.Keys.ToList());
     }
-    public Task<IMethod> GetConnection(HostProfile profile)
+    public Task<IConnection> GetConnection(HostProfile profile)
     {
-        if (!_hostProfileToConnection.TryGetValue(profile, out IMethod? connection))
+        if (!_hostProfileToConnection.TryGetValue(profile, out IConnection? connection))
         {
             throw new KeyNotFoundException($"connection not exists");
         }
@@ -105,7 +105,7 @@ public class ConnectionManager : IConnectionManager
 
     private async Task AddConnection(HostProfile profile)
     {
-        var newConnection = _connectionFactory.CreateMethod(profile);
+        var newConnection = _connectionFactory.CreateConnection(profile);
         _hostProfileToConnection[profile] = newConnection;
     }
 }

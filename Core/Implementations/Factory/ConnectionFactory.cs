@@ -7,19 +7,21 @@ namespace Core.Implementations.Factory;
 
 public class ConnectionFactory : IConnectionFactory
 {
-    public IMethod CreateMethod(HostProfile profile) {
+    public IConnection CreateConnection(HostProfile profile)
+    {
         //нужно добавить enum в Protocol вместо string
-        //и вообще раз у нас IMethod - connection, то стоит в нём получать на вход HostProfile,
-        //и не делать IMethod.Connect(HostProfile)
-        if (profile.Protocol == "local")
+        //и вообще раз у нас IConnection - connection, то стоит в нём получать на вход HostProfile,
+        //и не делать IConnection.Connect(HostProfile)
+        switch (profile.Protocol.ToLower())
         {
-            return new CommandsLocal();
-            //return new CommandsLocal(profile);
+            case "local":
+                return new LocalConnection();
+            case "ftp":
+                return new FtpConnection(profile);
+            case "sftp":
+                return new SftpConnection(profile);
+            default:
+                throw new ArgumentOutOfRangeException($"Unknown protocol: {profile.Protocol}");
         }
-        if (profile.Protocol == "ftp")
-        {
-            return new CommandsFtp();
-        }
-        return new CommandsSftp();
     }
 }
