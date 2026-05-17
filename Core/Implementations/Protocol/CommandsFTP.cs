@@ -1,8 +1,10 @@
+using System.Net;
 using Core.Interfaces.Protocol;
 using Core.Models;
-
-using System.Net;
+using Core.Models.Credentials;
 using FluentFTP;
+
+namespace Core.Implementations.Protocol;
 
 public class CommandsFtp : IMethod
 {
@@ -13,11 +15,20 @@ public class CommandsFtp : IMethod
     {
         try
         {
-            _client = new FtpClient(profile.Host,
-            new NetworkCredential(
-                profile.AuthData.Username,
-                profile.AuthData.Password
-            ));
+            _client = profile.Auth switch
+            {
+                PasswordAuth(var user, var pwd) 
+                    => new FtpClient(profile.Host, new NetworkCredential(user, pwd), profile.EffectivePort),
+            
+                AnonymousAuth 
+                    => new FtpClient(profile.Host, new NetworkCredential("anonymous", "anonymous@example.com"), profile.EffectivePort),
+            
+                KeyAuth 
+                    => throw new InvalidOperationException("Key authentication is not supported by FTP. Use SFTP instead."),
+            
+                _ => throw new ArgumentOutOfRangeException(nameof(profile.Auth))
+            };
+        
             _client.Connect();
             return Task.FromResult(new OperationStatus
             {
@@ -394,5 +405,10 @@ public class CommandsFtp : IMethod
                + (othersRead ? "r" : "-")
                + (othersWrite ? "w" : "-")
                + (othersExecute ? "x" : "-");
+    }
+
+    public void Dispose()
+    {
+        _client?.Dispose();
     }
 }

@@ -1,6 +1,6 @@
 using Core.Interfaces.Protocol;
 using Core.Models;
-
+using Core.Models.Credentials;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
 
@@ -9,16 +9,23 @@ namespace Core.Implementations.Protocol;
 public class CommandsSftp : IMethod
 {
     private SftpClient? _client;
-    private string _currentDirectory = "/";
-
+    public bool IsConnected =>  _client?.IsConnected ?? false;
+    
+    
     public Task<OperationStatus> Connect(HostProfile profile)
     {
         try
         {
-            _client = new SftpClient(profile.Host, profile.Port,
-                profile.AuthData.Username,
-                profile.AuthData.Password ?? throw new InvalidOperationException("Only password auth nowadays")
-            );
+            _client = profile.Auth switch
+            {
+                PasswordAuth(var user, var pwd)
+                    => new SftpClient(profile.Host, profile.EffectivePort, user, pwd),
+                KeyAuth(var user, var keyPath, var passphrase)
+                    => new SftpClient(profile.Host, profile.EffectivePort, user, BuildKeySource(keyPath, passphrase)),
+                AnonymousAuth
+                    => throw new InvalidOperationException("Anonymous authentication doesn't supported by sftp authentication"),
+                _ => throw new  ArgumentOutOfRangeException(nameof(profile.Auth))
+            };
             _client.Connect();
             return Task.FromResult(new OperationStatus
             {
@@ -36,6 +43,12 @@ public class CommandsSftp : IMethod
         }
     }
 
+    private static IPrivateKeySource[] BuildKeySource(string keyPath, string? passphrase)
+    {
+        var key = passphrase is null ? new PrivateKeyFile(keyPath) : new PrivateKeyFile(keyPath, passphrase);
+        return [key];
+    }
+    
     public Task<OperationStatus> Disconnect()
     {
         try
@@ -62,9 +75,7 @@ public class CommandsSftp : IMethod
             });
         }
     }
-
-    public bool IsConnected => _client?.IsConnected ?? false;
-
+    
     public Task<QueryResult<List<FileItem>>> GetFiles(string path)
     {
         try
@@ -311,12 +322,11 @@ public class CommandsSftp : IMethod
     {
         try
         {
-            _client!.ChangeDirectory(path);
-            _currentDirectory = _client.WorkingDirectory;
+            _client.ChangeDirectory(path);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
-                Message = $"Changed directory to {_currentDirectory}"
+                Message = $"Changed directory to {_client.WorkingDirectory}"
             });
         }
         catch (Exception e)
@@ -380,5 +390,12 @@ public class CommandsSftp : IMethod
                + (attrs.OthersCanRead ? "r" : "-")
                + (attrs.OthersCanWrite ? "w" : "-")
                + (attrs.OthersCanExecute ? "x" : "-");
+    }
+
+    
+    
+    public void Dispose()
+    {
+        _client?.Dispose();
     }
 }
