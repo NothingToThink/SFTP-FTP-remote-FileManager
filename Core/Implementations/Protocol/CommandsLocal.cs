@@ -1,6 +1,7 @@
 using System.Dynamic;
 using Core.Interfaces.Protocol;
 using Core.Models;
+using Core.Models.Credentials;
 
 namespace Core.Implementations.Protocol;
 
@@ -412,5 +413,10 @@ public class CommandsLocal : IMethod
                 }
             });
         }
+    }
+
+    public void Dispose()
+    {
+        // TODO release managed resources here
     }
 }
