@@ -4,7 +4,9 @@ using Core.Models;
 using System.Net;
 using FluentFTP;
 
-public class CommandsFtp : IMethod
+namespace Core.Implementations.Protocol;
+
+public class FtpConnection : IConnection
 {
     private FtpClient? _client;
     private string _currentDirectory = "/";
@@ -118,7 +120,7 @@ public class CommandsFtp : IMethod
             });
         }
     }
-    
+
     public Task<QueryResult<List<string>>> GetDirectories(string path)
     {
         try
@@ -233,7 +235,7 @@ public class CommandsFtp : IMethod
 
     public Task<OperationStatus> CreateDir(string remotePath)
     {
-        
+
         try
         {
             _client!.CreateDirectory(remotePath);
@@ -330,10 +332,10 @@ public class CommandsFtp : IMethod
             });
         }
     }
-    
+
     public Task<OperationStatus> ChangeFile(string path)
     {
-        
+
         try
         {
             if (!_client!.FileExists(path))

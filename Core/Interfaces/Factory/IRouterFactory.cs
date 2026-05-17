@@ -5,5 +5,5 @@ namespace Core.Interfaces.Factory;
 
 public interface IRouterFactory
 {
-    IMethod CreateMethod(HostProfile profile);
+    IConnection CreateMethod(HostProfile profile);
 }

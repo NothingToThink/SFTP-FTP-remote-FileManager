@@ -6,7 +6,7 @@ using Renci.SshNet.Sftp;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsSftp : IMethod
+public class SftpConnection : IConnection
 {
     private SftpClient? _client;
     private string _currentDirectory = "/";

@@ -4,12 +4,12 @@ using Core.Models;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsLocal : IMethod
+public class LocalConnection : IConnection
 {
     private readonly string _rootPath;
     private string _currentPath = "";
     private bool _isConnected = false;
-    public CommandsLocal(string rootFolder = "tmp")
+    public LocalConnection(string rootFolder = "tmp")
     {
         _rootPath = Path.GetFullPath(rootFolder);
         if (!Directory.Exists(_rootPath))
