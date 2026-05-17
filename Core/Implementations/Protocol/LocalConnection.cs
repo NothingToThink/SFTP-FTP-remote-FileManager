@@ -18,13 +18,13 @@ public class LocalConnection : IConnection
         }
     }
 
-    private string GetLocalPath (string remotePath)
+    private string GetLocalPath(string remotePath)
     {
         string combined;
         if (remotePath.StartsWith('\\') || remotePath.StartsWith('/'))
         {
             combined = Path.Combine(_rootPath, remotePath.TrimStart('/', '\\'));
-        } 
+        }
         else
         {
             combined = Path.Combine(_rootPath, _currentPath, remotePath);
@@ -42,7 +42,7 @@ public class LocalConnection : IConnection
         _isConnected = true;
         return Task.FromResult(new OperationStatus
         {
-            Code = 0, 
+            Code = 0,
             Message = "connected",
             IsSuccess = true
         });
@@ -53,49 +53,49 @@ public class LocalConnection : IConnection
         _isConnected = false;
         return Task.FromResult(new OperationStatus
         {
-            Code = 0, 
+            Code = 0,
             Message = "disconnected",
             IsSuccess = true
         });
     }
 
-    public bool IsConnected  => _isConnected;
+    public bool IsConnected => _isConnected;
 
-    public async Task<OperationStatus> SaveFile (string remotePath, Stream content)
+    public async Task<OperationStatus> SaveFile(string remotePath, Stream content)
     {
         try
         {
             var localPath = GetLocalPath(remotePath);
             Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
             using (var fileStream = new FileStream(
-                localPath, 
-                FileMode.Create, 
-                FileAccess.Write, 
-                FileShare.None, 
-                4096, 
+                localPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                4096,
                 useAsync: true))
             {
                 await content.CopyToAsync(fileStream);
             }
             return new OperationStatus
             {
-                Code = 0, 
+                Code = 0,
                 Message = "file saved",
                 IsSuccess = true
             };
-        }   
+        }
         catch (Exception e)
         {
             return new OperationStatus
             {
-                Code = 1, 
+                Code = 1,
                 Message = e.Message + "file not saved",
                 IsSuccess = false
             };
         }
     }
 
-    public Task<OperationStatus> CreateFile (string remotePath)
+    public Task<OperationStatus> CreateFile(string remotePath)
     {
         try
         {
@@ -103,23 +103,23 @@ public class LocalConnection : IConnection
             File.Create(localPath).Dispose();
             return Task.FromResult(new OperationStatus
             {
-                Code = 0, 
+                Code = 0,
                 Message = "file created",
                 IsSuccess = true
             });
-        }   
+        }
         catch (Exception e)
         {
             return Task.FromResult(new OperationStatus
             {
-                Code = 1, 
+                Code = 1,
                 Message = e.Message + " file not created",
                 IsSuccess = false
             });
         }
     }
 
-    public Task<OperationStatus> DeleteFile (string remotePath)
+    public Task<OperationStatus> DeleteFile(string remotePath)
     {
         try
         {
@@ -131,23 +131,23 @@ public class LocalConnection : IConnection
             File.Delete(localPath);
             return Task.FromResult(new OperationStatus
             {
-                Code = 0, 
+                Code = 0,
                 Message = "file deleted",
                 IsSuccess = true
             });
-        }   
+        }
         catch (Exception e)
         {
             return Task.FromResult(new OperationStatus
             {
-                Code = 1, 
+                Code = 1,
                 Message = e.Message + " file not deleted",
                 IsSuccess = false
             });
         }
     }
 
-    public Task<OperationStatus> RenameFile (string oldName, string newName)
+    public Task<OperationStatus> RenameFile(string oldName, string newName)
     {
         try
         {
@@ -156,23 +156,23 @@ public class LocalConnection : IConnection
             File.Move(oldPath, newPath);
             return Task.FromResult(new OperationStatus
             {
-                Code = 0, 
+                Code = 0,
                 Message = "file renamed",
                 IsSuccess = true
             });
-        }   
+        }
         catch (Exception e)
         {
             return Task.FromResult(new OperationStatus
             {
-                Code = 1, 
+                Code = 1,
                 Message = e.Message + " file not renamed",
                 IsSuccess = false
             });
         }
     }
 
-    public Task<OperationStatus> CreateDir (string remotePath)
+    public Task<OperationStatus> CreateDir(string remotePath)
     {
         try
         {
@@ -180,23 +180,23 @@ public class LocalConnection : IConnection
             Directory.CreateDirectory(localPath);
             return Task.FromResult(new OperationStatus
             {
-                Code = 0, 
+                Code = 0,
                 Message = "directory created",
                 IsSuccess = true
             });
-        }   
+        }
         catch (Exception e)
         {
             return Task.FromResult(new OperationStatus
             {
-                Code = 1, 
+                Code = 1,
                 Message = e.Message + " directory not created",
                 IsSuccess = false
             });
         }
     }
 
-    public Task<OperationStatus> DeleteDir (string remotePath)
+    public Task<OperationStatus> DeleteDir(string remotePath)
     {
         try
         {
@@ -208,23 +208,23 @@ public class LocalConnection : IConnection
             Directory.Delete(localPath, recursive: true);
             return Task.FromResult(new OperationStatus
             {
-                Code = 0, 
+                Code = 0,
                 Message = "directory removed",
                 IsSuccess = true
             });
-        }   
+        }
         catch (Exception e)
         {
             return Task.FromResult(new OperationStatus
             {
-                Code = 1, 
+                Code = 1,
                 Message = e.Message + " directory not removed",
                 IsSuccess = false
             });
         }
     }
 
-    public Task<OperationStatus> RenameDir (string oldName, string newName)
+    public Task<OperationStatus> RenameDir(string oldName, string newName)
     {
         try
         {
@@ -233,23 +233,23 @@ public class LocalConnection : IConnection
             Directory.Move(oldPath, newPath);
             return Task.FromResult(new OperationStatus
             {
-                Code = 0, 
+                Code = 0,
                 Message = "directory renamed",
                 IsSuccess = true
             });
-        }   
+        }
         catch (Exception e)
         {
             return Task.FromResult(new OperationStatus
             {
-                Code = 1, 
+                Code = 1,
                 Message = e.Message + " directory not renamed",
                 IsSuccess = false
             });
         }
     }
 
-    public Task<OperationStatus> ChangeDirectory (string path)
+    public Task<OperationStatus> ChangeDirectory(string path)
     {
         try
         {
@@ -262,7 +262,7 @@ public class LocalConnection : IConnection
             _currentPath = (newCurrentPath == ".") ? "" : newCurrentPath;
             return Task.FromResult(new OperationStatus
             {
-                Code = 0, 
+                Code = 0,
                 Message = "directory changed",
                 IsSuccess = true
             });
@@ -271,7 +271,7 @@ public class LocalConnection : IConnection
         {
             return Task.FromResult(new OperationStatus
             {
-                Code = 1, 
+                Code = 1,
                 Message = e.Message + " directory not changed",
                 IsSuccess = false
             });
@@ -282,7 +282,7 @@ public class LocalConnection : IConnection
     {
         return Task.FromResult(new OperationStatus
         {
-            Code = 0, 
+            Code = 0,
             Message = "file changed",
             IsSuccess = true
         });
@@ -290,7 +290,8 @@ public class LocalConnection : IConnection
 
     public Task<QueryResult<List<FileItem>>> GetFiles(string path)
     {
-        try {
+        try
+        {
             var localPath = GetLocalPath(path);
 
             var dirInfo = new DirectoryInfo(localPath);
@@ -312,7 +313,7 @@ public class LocalConnection : IConnection
                 Data = data,
                 Status = new OperationStatus
                 {
-                    Code = 0, 
+                    Code = 0,
                     Message = "files received",
                     IsSuccess = true
                 }
@@ -324,7 +325,7 @@ public class LocalConnection : IConnection
             {
                 Status = new OperationStatus
                 {
-                    Code = 1, 
+                    Code = 1,
                     Message = e.Message + " files not received",
                     IsSuccess = false
                 }
@@ -332,10 +333,10 @@ public class LocalConnection : IConnection
         }
     }
 
-    private static string GetPermissionsString (FileSystemInfo info)
+    private static string GetPermissionsString(FileSystemInfo info)
     {
         var attrs = info.Attributes;
-        bool isDir    = attrs.HasFlag(FileAttributes.Directory);
+        bool isDir = attrs.HasFlag(FileAttributes.Directory);
         bool isReadOnly = attrs.HasFlag(FileAttributes.ReadOnly);
 
         char r = 'r';
@@ -357,7 +358,7 @@ public class LocalConnection : IConnection
                 Data = data,
                 Status = new OperationStatus
                 {
-                    Code = 0, 
+                    Code = 0,
                     Message = "file recieved",
                     IsSuccess = true
                 }
@@ -369,7 +370,7 @@ public class LocalConnection : IConnection
             {
                 Status = new OperationStatus
                 {
-                    Code = 1, 
+                    Code = 1,
                     Message = e.Message + " file not received",
                     IsSuccess = false
                 }
@@ -394,7 +395,7 @@ public class LocalConnection : IConnection
                 Data = data,
                 Status = new OperationStatus
                 {
-                    Code = 0, 
+                    Code = 0,
                     Message = "directories received",
                     IsSuccess = true
                 }
@@ -406,11 +407,20 @@ public class LocalConnection : IConnection
             {
                 Status = new OperationStatus
                 {
-                    Code = 1, 
+                    Code = 1,
                     Message = e.Message + " directories not received",
                     IsSuccess = false
                 }
             });
         }
+    }
+
+    public Task<QueryResult<string>> GetWorkingDirectory()
+    {
+        return Task.FromResult(new QueryResult<string>
+        {
+            Data = _currentPath,
+            Status = new OperationStatus { Code = 0, Message = "Working direcotory recieved" }
+        });
     }
 }

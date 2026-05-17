@@ -9,7 +9,6 @@ namespace Core.Implementations.Protocol;
 public class SftpConnection : IConnection
 {
     private SftpClient _client;
-    private string _currentDirectory = "/";
 
     public SftpConnection(HostProfile profile)
     {
@@ -142,6 +141,26 @@ public class SftpConnection : IConnection
             {
                 Data = null,
                 Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive directories" }
+            });
+        }
+    }
+
+    public Task<QueryResult<string>> GetWorkingDirectory()
+    {
+        try
+        {
+            return Task.FromResult(new QueryResult<string>
+            {
+                Data = _client.WorkingDirectory,
+                Status = new OperationStatus { Code = 0, Message = "Working direcotory recieved" }
+            });
+        }
+        catch (Exception e)
+        {
+            return Task.FromResult(new QueryResult<string>
+            {
+                Data = null,
+                Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive working directory" }
             });
         }
     }
@@ -314,11 +333,10 @@ public class SftpConnection : IConnection
         try
         {
             _client.ChangeDirectory(path);
-            _currentDirectory = _client.WorkingDirectory;
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
-                Message = $"Changed directory to {_currentDirectory}"
+                Message = $"Changed directory to {_client.WorkingDirectory}"
             });
         }
         catch (Exception e)
