@@ -1,16 +1,14 @@
-using System.Dynamic;
 using Core.Interfaces.Protocol;
 using Core.Models;
-using Core.Models.Credentials;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsLocal : Connection
+public class LocalConnection : Connection
 {
     private readonly string _rootPath;
     private string _currentPath = "";
-    private bool _isConnected = false;
-    public CommandsLocal(string rootFolder = "tmp")
+    private bool _isConnected;
+    public LocalConnection(string rootFolder = "tmp")
     {
         _rootPath = Path.GetFullPath(rootFolder);
         if (!Directory.Exists(_rootPath))
@@ -360,7 +358,7 @@ public class CommandsLocal : Connection
                 Status = new OperationStatus
                 {
                     Code = 0, 
-                    Message = "file recieved",
+                    Message = "file received",
                     IsSuccess = true
                 }
             });
@@ -414,6 +412,15 @@ public class CommandsLocal : Connection
                 }
             });
         }
+    }
+
+    public override Task<QueryResult<string>> GetWorkingDirectory()
+    {
+        return Task.FromResult(new QueryResult<string>
+        {
+            Data = _currentPath,
+            Status = new OperationStatus { Code = 0, Message = "Working directory received" }
+        });
     }
     
 
