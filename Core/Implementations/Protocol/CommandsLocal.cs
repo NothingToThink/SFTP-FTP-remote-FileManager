@@ -5,7 +5,7 @@ using Core.Models.Credentials;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsLocal : IMethod
+public class CommandsLocal : IConnection
 {
     private readonly string _rootPath;
     private string _currentPath = "";

@@ -6,29 +6,31 @@ using FluentFTP;
 
 namespace Core.Implementations.Protocol;
 
-public class CommandsFtp : IMethod
+public class CommandsFtp : IConnection
 {
-    private FtpClient? _client;
-    private string _currentDirectory = "/";
+    private readonly FtpClient _client;
 
+    public CommandsFtp(HostProfile profile)
+    {
+        _client = profile.Auth switch
+        {
+            PasswordAuth(var user, var pwd) 
+                => new FtpClient(profile.Host, new NetworkCredential(user, pwd), profile.EffectivePort),
+            
+            AnonymousAuth 
+                => new FtpClient(profile.Host, new NetworkCredential("anonymous", "anonymous@example.com"), profile.EffectivePort),
+            
+            KeyAuth 
+                => throw new InvalidOperationException("Key authentication is not supported by FTP. Use SFTP instead."),
+            
+            _ => throw new ArgumentOutOfRangeException(nameof(profile.Auth))
+        };
+    }
+    
     public Task<OperationStatus> Connect(HostProfile profile)
     {
         try
         {
-            _client = profile.Auth switch
-            {
-                PasswordAuth(var user, var pwd) 
-                    => new FtpClient(profile.Host, new NetworkCredential(user, pwd), profile.EffectivePort),
-            
-                AnonymousAuth 
-                    => new FtpClient(profile.Host, new NetworkCredential("anonymous", "anonymous@example.com"), profile.EffectivePort),
-            
-                KeyAuth 
-                    => throw new InvalidOperationException("Key authentication is not supported by FTP. Use SFTP instead."),
-            
-                _ => throw new ArgumentOutOfRangeException(nameof(profile.Auth))
-            };
-        
             _client.Connect();
             return Task.FromResult(new OperationStatus
             {
@@ -54,7 +56,6 @@ public class CommandsFtp : IMethod
             {
                 _client.Disconnect();
                 _client.Dispose();
-                _client = null;
             }
 
             return Task.FromResult(new OperationStatus
@@ -73,13 +74,13 @@ public class CommandsFtp : IMethod
         }
     }
 
-    public bool IsConnected => _client?.IsConnected ?? false;
+    public bool IsConnected => _client.IsConnected;
 
     public Task<QueryResult<List<FileItem>>> GetFiles(string path)
     {
         try
         {
-            var files = _client!.GetListing(path)
+            var files = _client.GetListing(path)
                 .Where(f => f.Name != "." && f.Name != "..") // в Filezilla точка передается, хз надо ли нам 
                 .Select(file => new FileItem
                 {
@@ -109,7 +110,7 @@ public class CommandsFtp : IMethod
     {
         try
         {
-            using var ftpStream = _client!.OpenRead(path);
+            using var ftpStream = _client.OpenRead(path);
             var memoryStream = new MemoryStream();
             ftpStream.CopyTo(memoryStream);
             memoryStream.Position = 0;
@@ -134,7 +135,7 @@ public class CommandsFtp : IMethod
     {
         try
         {
-            var dirs = _client!.GetListing(path)
+            var dirs = _client.GetListing(path)
                 .Where(f => f.Type == FtpObjectType.Directory && f.Name != "." && f.Name != "..")
                 .Select(f => f.FullName)
                 .ToList();
@@ -160,7 +161,7 @@ public class CommandsFtp : IMethod
         try
         {
             if (content.CanSeek) content.Position = 0;
-            _client!.UploadStream(content, remotePath);
+            _client.UploadStream(content, remotePath);
 
             return Task.FromResult(new OperationStatus
             {
@@ -182,7 +183,7 @@ public class CommandsFtp : IMethod
     {
         try
         {
-            using var stream = _client!.OpenWrite(remotePath);
+            using var stream = _client.OpenWrite(remotePath);
             stream.Close();
             return Task.FromResult(new OperationStatus
             {
@@ -204,7 +205,7 @@ public class CommandsFtp : IMethod
     {
         try
         {
-            _client!.DeleteFile(remotePath);
+            _client.DeleteFile(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -225,7 +226,7 @@ public class CommandsFtp : IMethod
     {
         try
         {
-            _client!.Rename(oldName, newName);
+            _client.Rename(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -247,7 +248,7 @@ public class CommandsFtp : IMethod
         
         try
         {
-            _client!.CreateDirectory(remotePath);
+            _client.CreateDirectory(remotePath);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -287,7 +288,7 @@ public class CommandsFtp : IMethod
 
     private void DeleteDirectoryRecursive(string path)
     {
-        foreach (var entry in _client!.GetListing(path))
+        foreach (var entry in _client.GetListing(path))
         {
             if (entry.Name is "." or "..") continue;
 
@@ -303,7 +304,7 @@ public class CommandsFtp : IMethod
     {
         try
         {
-            _client!.Rename(oldName, newName);
+            _client.Rename(oldName, newName);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
@@ -324,12 +325,11 @@ public class CommandsFtp : IMethod
     {
         try
         {
-            _client!.SetWorkingDirectory(path);
-            _currentDirectory = _client.GetWorkingDirectory();
+            _client.SetWorkingDirectory(path);
             return Task.FromResult(new OperationStatus
             {
                 Code = 0,
-                Message = $"Changed directory to {_currentDirectory}"
+                Message = $"Changed directory to {_client.GetWorkingDirectory()}"
             });
         }
         catch (Exception e)
@@ -347,7 +347,7 @@ public class CommandsFtp : IMethod
         
         try
         {
-            if (!_client!.FileExists(path))
+            if (!_client.FileExists(path))
             {
                 return Task.FromResult(new OperationStatus
                 {
@@ -409,6 +409,6 @@ public class CommandsFtp : IMethod
 
     public void Dispose()
     {
-        _client?.Dispose();
+        _client.Dispose();
     }
 }
