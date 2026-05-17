@@ -75,9 +75,7 @@ public class ConnectionManager : IConnectionManager
     {
         try
         {
-            await _storage.Delete(profile.Protocol);
-            //должно быть 
-            //await _storage.Delete(profile.Name);
+            await _storage.Delete(profile.Name);
         }
         catch(Exception e)
         {
