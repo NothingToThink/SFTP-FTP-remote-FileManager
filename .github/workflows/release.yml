@@ -41,5 +41,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag dist\FileManager.exe dist\LocalServer.exe --title "GUI build $tag" --notes $notes
           } else {
+            gh release delete-asset $tag FileManager-GUI.zip --yes 2>$null
+            gh release delete-asset $tag LocalServer.zip --yes 2>$null
             gh release upload $tag dist\FileManager.exe dist\LocalServer.exe --clobber
           }
