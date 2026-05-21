@@ -25,16 +25,10 @@ jobs:
         run: py -m pip install -r requirements.txt
 
       - name: Build GUI
-        run: py -m PyInstaller --noconfirm --clean --onedir --windowed --name FileManager GUI.py
+        run: py -m PyInstaller --noconfirm --clean --onefile --windowed --name FileManager GUI.py
 
       - name: Build LocalServer
-        run: py -m PyInstaller --noconfirm --clean --onedir --console --add-data "api.json;." --add-data "docs.html;." --name LocalServer local_server.py
-
-      - name: Pack artifacts
-        shell: pwsh
-        run: |
-          Compress-Archive -Path "dist\FileManager\*" -DestinationPath "FileManager-GUI.zip" -Force
-          Compress-Archive -Path "dist\LocalServer\*" -DestinationPath "LocalServer.zip" -Force
+        run: py -m PyInstaller --noconfirm --clean --onefile --console --add-data "api.json;." --add-data "docs.html;." --name LocalServer local_server.py
 
       - name: Publish release
         shell: pwsh
@@ -45,7 +39,7 @@ jobs:
           $notes = "GUI и LocalServer для Windows. Сначала запустить LocalServer.exe, затем FileManager.exe."
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag FileManager-GUI.zip LocalServer.zip --title "GUI build $tag" --notes $notes
+            gh release create $tag dist\FileManager.exe dist\LocalServer.exe --title "GUI build $tag" --notes $notes
           } else {
-            gh release upload $tag FileManager-GUI.zip LocalServer.zip --clobber
+            gh release upload $tag dist\FileManager.exe dist\LocalServer.exe --clobber
           }

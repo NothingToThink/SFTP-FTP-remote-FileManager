@@ -7,10 +7,10 @@ GUI-клиент и отдельный LocalServer для тестовой ра�
 ## Как запустить собранную версию
 
 1. Запустить сервер:
-   `dist\LocalServer\LocalServer.exe`
+   `dist\LocalServer.exe`
 
 2. Запустить интерфейс:
-   `dist\FileManager\FileManager.exe`
+   `dist\FileManager.exe`
 
 LocalServer слушает `http://127.0.0.1:5000/api`.
 Swagger доступен по `http://127.0.0.1:5000/docs/`.
@@ -23,8 +23,8 @@ Swagger доступен по `http://127.0.0.1:5000/docs/`.
 
 Он собирает обе части:
 
-- `dist\LocalServer\LocalServer.exe`
-- `dist\FileManager\FileManager.exe`
+- `dist\FileManager.exe`
+- `dist\LocalServer.exe`
 
 ## Что сейчас работает
 
