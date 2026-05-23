@@ -1,19 +1,48 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Core.Implementations.Factory;
+using Core.Implementations.Manager;
 using Core.Implementations.Storage;
+using Core.Interfaces.Factory;
 using Core.Interfaces.Manager;
 using Core.Interfaces.Storage;
-using Microsoft.AspNetCore.Connections;
 
-var builder = WebApplication.CreateBuilder(args);
+try
+{
 
-//builder.Services.AddEndpointsApiExplorer();
-//builder.Services.AddSwaggerGen();
+    var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
+
+    builder.Services.AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+            options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        });
 
 
-builder.Services.AddSingleton<IProfileStorage, JsonProfileStorage>();
-builder.Services.AddSingleton<IConnectionManager>();
-builder.Services.AddSingleton<IConnectionFactory>();
+    builder.Services.AddSingleton<IProfileStorage, JsonProfileStorage>();
+    builder.Services.AddSingleton<IConnectionManager, ConnectionManager>();
+    builder.Services.AddSingleton<IConnectionFactory, ConnectionFactory>();
 
 
-var app = builder.Build(); 
+    using var app = builder.Build();
+
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+
+    app.UseCors(policy => policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
+    app.MapControllers();
+    app.Run();
+}
+catch (Exception e)
+{
+    Console.WriteLine($"Fatal error: {e.Message}");
+    Console.WriteLine(e.StackTrace);
+}
