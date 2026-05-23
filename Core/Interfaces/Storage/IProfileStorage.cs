@@ -10,3 +10,4 @@ public interface IProfileStorage
     void Save(SavedProfile profile);
     void Delete(Guid id);
 }
+
