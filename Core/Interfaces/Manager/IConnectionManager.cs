@@ -7,7 +7,7 @@ public interface IConnectionManager
 {
     Guid CreateConnection(SavedProfile profile);
     List<Guid> GetConnectionIdList();
-    Connection GetCurrentConnection();
+    Connection GetConnection(Guid id);
     List<SavedProfile> GetProfilesList();
     void DeleteConnection(Guid id);
 }
