@@ -4,93 +4,25 @@ using Core.Interfaces.Manager;
 using Core.Interfaces.Storage;
 using Core.Interfaces.Protocol;
 using Core.Interfaces.Factory;
-using Core.Models;
 using Core.Models.Credentials;
 
 namespace Core.Implementations.Manager;
 
 public class ConnectionManager : IConnectionManager 
 {
-    private static ConnectionManager? _instance;
-    private static readonly SemaphoreSlim _lock = new(1, 1);
-    private IProfileStorage _storage;
-    private IConnectionFactory _connectionFactory;
-    private ConcurrentDictionary<HostProfile, Connection> _hostProfileToConnection = new();
-    private Task Initialization { get; }
+    private readonly IProfileStorage _storage;
+    private readonly IConnectionFactory _connectionFactory;
+    private Dictionary<Guid, Connection> _connections = new();
     private ConnectionManager (IProfileStorage storage, IConnectionFactory connectionFactory)
     {
         _storage = storage;
         _connectionFactory = connectionFactory;
-        Initialization = InitializeAsync();
-    }
 
-    public static async Task<ConnectionManager> CreateAsync (IProfileStorage storage, IConnectionFactory connectionFactory) {
-        if (_instance != null) {
-            return _instance;
-        }
-        await _lock.WaitAsync();
-        try
-        {
-            if (_instance == null)
-            {
-                var manager = new ConnectionManager(storage, connectionFactory);
-                await manager.Initialization;
-                _instance = manager;
-            }
-        }
-        finally
-        {
-            _lock.Release();
-        }
-
-        return _instance;
-    }
-    public async Task CreateConnection (HostProfile profile)
-    {
-        try 
-        {
-            await _storage.Save(profile);
-        }
-        catch (Exception e)
-        {
-            throw new InvalidOperationException($"IProfileStorage.GetProfiles failed, connection not created", e);
-        }
-
-        await AddConnection(profile);
-    }
-    public Task<IReadOnlyList<HostProfile>> GetProfilesList()
-    {
-        //Todo HostProfile <- Iconncetion
-        return Task.FromResult<IReadOnlyList<HostProfile>>(_hostProfileToConnection.Keys.ToList());
-    }
-    public Task<IConnection> GetConnection(HostProfile profile)
-    {
-        if (!_hostProfileToConnection.TryGetValue(profile, out IConnection? connection))
-        {
-            throw new KeyNotFoundException($"connection not exists");
-        }
-        return Task.FromResult(connection);
-    }
-
-    private async Task DeleteConnection(HostProfile profile)
-    {
-        //TODO по id
-        try
-        {
-            await _storage.Delete(profile.Name);
-        }
-        catch(Exception e)
-        {
-            throw new InvalidOperationException("IProfileStorage.Delete failed", e);
-        }
-    }
-
-    private async Task InitializeAsync()
-    {
         List<HostProfile> profiles;
         try 
         {
-            profiles = await _storage.GetProfiles();
+            var storageProfiles = _storage.GetProfiles();
+            profiles = storageProfiles.Select(p => p.HostProfile with{}).ToList();
         }
         catch (Exception e)
         {
@@ -99,13 +31,52 @@ public class ConnectionManager : IConnectionManager
 
         foreach (var profile in profiles)
         {
-            await AddConnection(profile);
+            AddConnection(profile);
+        }
+    }
+    public void CreateConnection (SavedProfile profile)
+    {
+        try
+        {
+            _storage.Save(new SavedProfile.Create);
+        }
+        catch (Exception e)
+        {
+            throw new InvalidOperationException($"IProfileStorage.GetProfiles failed, connection not created", e);
+        }
+
+        AddConnection(profile.HostProfile);
+    }
+    public IReadOnlyList<HostProfile> GetProfilesList()
+    {
+        //Todo HostProfile <- Iconncetion
+        return _connections.Values.ToList();
+    }
+    public Connection GetConnection(Guid id)
+    {
+        if (!_hostProfileToConnection.TryGetValue(profile, out Connection? connection))
+        {
+            throw new KeyNotFoundException($"connection not exists");
+        }
+        return Task.FromResult(connection);
+    }
+
+    private void DeleteConnection(HostProfile profile)
+    {
+        //TODO по id
+        try
+        {
+            _storage.Delete(profile.Name);
+        }
+        catch(Exception e)
+        {
+            throw new InvalidOperationException("IProfileStorage.Delete failed", e);
         }
     }
 
-    private async Task AddConnection(HostProfile profile)
+    private void AddConnection(HostProfile profile)
     {
         var newConnection = _connectionFactory.CreateConnection(profile);
-        _hostProfileToConnection[profile] = newConnection;
+        _connections[newConnection.Id] = newConnection;
     }
 }

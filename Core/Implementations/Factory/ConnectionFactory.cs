@@ -3,7 +3,6 @@ using Core.Models.Credentials;
 using Core.Interfaces.Protocol;
 using Core.Implementations.Protocol;
 using System.Diagnostics;
-using Core.Models;
 
 namespace Core.Implementations.Factory;
 
