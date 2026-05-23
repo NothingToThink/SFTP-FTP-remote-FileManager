@@ -5,7 +5,7 @@ namespace Core.Interfaces.Manager;
 
 public interface IConnectionManager
 {
-    Task CreateConnection(HostProfile profile);
-    Task<IReadOnlyList<HostProfile>> GetProfilesList();
-    Task<Connection> GetConnection(HostProfile profile);
+    void CreateConnection(SavedProfile profile);
+    List<Guid> GetConnectionIdList();
+    Connection GetCurrentConnection();
 }
