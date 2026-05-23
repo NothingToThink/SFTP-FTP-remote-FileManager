@@ -5,8 +5,8 @@ namespace Core.Interfaces.Storage;
 public interface IProfileStorage
 {
     List<SavedProfile> GetProfiles();
-    Task DownloadConfig(List<SavedProfile> profiles);
-    SavedProfile? GetProfile(Guid id);
+    void DownloadConfig(List<SavedProfile> profiles);
+    SavedProfile GetProfile(Guid id);
     void Save(SavedProfile profile);
     void Delete(Guid id);
 }

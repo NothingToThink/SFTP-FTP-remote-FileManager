@@ -25,13 +25,13 @@ public class JsonProfileStorage : IProfileStorage
 
     private class StoredAuthData
     {
-        public string AuthType { get; set; } = string.Empty;  // "anonymous" | "password" | "key"
+        public string AuthType { get; set; } = string.Empty;
         public string? Username { get; set; }
         public string? ProtectedPassword { get; set; }
         public string? KeyPath { get; set; }
         public string? ProtectedPassphrase { get; set; }
     }
-    
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
@@ -48,55 +48,64 @@ public class JsonProfileStorage : IProfileStorage
             throw new ArgumentException("File path cannot be empty.", nameof(filePath));
 
         _filePath = filePath;
-        _credentialProtectionService = credentialProtectionService 
+
+        _credentialProtectionService = credentialProtectionService
             ?? throw new ArgumentNullException(nameof(credentialProtectionService));
     }
-    
-    public async Task<List<SavedProfile>> GetAll()
+
+    public List<SavedProfile> GetAll()
     {
-        var file = await ReadStorageFile();
+        var file = ReadStorageFile();
         return file.Profiles.Select(ToSavedProfile).ToList();
     }
 
-    public async Task<SavedProfile?> GetProfile(Guid id)
+    public SavedProfile GetProfile(Guid id)
     {
-        var file = await ReadStorageFile();
+        var file = ReadStorageFile();
         var stored = file.Profiles.FirstOrDefault(p => p.Id == id);
-        return stored is null ? null : ToSavedProfile(stored);
+        if (stored is null)
+        {
+            throw new KeyNotFoundException($"Profile with id {id} not found");
+        }
+        return ToSavedProfile(stored);
     }
 
-    public Task<List<SavedProfile>> GetProfiles()
+    public List<SavedProfile> GetProfiles()
+    {
+        return GetAll();
+    }
+
+    public void DownloadConfig(List<SavedProfile> profiles)
     {
         throw new NotImplementedException();
     }
 
-    public Task DownloadConfig(List<SavedProfile> profiles)
+    public void Save(SavedProfile profile)
     {
-        throw new NotImplementedException();
-    }
+        if (profile is null)
+            throw new ArgumentNullException(nameof(profile));
 
-    public async Task Save(SavedProfile profile)
-    {
-        if (profile is null) throw new ArgumentNullException(nameof(profile));
+        var file = ReadStorageFile();
 
-        var file = await ReadStorageFile();
-        
         file.Profiles.RemoveAll(p => p.Id == profile.Id);
         file.Profiles.Add(ToStoredProfile(profile));
 
-        await WriteStorageFile(file);
+        WriteStorageFile(file);
     }
 
-    public async Task Delete(Guid id)
+    public void Delete(Guid id)
     {
-        var file = await ReadStorageFile();
+        var file = ReadStorageFile();
+
         file.Profiles.RemoveAll(p => p.Id == id);
-        await WriteStorageFile(file);
+
+        WriteStorageFile(file);
     }
-    
+
     private StoredProfile ToStoredProfile(SavedProfile profile)
     {
         var host = profile.HostProfile;
+
         return new StoredProfile
         {
             Id = profile.Id,
@@ -114,6 +123,7 @@ public class JsonProfileStorage : IProfileStorage
             throw new InvalidDataException($"Unknown protocol in storage: {stored.Protocol}");
 
         var auth = ToAuthData(stored.Auth);
+
         var hostProfile = new HostProfile(
             Host: stored.Host,
             Protocol: protocol,
@@ -143,8 +153,8 @@ public class JsonProfileStorage : IProfileStorage
             AuthType = "key",
             Username = user,
             KeyPath = keyPath,
-            ProtectedPassphrase = passphrase is null 
-                ? null 
+            ProtectedPassphrase = passphrase is null
+                ? null
                 : _credentialProtectionService.Encrypt(passphrase)
         },
 
@@ -157,7 +167,7 @@ public class JsonProfileStorage : IProfileStorage
 
         "password" => new PasswordAuth(
             Username: stored.Username ?? throw new InvalidDataException("Password auth requires Username"),
-            Password: stored.ProtectedPassword is null 
+            Password: stored.ProtectedPassword is null
                 ? throw new InvalidDataException("Password auth requires ProtectedPassword")
                 : _credentialProtectionService.Decrypt(stored.ProtectedPassword)
         ),
@@ -172,29 +182,34 @@ public class JsonProfileStorage : IProfileStorage
 
         _ => throw new InvalidDataException($"Unknown auth type in storage: {stored.AuthType}")
     };
-    
-    private async Task<StoredProfilesFile> ReadStorageFile()
+
+    private StoredProfilesFile ReadStorageFile()
     {
         if (!File.Exists(_filePath))
             return new StoredProfilesFile();
 
-        var json = await File.ReadAllTextAsync(_filePath);
+        var json = File.ReadAllText(_filePath);
+
         if (string.IsNullOrWhiteSpace(json))
             return new StoredProfilesFile();
 
         var file = JsonSerializer.Deserialize<StoredProfilesFile>(json, JsonOptions);
+
         return file ?? new StoredProfilesFile();
     }
 
-    private async Task WriteStorageFile(StoredProfilesFile storedFile)
+    private void WriteStorageFile(StoredProfilesFile storedFile)
     {
-        if (storedFile is null) throw new ArgumentNullException(nameof(storedFile));
+        if (storedFile is null)
+            throw new ArgumentNullException(nameof(storedFile));
 
         var directoryPath = Path.GetDirectoryName(_filePath);
+
         if (!string.IsNullOrWhiteSpace(directoryPath))
             Directory.CreateDirectory(directoryPath);
 
         var json = JsonSerializer.Serialize(storedFile, JsonOptions);
-        await File.WriteAllTextAsync(_filePath, json);
+
+        File.WriteAllText(_filePath, json);
     }
 }
