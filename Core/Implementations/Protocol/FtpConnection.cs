@@ -14,308 +14,117 @@ public class FtpConnection : Connection
     {
         _client = profile.Auth switch
         {
-            PasswordAuth(var user, var pwd) 
+            PasswordAuth(var user, var pwd)
                 => new FtpClient(profile.Host, new NetworkCredential(user, pwd), profile.EffectivePort),
-            
-            AnonymousAuth 
+
+            AnonymousAuth
                 => new FtpClient(profile.Host, new NetworkCredential("anonymous", "anonymous@example.com"), profile.EffectivePort),
-            
-            KeyAuth 
+
+            KeyAuth
                 => throw new InvalidOperationException("Key authentication is not supported by FTP. Use SFTP instead."),
-            
+
             _ => throw new ArgumentOutOfRangeException(nameof(profile.Auth))
         };
     }
-    
-    public override OperationStatus Connect()
+
+    public override void Connect()
     {
-        try
-        {
-            _client.Connect();
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "Connected"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Connection failed"
-            };
-        }
+        _client.Connect();
     }
 
-    public override OperationStatus Disconnect()
+    public override void Disconnect()
     {
-        try
+        if (_client is { IsConnected: true })
         {
-            if (_client is { IsConnected: true })
-            {
-                _client.Disconnect();
-                _client.Dispose();
-            }
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "Disconnected successfully"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Disconnection failed"
-            };
+            _client.Disconnect();
+            _client.Dispose();
         }
     }
 
     public override bool IsConnected => _client.IsConnected;
 
-    public override QueryResult<List<FileItem>> GetFiles(string path)
+    public override List<FileItem> GetFiles(string path)
     {
-        try
-        {
-            var files = _client.GetListing(path)
-                .Where(f => f.Name != "." && f.Name != "..")
-                .Select(file => new FileItem
-                {
-                    Name = file.Name,
-                    Size = file.Size,
-                    LastModified = file.Modified,
-                    IsDirectory = file.Type == FtpObjectType.Directory,
-                    Permissions = GetPermissionsString(file.Chmod),
-                }).ToList();
-
-            return new QueryResult<List<FileItem>>
+        return _client.GetListing(path)
+            .Where(f => f.Name != "." && f.Name != "..")
+            .Select(file => new FileItem
             {
-                Data = files,
-                Status = new OperationStatus { Code = 0, Message = "All files received" }
-            };
-        }
-        catch (Exception e)
-        {
-            return new QueryResult<List<FileItem>>
-            {
-                Data = null,
-                Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive files" }
-            };
-        }
+                Name = file.Name,
+                Size = file.Size,
+                LastModified = file.Modified,
+                IsDirectory = file.Type == FtpObjectType.Directory,
+                Permissions = GetPermissionsString(file.Chmod),
+            })
+            .ToList();
     }
 
-    public override QueryResult<Stream> GetFile(string path)
+    public override Stream GetFile(string path)
     {
-        try
-        {
-            using var ftpStream = _client.OpenRead(path);
-            var memoryStream = new MemoryStream();
-            ftpStream.CopyTo(memoryStream);
-            memoryStream.Position = 0;
+        using var ftpStream = _client.OpenRead(path);
 
-            return new QueryResult<Stream>
-            {
-                Data = memoryStream,
-                Status = new OperationStatus { Code = 0, Message = "File downloaded" }
-            };
-        }
-        catch (Exception e)
-        {
-            return new QueryResult<Stream>
-            {
-                Data = null,
-                Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to download file" }
-            };
-        }
-    }
-    
-    public override QueryResult<List<string>> GetDirectories(string path)
-    {
-        try
-        {
-            var dirs = _client.GetListing(path)
-                .Where(f => f.Type == FtpObjectType.Directory && f.Name != "." && f.Name != "..")
-                .Select(f => f.FullName)
-                .ToList();
+        var memoryStream = new MemoryStream();
 
-            return new QueryResult<List<string>>
-            {
-                Data = dirs,
-                Status = new OperationStatus { Code = 0, Message = "Directories received" }
-            };
-        }
-        catch (Exception e)
-        {
-            return new QueryResult<List<string>>
-            {
-                Data = null,
-                Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive directories" }
-            };
-        }
+        ftpStream.CopyTo(memoryStream);
+
+        memoryStream.Position = 0;
+
+        return memoryStream;
     }
 
-    public override QueryResult<string> GetWorkingDirectory()
+    public override List<string> GetDirectories(string path)
     {
-        try
-        {
-            return new QueryResult<string>
-            {
-                Data = _client.GetWorkingDirectory(),
-                Status = new OperationStatus { Code = 0, Message = "Working directory received" }
-            };
-        }
-        catch (Exception e)
-        {
-            return new QueryResult<string>
-            {
-                Data = null,
-                Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive working directory" }
-            };
-        }
-    }
-    
-    public override OperationStatus SaveFile(string remotePath, Stream content)
-    {
-        try
-        {
-            if (content.CanSeek) content.Position = 0;
-            _client.UploadStream(content, remotePath);
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "File saved successfully"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to save file"
-            };
-        }
+        return _client.GetListing(path)
+            .Where(f => f.Type == FtpObjectType.Directory && f.Name != "." && f.Name != "..")
+            .Select(f => f.FullName)
+            .ToList();
     }
 
-    public override OperationStatus CreateFile(string remotePath)
+    public override string GetWorkingDirectory()
     {
-        try
-        {
-            using var stream = _client.OpenWrite(remotePath);
-            stream.Close();
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "File created"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to create file"
-            };
-        }
+        return _client.GetWorkingDirectory();
     }
 
-    public override OperationStatus DeleteFile(string remotePath)
+    public override void SaveFile(string remotePath, Stream content)
     {
-        try
-        {
-            _client.DeleteFile(remotePath);
+        if (content.CanSeek)
+            content.Position = 0;
 
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "File deleted"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to delete file"
-            };
-        }
+        _client.UploadStream(content, remotePath);
     }
 
-    public override OperationStatus RenameFile(string oldName, string newName)
+    public override void CreateFile(string remotePath)
     {
-        try
-        {
-            _client.Rename(oldName, newName);
+        using var stream = _client.OpenWrite(remotePath);
 
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "File renamed"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to rename file"
-            };
-        }
+        stream.Close();
     }
 
-    public override OperationStatus CreateDir(string remotePath)
+    public override void DeleteFile(string remotePath)
     {
-        try
-        {
-            _client.CreateDirectory(remotePath);
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "Directory created"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to create directory"
-            };
-        }
+        _client.DeleteFile(remotePath);
     }
 
-    public override OperationStatus DeleteDir(string remotePath)
+    public override void RenameFile(string oldName, string newName)
     {
-        try
-        {
-            DeleteDirectoryRecursive(remotePath);
+        _client.Rename(oldName, newName);
+    }
 
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "Directory deleted"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to delete directory"
-            };
-        }
+    public override void CreateDir(string remotePath)
+    {
+        _client.CreateDirectory(remotePath);
+    }
+
+    public override void DeleteDir(string remotePath)
+    {
+        DeleteDirectoryRecursive(remotePath);
     }
 
     private void DeleteDirectoryRecursive(string path)
     {
         foreach (var entry in _client.GetListing(path))
         {
-            if (entry.Name is "." or "..") continue;
+            if (entry.Name is "." or "..")
+                continue;
 
             if (entry.Type == FtpObjectType.Directory)
                 DeleteDirectoryRecursive(entry.FullName);
@@ -326,85 +135,26 @@ public class FtpConnection : Connection
         _client.DeleteDirectory(path);
     }
 
-    public override OperationStatus RenameDir(string oldName, string newName)
+    public override void RenameDir(string oldName, string newName)
     {
-        try
-        {
-            _client.Rename(oldName, newName);
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "Directory renamed"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to rename directory"
-            };
-        }
+        _client.Rename(oldName, newName);
     }
 
-    public override OperationStatus ChangeDirectory(string path)
+    public override void ChangeDirectory(string path)
     {
-        try
-        {
-            _client.SetWorkingDirectory(path);
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = $"Changed directory to {_client.GetWorkingDirectory()}"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to change directory"
-            };
-        }
+        _client.SetWorkingDirectory(path);
     }
-    
-    public override OperationStatus ChangeFile(string path)
+
+    public override void ChangeFile(string path)
     {
-        try
+        if (!_client.FileExists(path))
         {
-            if (!_client.FileExists(path))
-            {
-                return new OperationStatus
-                {
-                    Code = 1,
-                    Message = "File does not exist"
-                };
-            }
-
-            if (_client.GetObjectInfo(path).Type == FtpObjectType.Directory)
-            {
-                return new OperationStatus
-                {
-                    Code = 1,
-                    Message = "Path is a directory, not a file"
-                };
-            }
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = $"File selected: {path}"
-            };
+            throw new FileNotFoundException("File does not exist", path);
         }
-        catch (Exception e)
+
+        if (_client.GetObjectInfo(path).Type == FtpObjectType.Directory)
         {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to access file"
-            };
+            throw new InvalidOperationException("Path is a directory, not a file");
         }
     }
 
