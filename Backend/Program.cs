@@ -6,6 +6,8 @@ using Core.Implementations.Storage;
 using Core.Interfaces.Factory;
 using Core.Interfaces.Manager;
 using Core.Interfaces.Storage;
+using Core.Security;
+using Core.Utils;
 
 try
 {
@@ -22,10 +24,17 @@ try
             options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         });
 
-
-    builder.Services.AddSingleton<IProfileStorage, JsonProfileStorage>();
+    builder.Services.AddSingleton<ICredentialProtectionService, Base64CredentialProtectionService>();
+    builder.Services.AddSingleton<IProfileStorage>(sp =>
+    {
+        var protection = sp.GetRequiredService<ICredentialProtectionService>();
+        return new JsonProfileStorage(AppPaths
+            .GetProfilesFilePath(), protection);
+    });
+    
     builder.Services.AddSingleton<IConnectionManager, ConnectionManager>();
     builder.Services.AddSingleton<IConnectionFactory, ConnectionFactory>();
+    
 
 
     using var app = builder.Build();
