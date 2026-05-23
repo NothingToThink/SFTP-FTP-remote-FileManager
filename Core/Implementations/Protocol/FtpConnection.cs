@@ -27,28 +27,28 @@ public class FtpConnection : Connection
         };
     }
     
-    public override Task<OperationStatus> Connect()
+    public override OperationStatus Connect()
     {
         try
         {
             _client.Connect();
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 0,
                 Message = "Connected"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Connection failed"
-            });
+            };
         }
     }
 
-    public override Task<OperationStatus> Disconnect()
+    public override OperationStatus Disconnect()
     {
         try
         {
@@ -58,30 +58,30 @@ public class FtpConnection : Connection
                 _client.Dispose();
             }
 
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 0,
                 Message = "Disconnected successfully"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Disconnection failed"
-            });
+            };
         }
     }
 
     public override bool IsConnected => _client.IsConnected;
 
-    public override Task<QueryResult<List<FileItem>>> GetFiles(string path)
+    public override QueryResult<List<FileItem>> GetFiles(string path)
     {
         try
         {
             var files = _client.GetListing(path)
-                .Where(f => f.Name != "." && f.Name != "..") // в Filezilla точка передается, хз надо ли нам 
+                .Where(f => f.Name != "." && f.Name != "..")
                 .Select(file => new FileItem
                 {
                     Name = file.Name,
@@ -90,23 +90,24 @@ public class FtpConnection : Connection
                     IsDirectory = file.Type == FtpObjectType.Directory,
                     Permissions = GetPermissionsString(file.Chmod),
                 }).ToList();
-            return Task.FromResult(new QueryResult<List<FileItem>>
+
+            return new QueryResult<List<FileItem>>
             {
                 Data = files,
                 Status = new OperationStatus { Code = 0, Message = "All files received" }
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new QueryResult<List<FileItem>>
+            return new QueryResult<List<FileItem>>
             {
                 Data = null,
                 Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive files" }
-            });
+            };
         }
     }
 
-    public override Task<QueryResult<Stream>> GetFile(string path)
+    public override QueryResult<Stream> GetFile(string path)
     {
         try
         {
@@ -115,23 +116,23 @@ public class FtpConnection : Connection
             ftpStream.CopyTo(memoryStream);
             memoryStream.Position = 0;
 
-            return Task.FromResult(new QueryResult<Stream>
+            return new QueryResult<Stream>
             {
                 Data = memoryStream,
                 Status = new OperationStatus { Code = 0, Message = "File downloaded" }
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new QueryResult<Stream>
+            return new QueryResult<Stream>
             {
                 Data = null,
                 Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to download file" }
-            });
+            };
         }
     }
     
-    public override Task<QueryResult<List<string>>> GetDirectories(string path)
+    public override QueryResult<List<string>> GetDirectories(string path)
     {
         try
         {
@@ -140,168 +141,173 @@ public class FtpConnection : Connection
                 .Select(f => f.FullName)
                 .ToList();
 
-            return Task.FromResult(new QueryResult<List<string>>
+            return new QueryResult<List<string>>
             {
                 Data = dirs,
                 Status = new OperationStatus { Code = 0, Message = "Directories received" }
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new QueryResult<List<string>>
+            return new QueryResult<List<string>>
             {
                 Data = null,
                 Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive directories" }
-            });
+            };
         }
     }
-    public override Task<QueryResult<string>> GetWorkingDirectory()
+
+    public override QueryResult<string> GetWorkingDirectory()
     {
         try
         {
-            return Task.FromResult(new QueryResult<string>
+            return new QueryResult<string>
             {
                 Data = _client.GetWorkingDirectory(),
                 Status = new OperationStatus { Code = 0, Message = "Working directory received" }
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new QueryResult<string>
+            return new QueryResult<string>
             {
                 Data = null,
                 Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive working directory" }
-            });
+            };
         }
     }
     
-    public override Task<OperationStatus> SaveFile(string remotePath, Stream content)
+    public override OperationStatus SaveFile(string remotePath, Stream content)
     {
         try
         {
             if (content.CanSeek) content.Position = 0;
             _client.UploadStream(content, remotePath);
 
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 0,
                 Message = "File saved successfully"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Failed to save file"
-            });
+            };
         }
     }
 
-    public override Task<OperationStatus> CreateFile(string remotePath)
+    public override OperationStatus CreateFile(string remotePath)
     {
         try
         {
             using var stream = _client.OpenWrite(remotePath);
             stream.Close();
-            return Task.FromResult(new OperationStatus
+
+            return new OperationStatus
             {
                 Code = 0,
                 Message = "File created"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Failed to create file"
-            });
+            };
         }
     }
 
-    public override Task<OperationStatus> DeleteFile(string remotePath)
+    public override OperationStatus DeleteFile(string remotePath)
     {
         try
         {
             _client.DeleteFile(remotePath);
-            return Task.FromResult(new OperationStatus
+
+            return new OperationStatus
             {
                 Code = 0,
                 Message = "File deleted"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Failed to delete file"
-            });
+            };
         }
     }
 
-    public override Task<OperationStatus> RenameFile(string oldName, string newName)
+    public override OperationStatus RenameFile(string oldName, string newName)
     {
         try
         {
             _client.Rename(oldName, newName);
-            return Task.FromResult(new OperationStatus
+
+            return new OperationStatus
             {
                 Code = 0,
                 Message = "File renamed"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Failed to rename file"
-            });
+            };
         }
     }
 
-    public override Task<OperationStatus> CreateDir(string remotePath)
+    public override OperationStatus CreateDir(string remotePath)
     {
-        
         try
         {
             _client.CreateDirectory(remotePath);
-            return Task.FromResult(new OperationStatus
+
+            return new OperationStatus
             {
                 Code = 0,
                 Message = "Directory created"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Failed to create directory"
-            });
+            };
         }
     }
 
-    public override Task<OperationStatus> DeleteDir(string remotePath)
+    public override OperationStatus DeleteDir(string remotePath)
     {
         try
         {
             DeleteDirectoryRecursive(remotePath);
-            return Task.FromResult(new OperationStatus
+
+            return new OperationStatus
             {
                 Code = 0,
                 Message = "Directory deleted"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Failed to delete directory"
-            });
+            };
         }
     }
 
@@ -316,87 +322,89 @@ public class FtpConnection : Connection
             else
                 _client.DeleteFile(entry.FullName);
         }
+
         _client.DeleteDirectory(path);
     }
 
-    public override Task<OperationStatus> RenameDir(string oldName, string newName)
+    public override OperationStatus RenameDir(string oldName, string newName)
     {
         try
         {
             _client.Rename(oldName, newName);
-            return Task.FromResult(new OperationStatus
+
+            return new OperationStatus
             {
                 Code = 0,
                 Message = "Directory renamed"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Failed to rename directory"
-            });
+            };
         }
     }
 
-    public override Task<OperationStatus> ChangeDirectory(string path)
+    public override OperationStatus ChangeDirectory(string path)
     {
         try
         {
             _client.SetWorkingDirectory(path);
-            return Task.FromResult(new OperationStatus
+
+            return new OperationStatus
             {
                 Code = 0,
                 Message = $"Changed directory to {_client.GetWorkingDirectory()}"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Failed to change directory"
-            });
+            };
         }
     }
     
-    public override Task<OperationStatus> ChangeFile(string path)
+    public override OperationStatus ChangeFile(string path)
     {
-        
         try
         {
             if (!_client.FileExists(path))
             {
-                return Task.FromResult(new OperationStatus
+                return new OperationStatus
                 {
                     Code = 1,
                     Message = "File does not exist"
-                });
+                };
             }
 
             if (_client.GetObjectInfo(path).Type == FtpObjectType.Directory)
             {
-                return Task.FromResult(new OperationStatus
+                return new OperationStatus
                 {
                     Code = 1,
                     Message = "Path is a directory, not a file"
-                });
+                };
             }
 
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 0,
                 Message = $"File selected: {path}"
-            });
+            };
         }
         catch (Exception e)
         {
-            return Task.FromResult(new OperationStatus
+            return new OperationStatus
             {
                 Code = 1,
                 Message = e.Message + " Failed to access file"
-            });
+            };
         }
     }
 
