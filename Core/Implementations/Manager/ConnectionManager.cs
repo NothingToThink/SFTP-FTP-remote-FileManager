@@ -13,7 +13,8 @@ public class ConnectionManager : IConnectionManager
     private readonly IProfileStorage _storage;
     private readonly IConnectionFactory _connectionFactory;
     private Dictionary<Guid, Connection> _connections = new();
-    private ConnectionManager (IProfileStorage storage, IConnectionFactory connectionFactory)
+    private Connection? _currentConnection = null;
+    public ConnectionManager (IProfileStorage storage, IConnectionFactory connectionFactory)
     {
         _storage = storage;
         _connectionFactory = connectionFactory;
@@ -34,49 +35,34 @@ public class ConnectionManager : IConnectionManager
             AddConnection(profile);
         }
     }
-    public void CreateConnection (SavedProfile profile)
+    public Guid CreateConnection (SavedProfile profile)
     {
-        try
-        {
-            _storage.Save(new SavedProfile.Create);
-        }
-        catch (Exception e)
-        {
-            throw new InvalidOperationException($"IProfileStorage.GetProfiles failed, connection not created", e);
-        }
-
-        AddConnection(profile.HostProfile);
+        return AddConnection(profile.HostProfile);
     }
-    public IReadOnlyList<HostProfile> GetProfilesList()
+    public List<Guid> GetConnectionIdList()
     {
-        //Todo HostProfile <- Iconncetion
-        return _connections.Values.ToList();
+        return _connections.Keys.ToList();
     }
-    public Connection GetConnection(Guid id)
+    
+    public Connection GetConnection (Guid id)
     {
-        if (!_hostProfileToConnection.TryGetValue(profile, out Connection? connection))
-        {
-            throw new KeyNotFoundException($"connection not exists");
-        }
-        return Task.FromResult(connection);
+        return _connections[id] ?? throw new InvalidOperationException("Current connection is not set");
     }
 
-    private void DeleteConnection(HostProfile profile)
+    public List<SavedProfile> GetProfilesList()
     {
-        //TODO по id
-        try
-        {
-            _storage.Delete(profile.Name);
-        }
-        catch(Exception e)
-        {
-            throw new InvalidOperationException("IProfileStorage.Delete failed", e);
-        }
+        return _storage.GetProfiles();
     }
 
-    private void AddConnection(HostProfile profile)
+    public void DeleteConnection (Guid id)
+    {
+        _connections.Remove(id);
+    }
+
+    private Guid AddConnection(HostProfile profile)
     {
         var newConnection = _connectionFactory.CreateConnection(profile);
         _connections[newConnection.Id] = newConnection;
+        return newConnection.Id;
     }
 }
