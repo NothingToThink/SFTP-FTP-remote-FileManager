@@ -1,5 +1,4 @@
 using Core.Models;
-using Core.Models.Credentials;
 
 namespace Core.Interfaces.Protocol;
 
@@ -7,21 +6,21 @@ public abstract class Connection : IQuery, ICommand, IDisposable
 {
     private bool _disposed = false;
     public Guid Id { get; } = Guid.NewGuid();
-    public abstract Task<OperationStatus> Connect();
-    public abstract Task<OperationStatus> Disconnect();
+    public abstract OperationStatus Connect();
+    public abstract OperationStatus Disconnect();
     public abstract bool IsConnected { get; }
-    public abstract Task<QueryResult<List<FileItem>>> GetFiles(string path);
-    public abstract Task<QueryResult<Stream>> GetFile(string path);
-    public abstract Task<QueryResult<List<string>>> GetDirectories(string path);
-    public abstract Task<OperationStatus> SaveFile(string remotePath, Stream content);
-    public abstract Task<OperationStatus> CreateFile(string remotePath);
-    public abstract Task<OperationStatus> DeleteFile(string remotePath);
-    public abstract Task<OperationStatus> RenameFile(string oldName, string newName);
-    public abstract Task<OperationStatus> CreateDir(string remotePath);
-    public abstract Task<OperationStatus> DeleteDir(string remotePath);
-    public abstract Task<OperationStatus> RenameDir(string oldName, string newName);
-    public abstract Task<OperationStatus> ChangeDirectory(string path);
-    public abstract Task<OperationStatus> ChangeFile(string path);
+    public abstract QueryResult<List<FileItem>> GetFiles(string path);
+    public abstract QueryResult<Stream> GetFile(string path);
+    public abstract QueryResult<List<string>> GetDirectories(string path);
+    public abstract OperationStatus SaveFile(string remotePath, Stream content);
+    public abstract OperationStatus CreateFile(string remotePath);
+    public abstract OperationStatus DeleteFile(string remotePath);
+    public abstract OperationStatus RenameFile(string oldName, string newName);
+    public abstract OperationStatus CreateDir(string remotePath);
+    public abstract OperationStatus DeleteDir(string remotePath);
+    public abstract OperationStatus RenameDir(string oldName, string newName);
+    public abstract OperationStatus ChangeDirectory(string path);
+    public abstract OperationStatus ChangeFile(string path);
 
     public void Dispose()
     {
@@ -31,5 +30,5 @@ public abstract class Connection : IQuery, ICommand, IDisposable
     }
 
     protected abstract void DisposeCore();
-    public abstract Task<QueryResult<string>> GetWorkingDirectory();
+    public abstract QueryResult<string> GetWorkingDirectory();
 }
