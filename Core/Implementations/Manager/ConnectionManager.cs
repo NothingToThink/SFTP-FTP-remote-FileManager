@@ -13,7 +13,6 @@ public class ConnectionManager : IConnectionManager
     private readonly IProfileStorage _storage;
     private readonly IConnectionFactory _connectionFactory;
     private Dictionary<Guid, Connection> _connections = new();
-    private Connection? _currentConnection = null;
     public ConnectionManager (IProfileStorage storage, IConnectionFactory connectionFactory)
     {
         _storage = storage;
