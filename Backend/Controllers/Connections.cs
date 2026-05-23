@@ -11,7 +11,7 @@ namespace Backend.Controllers;
 public class Connections(ILogger<Connections> logger, IConnectionManager connectionManager)
     : ControllerBase
 {
-    [HttpGet("/profiles")]
+    [HttpGet("profiles")]
     public IActionResult GetAll()
     {
         logger.LogInformation("Getting all profiles");
@@ -19,7 +19,7 @@ public class Connections(ILogger<Connections> logger, IConnectionManager connect
         return Ok(profiles);
     }
 
-    [HttpGet("/connect/{id}")]
+    [HttpGet("connect/{id}")]
     public IActionResult ConnectById([FromBody] Guid id)
     {
         logger.LogInformation("Getting connection profile");
@@ -35,7 +35,7 @@ public class Connections(ILogger<Connections> logger, IConnectionManager connect
         }
     }
     
-    [HttpPost("/connect")]
+    [HttpPost("connect")]
     public IActionResult ConnectByProfile([FromBody] ConnectRequest request)
     {
         logger.LogInformation("Connecting to credentials");
@@ -44,7 +44,7 @@ public class Connections(ILogger<Connections> logger, IConnectionManager connect
         return Ok(id);
     }
 
-    [HttpPost("/disconnect")]
+    [HttpPost("disconnect")]
     public IActionResult DisconnectById([FromBody] Guid id)
     {
         logger.LogInformation("Deleting connection profile");
@@ -60,7 +60,7 @@ public class Connections(ILogger<Connections> logger, IConnectionManager connect
         }
     }
 
-    [HttpPost("/test")]
+    [HttpPost("test")]
     public IActionResult Test([FromBody] Guid id)
     {
         logger.LogInformation("Testing connection");
