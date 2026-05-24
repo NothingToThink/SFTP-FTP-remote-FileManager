@@ -19,6 +19,12 @@ public class Connections(ILogger<Connections> logger, IConnectionManager connect
         return Ok(profiles);
     }
 
+    // [HttpPost("profiles")]
+    // public IActionResult SaveProfile()
+    // {
+        
+    // }
+
     [HttpGet("connect/{id}")]
     public IActionResult ConnectById([FromBody] Guid id)
     {
@@ -40,6 +46,7 @@ public class Connections(ILogger<Connections> logger, IConnectionManager connect
     {
         logger.LogInformation("Connecting to credentials");
         var profile = SavedProfile.Create(request.Name, request.HostProfile);
+        // connectionManager.
         var id = connectionManager.CreateConnection(profile);
         return Ok(id);
     }
