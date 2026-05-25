@@ -11,7 +11,6 @@ using Core.Utils;
 
 try
 {
-
     var builder = WebApplication.CreateBuilder(args);
 
     builder.Services.AddEndpointsApiExplorer();
@@ -32,13 +31,12 @@ try
             .GetProfilesFilePath(), protection);
     });
     
-    builder.Services.AddSingleton<IConnectionManager, ConnectionManager>();
     builder.Services.AddSingleton<IConnectionFactory, ConnectionFactory>();
-    
+    builder.Services.AddSingleton<IConnectionManager, ConnectionManager>();
+    // builder.Services.AddSingleton<IProfileManager, IProfileManager>();
 
 
     using var app = builder.Build();
-
 
     if (app.Environment.IsDevelopment())
     {
