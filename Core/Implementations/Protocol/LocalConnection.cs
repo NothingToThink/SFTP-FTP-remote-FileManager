@@ -206,6 +206,47 @@ public class LocalConnection : Connection
         return _currentPath;
     }
 
+    public override bool FileExists(string path)
+    {
+        return File.Exists(GetLocalPath(path));
+    }
+
+    public override bool DirecotryExists(string path)
+    {
+        return Directory.Exists(GetLocalPath(path));
+    }
+
+    public override FileItem GetInfo(string path)
+    {
+        var localPath = GetLocalPath(path);
+        if (Directory.Exists(localPath))
+        {
+            var info = new DirectoryInfo(path);
+            return new FileItem
+            {
+                Name = info.Name,
+                Size = 0,
+                LastModified = info.LastWriteTime,
+                IsDirectory = true,
+                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
+                Permissions = GetPermissionsString(info)
+            };
+        }
+        else
+        {
+            var info = new FileInfo(path);
+            return new FileItem
+            {
+                Name = info.Name,
+                Size = info.Length,
+                LastModified = info.LastWriteTime,
+                IsDirectory = false,
+                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
+                Permissions = GetPermissionsString(info)
+            };
+        }
+    }
+
     protected override void DisposeCore()
     {
 

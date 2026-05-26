@@ -60,6 +60,7 @@ public class SftpConnection : Connection
                 Name = file.Name,
                 Size = file.Length,
                 LastModified = file.LastWriteTime,
+                FullPath = file.FullName,
                 IsDirectory = file.IsDirectory,
                 Permissions = GetPermissionsString(file.Attributes),
             })
@@ -88,6 +89,32 @@ public class SftpConnection : Connection
     public override string GetWorkingDirectory()
     {
         return _client.WorkingDirectory;
+    }
+
+    public override bool FileExists(string path)
+    {
+        if (!_client.Exists(path)) return false;
+        return _client.GetAttributes(path).IsRegularFile;
+    }
+
+    public override bool DirecotryExists(string path)
+    {
+        if (!_client.Exists(path)) return false;
+        return _client.GetAttributes(path).IsDirectory;
+    }
+
+    public override FileItem GetInfo(string path)
+    {
+        var file = _client.Get(path);
+        return new FileItem
+        {
+            Name = file.Name,
+            Size = file.Length,
+            LastModified = file.LastWriteTime,
+            FullPath = file.FullName,
+            IsDirectory = file.IsDirectory,
+            Permissions = GetPermissionsString(file.Attributes),
+        };
     }
 
     public override void SaveFile(string remotePath, Stream content)
