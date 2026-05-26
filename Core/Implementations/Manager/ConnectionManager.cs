@@ -1,39 +1,15 @@
-using System.Collections.Concurrent;
-
 using Core.Interfaces.Manager;
-using Core.Interfaces.Storage;
 using Core.Interfaces.Protocol;
 using Core.Interfaces.Factory;
 using Core.Models.Credentials;
 
 namespace Core.Implementations.Manager;
 
-public class ConnectionManager : IConnectionManager 
+public class ConnectionManager (IConnectionFactory connectionFactory) : IConnectionManager 
 {
-    private readonly IProfileStorage _storage;
-    private readonly IConnectionFactory _connectionFactory;
+    private readonly IConnectionFactory _connectionFactory = connectionFactory;
     private Dictionary<Guid, Connection> _connections = new();
-    public ConnectionManager (IProfileStorage storage, IConnectionFactory connectionFactory)
-    {
-        _storage = storage;
-        _connectionFactory = connectionFactory;
 
-        List<HostProfile> profiles;
-        try 
-        {
-            var storageProfiles = _storage.GetProfiles();
-            profiles = storageProfiles.Select(p => p.HostProfile with{}).ToList();
-        }
-        catch (Exception e)
-        {
-            throw new InvalidOperationException("IProfileStorage.GetProfiles failed", e);
-        }
-
-        foreach (var profile in profiles)
-        {
-            AddConnection(profile);
-        }
-    }
     public Guid CreateConnection (SavedProfile profile)
     {
         return AddConnection(profile.HostProfile);
@@ -45,12 +21,7 @@ public class ConnectionManager : IConnectionManager
     
     public Connection GetConnection (Guid id)
     {
-        return _connections[id] ?? throw new InvalidOperationException("Current connection is not set");
-    }
-
-    public List<SavedProfile> GetProfilesList()
-    {
-        return _storage.GetProfiles();
+        return _connections[id] ?? throw new InvalidOperationException($"Connection with id = {id} doesnt exists");
     }
 
     public void DeleteConnection (Guid id)
