@@ -98,6 +98,24 @@ public class LocalConnection : Connection
         File.Move(oldPath, newPath);
     }
 
+    public override void MoveFile(string sourcePath, string targetPath, bool canOverride = true)
+    {
+        if (!canOverride && File.Exists(targetPath))
+            throw new InvalidOperationException("Cannot move file: target file already exists.");
+        if (Directory.Exists(targetPath))
+            throw new InvalidOperationException("Cannot move file: target file is a directory.");
+        File.Move(sourcePath, targetPath);
+    }
+
+    public override void CopyFile(string sourcePath, string targetPath, bool canOverride = true)
+    {
+        if (!canOverride && File.Exists(targetPath))
+            throw new InvalidOperationException("Cannot copy file: target file already exists.");
+        if (Directory.Exists(targetPath))
+            throw new InvalidOperationException("Cannot copy file: target file is a directory.");
+        File.Copy(sourcePath, targetPath);
+    }
+
     public override void CreateDir(string remotePath)
     {
         var localPath = GetLocalPath(remotePath);
@@ -210,8 +228,8 @@ public class LocalConnection : Connection
     {
         return File.Exists(GetLocalPath(path));
     }
+    public override bool DirectoryExists(string path)
 
-    public override bool DirecotryExists(string path)
     {
         return Directory.Exists(GetLocalPath(path));
     }
