@@ -223,7 +223,7 @@ public class LocalConnection : Connection
     {
         return File.Exists(GetLocalPath(path));
     }
-    public override bool DirectoryExists(string path)
+    public override bool DirExists(string path)
 
     {
         return Directory.Exists(GetLocalPath(path));

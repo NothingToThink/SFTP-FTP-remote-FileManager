@@ -3,7 +3,7 @@ using Core.Interfaces.Manager;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
-[Route("connecions/{connectionId}/filesystem")]
+[Route("connections/{connectionId}/filesystem")]
 public class ConnectionsFilesystemController(
         ILogger<ConnectionsFilesystemController> logger,
         IConnectionManager connectionManager
@@ -33,7 +33,8 @@ public class ConnectionsFilesystemController(
             logger.LogInformation("Getting file info.");
             var connection = connectionManager.GetConnection(connectionId);
             return Ok(connection.GetInfo(path));
-        } catch (Exception e)
+        }
+        catch (Exception e)
         {
             logger.LogError(e, "Error while getting file info.");
             return BadRequest();
@@ -64,7 +65,7 @@ public class ConnectionsFilesystemController(
         {
             logger.LogInformation("Creating directory.");
             var connection = connectionManager.GetConnection(connectionId);
-            connection.CreateFile(path);
+            connection.CreateDir(path);
             return Ok();
         }
         catch (Exception e)
@@ -81,7 +82,7 @@ public class ConnectionsFilesystemController(
         {
             logger.LogInformation("Deleting file.");
             var connection = connectionManager.GetConnection(connectionId);
-            connection.CreateFile(path);
+            connection.DeleteFile(path);
             return Ok();
         }
         catch (Exception e)
@@ -98,7 +99,7 @@ public class ConnectionsFilesystemController(
         {
             logger.LogInformation("Deleting directory.");
             var connection = connectionManager.GetConnection(connectionId);
-            connection.CreateFile(path);
+            connection.DeleteDir(path);
             return Ok();
         }
         catch (Exception e)
@@ -132,7 +133,7 @@ public class ConnectionsFilesystemController(
         {
             logger.LogInformation("Renaming directory.");
             var connection = connectionManager.GetConnection(connectionId);
-            connection.RenameFile(request.oldPath, request.newPath);
+            connection.RenameDir(request.oldPath, request.newPath);
             return Ok();
         }
         catch (Exception e)
@@ -150,7 +151,8 @@ public class ConnectionsFilesystemController(
             logger.LogInformation("Checking if the file exists.");
             var connection = connectionManager.GetConnection(connectionId);
             return Ok(connection.FileExists(path));
-        } catch (Exception e)
+        }
+        catch (Exception e)
         {
             logger.LogError(e, "Error while checking if the file exists.");
             return BadRequest();
@@ -164,8 +166,9 @@ public class ConnectionsFilesystemController(
         {
             logger.LogInformation("Checking if the directory exists.");
             var connection = connectionManager.GetConnection(connectionId);
-            return Ok(connection.FileExists(path));
-        } catch (Exception e)
+            return Ok(connection.DirExists(path));
+        }
+        catch (Exception e)
         {
             logger.LogError(e, "Error while checking if the directory exists.");
             return BadRequest();
@@ -196,7 +199,7 @@ public class ConnectionsFilesystemController(
         {
             logger.LogInformation("Moving file.");
             var connection = connectionManager.GetConnection(connectionId);
-            connection.CopyFile(request.sourcePath, request.targetPath, request.canOverride);
+            connection.MoveFile(request.sourcePath, request.targetPath, request.canOverride);
             return Ok();
         }
         catch (Exception e)

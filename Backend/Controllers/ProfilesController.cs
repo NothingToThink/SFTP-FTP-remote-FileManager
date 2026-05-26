@@ -13,7 +13,7 @@ public class ProfilesController(
 ) : ControllerBase
 {
   [HttpGet]
-  public IActionResult GetConnectionIdList()
+  public IActionResult GetProfileIdList()
   {
     logger.LogInformation("Getting profile id list.");
     var profileIdList = profileManager.GetProfileIdList();

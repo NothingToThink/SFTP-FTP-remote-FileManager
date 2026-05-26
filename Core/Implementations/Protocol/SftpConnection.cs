@@ -97,7 +97,7 @@ public class SftpConnection : Connection
         return _client.GetAttributes(path).IsRegularFile;
     }
 
-    public override bool DirectoryExists(string path)
+    public override bool DirExists(string path)
     {
         if (!_client.Exists(path)) return false;
         return _client.GetAttributes(path).IsDirectory;
