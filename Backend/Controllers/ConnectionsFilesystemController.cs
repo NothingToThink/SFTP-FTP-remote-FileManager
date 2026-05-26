@@ -28,13 +28,16 @@ public class ConnectionsFilesystemController(
     [HttpGet("info")]
     public IActionResult GetFileInfo([FromRoute] Guid connectionId, [FromBody] string path)
     {
-        throw new NotImplementedException();
-    }
-
-    [HttpGet("exists")]
-    public IActionResult FileExists([FromRoute] Guid connectionId, [FromBody] string path)
-    {
-        throw new NotImplementedException();
+        try
+        {
+            logger.LogInformation("Getting file info.");
+            var connection = connectionManager.GetConnection(connectionId);
+            return Ok(connection.GetInfo(path));
+        } catch (Exception e)
+        {
+            logger.LogError(e, "Error while getting file info.");
+            return BadRequest();
+        }
     }
 
     [HttpPost("file")]
@@ -135,6 +138,36 @@ public class ConnectionsFilesystemController(
         catch (Exception e)
         {
             logger.LogError(e, "Error while renaming directory.");
+            return BadRequest();
+        }
+    }
+
+    [HttpGet("file/exists")]
+    public IActionResult FileExists([FromRoute] Guid connectionId, [FromBody] string path)
+    {
+        try
+        {
+            logger.LogInformation("Checking if the file exists.");
+            var connection = connectionManager.GetConnection(connectionId);
+            return Ok(connection.FileExists(path));
+        } catch (Exception e)
+        {
+            logger.LogError(e, "Error while checking if the file exists.");
+            return BadRequest();
+        }
+    }
+
+    [HttpGet("dir/exists")]
+    public IActionResult DirExists([FromRoute] Guid connectionId, [FromBody] string path)
+    {
+        try
+        {
+            logger.LogInformation("Checking if the directory exists.");
+            var connection = connectionManager.GetConnection(connectionId);
+            return Ok(connection.FileExists(path));
+        } catch (Exception e)
+        {
+            logger.LogError(e, "Error while checking if the directory exists.");
             return BadRequest();
         }
     }
