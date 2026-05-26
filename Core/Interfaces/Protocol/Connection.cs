@@ -10,7 +10,7 @@ public abstract class Connection : IQuery, ICommand, IDisposable
     public abstract void Disconnect();
     public abstract string GetWorkingDirectory();
     public abstract bool FileExists(string path);
-    public abstract bool DirectoryExists(string path);
+    public abstract bool DirExists(string path);
     public abstract FileItem GetInfo(string path);
 
     public abstract bool IsConnected { get; }

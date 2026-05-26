@@ -90,7 +90,7 @@ public class FtpConnection : Connection
         return _client.FileExists(path);
     }
 
-    public override bool DirectoryExists(string path)
+    public override bool DirExists(string path)
     {
         return _client.DirectoryExists(path);
     }

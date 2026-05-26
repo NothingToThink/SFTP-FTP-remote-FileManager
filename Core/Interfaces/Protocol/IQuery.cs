@@ -9,6 +9,6 @@ public interface IQuery
     List<string> GetDirectories(string path);
     string GetWorkingDirectory();
     bool FileExists(string path);
-    bool DirectoryExists(string path);
+    bool DirExists(string path);
     FileItem GetInfo(string path);
 }
