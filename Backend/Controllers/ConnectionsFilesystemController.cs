@@ -2,12 +2,14 @@ using Backend.DTO;
 using Core.Interfaces.Manager;
 using Microsoft.AspNetCore.Mvc;
 
+namespace Backend.Controllers;
+
 [ApiController]
 [Route("connections/{connectionId}/filesystem")]
 public class ConnectionsFilesystemController(
-        ILogger<ConnectionsFilesystemController> logger,
-        IConnectionManager connectionManager
-    ) : ControllerBase
+    ILogger<ConnectionsFilesystemController> logger,
+    IConnectionManager connectionManager
+) : ControllerBase
 {
     [HttpGet]
     public IActionResult GetAllFiles([FromRoute] Guid connectionId)
@@ -210,42 +212,42 @@ public class ConnectionsFilesystemController(
     }
 
     [HttpPost("file/upload")]
-    public IActionResult UploadFile([FromRoute] Guid connectionId, [FromBody] UploadRequest request)
+    public async Task<IActionResult> UploadFile(
+        [FromRoute] Guid connectionId,
+        [FromQuery] string remotePath,
+        IFormFile file)
     {
-        logger.LogInformation($"Uploading file.");
         try
         {
             var connection = connectionManager.GetConnection(connectionId);
-            byte[] bytes = Convert.FromBase64String(request.base64String);
-            connection.SaveFile(request.remotePath, new MemoryStream(bytes));
+            await using var stream = file.OpenReadStream();
+            connection.SaveFile(remotePath, stream);
             return Ok();
         }
         catch (Exception e)
         {
-            logger.LogError(e, $"Error while uploading file.");
+            logger.LogError(e, "Error while uploading file.");
             return BadRequest();
         }
     }
 
-    [HttpPost("file/download")]
-    public IActionResult Download([FromRoute] Guid connectionId, [FromBody] string path)
+    [HttpGet("file/download")]
+    public IActionResult Download(
+        [FromRoute] Guid connectionId,
+        [FromQuery] string path)
     {
-        logger.LogInformation($"Downloading file.");
         try
         {
             var connection = connectionManager.GetConnection(connectionId);
             var stream = connection.GetFile(path);
-            byte[] bytes = new byte[stream.Length];
-            stream.ReadExactly(bytes, 0, bytes.Count());
-            return Ok(Convert.ToBase64String(bytes));
+            return File(stream, "application/octet-stream", Path.GetFileName(path));
         }
         catch (Exception e)
         {
-            logger.LogError(e, $"Error while downloading file.");
+            logger.LogError(e, "Error while downloading file.");
             return BadRequest();
         }
     }
-
     [HttpGet("dir/current")]
     public IActionResult GetCurrentDirectory([FromRoute] Guid connectionId)
     {
