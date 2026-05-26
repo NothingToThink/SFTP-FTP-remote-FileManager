@@ -157,11 +157,6 @@ public class LocalConnection : Connection
         _currentPath = (newCurrentPath == ".") ? "" : newCurrentPath;
     }
 
-    public override void ChangeFile(string path)
-    {
-
-    }
-
     public override List<FileItem> GetFiles(string path)
     {
         var localPath = GetLocalPath(path);

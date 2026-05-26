@@ -28,7 +28,6 @@ public abstract class Connection : IQuery, ICommand, IDisposable
     public abstract void DeleteDir(string remotePath);
     public abstract void RenameDir(string oldName, string newName);
     public abstract void ChangeDirectory(string path);
-    public abstract void ChangeFile(string path);
 
     public void Dispose()
     {
