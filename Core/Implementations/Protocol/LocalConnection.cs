@@ -42,323 +42,138 @@ public class LocalConnection : Connection
         return fullPath;
     }
 
-    public override OperationStatus Connect()
+    public override void Connect()
     {
         _isConnected = true;
-
-        return new OperationStatus
-        {
-            Code = 0,
-            Message = "connected",
-            IsSuccess = true
-        };
     }
 
-    public override OperationStatus Disconnect()
+    public override void Disconnect()
     {
         _isConnected = false;
-
-        return new OperationStatus
-        {
-            Code = 0,
-            Message = "disconnected",
-            IsSuccess = true
-        };
     }
 
     public override bool IsConnected => _isConnected;
 
-    public override OperationStatus SaveFile(string remotePath, Stream content)
+    public override void SaveFile(string remotePath, Stream content)
     {
-        try
-        {
-            var localPath = GetLocalPath(remotePath);
+        var localPath = GetLocalPath(remotePath);
 
-            Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
 
-            using (var fileStream = new FileStream(
-                       localPath,
-                       FileMode.Create,
-                       FileAccess.Write,
-                       FileShare.None,
-                       4096,
-                       useAsync: false))
-            {
-                content.CopyTo(fileStream);
-            }
+        using var fileStream = new FileStream(
+            localPath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            4096,
+            useAsync: false);
 
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "file saved",
-                IsSuccess = true
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + "file not saved",
-                IsSuccess = false
-            };
-        }
+        content.CopyTo(fileStream);
     }
 
-    public override OperationStatus CreateFile(string remotePath)
+    public override void CreateFile(string remotePath)
     {
-        try
-        {
-            var localPath = GetLocalPath(remotePath);
+        var localPath = GetLocalPath(remotePath);
 
-            File.Create(localPath).Dispose();
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "file created",
-                IsSuccess = true
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " file not created",
-                IsSuccess = false
-            };
-        }
+        File.Create(localPath).Dispose();
     }
 
-    public override OperationStatus DeleteFile(string remotePath)
+    public override void DeleteFile(string remotePath)
     {
-        try
+        var localPath = GetLocalPath(remotePath);
+
+        if (!File.Exists(localPath))
         {
-            var localPath = GetLocalPath(remotePath);
-
-            if (!File.Exists(localPath))
-            {
-                throw new ArgumentException($"file {remotePath} not exists");
-            }
-
-            File.Delete(localPath);
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "file deleted",
-                IsSuccess = true
-            };
+            throw new ArgumentException($"file {remotePath} not exists");
         }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " file not deleted",
-                IsSuccess = false
-            };
-        }
+
+        File.Delete(localPath);
     }
 
-    public override OperationStatus RenameFile(string oldName, string newName)
+    public override void RenameFile(string oldName, string newName)
     {
-        try
-        {
-            var oldPath = GetLocalPath(oldName);
-            var newPath = GetLocalPath(newName);
+        var oldPath = GetLocalPath(oldName);
+        var newPath = GetLocalPath(newName);
 
-            File.Move(oldPath, newPath);
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "file renamed",
-                IsSuccess = true
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " file not renamed",
-                IsSuccess = false
-            };
-        }
+        File.Move(oldPath, newPath);
     }
 
-    public override OperationStatus CreateDir(string remotePath)
+    public override void MoveFile(string sourcePath, string targetPath, bool canOverride = true)
     {
-        try
-        {
-            var localPath = GetLocalPath(remotePath);
-
-            Directory.CreateDirectory(localPath);
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "directory created",
-                IsSuccess = true
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " directory not created",
-                IsSuccess = false
-            };
-        }
+        if (!canOverride && File.Exists(targetPath))
+            throw new InvalidOperationException("Cannot move file: target file already exists.");
+        if (Directory.Exists(targetPath))
+            throw new InvalidOperationException("Cannot move file: target file is a directory.");
+        File.Move(sourcePath, targetPath);
     }
 
-    public override OperationStatus DeleteDir(string remotePath)
+    public override void CopyFile(string sourcePath, string targetPath, bool canOverride = true)
     {
-        try
-        {
-            var localPath = GetLocalPath(remotePath);
-
-            if (!Directory.Exists(localPath))
-            {
-                throw new ArgumentException($"directory {remotePath} not exists");
-            }
-
-            Directory.Delete(localPath, recursive: true);
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "directory removed",
-                IsSuccess = true
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " directory not removed",
-                IsSuccess = false
-            };
-        }
+        if (!canOverride && File.Exists(targetPath))
+            throw new InvalidOperationException("Cannot copy file: target file already exists.");
+        if (Directory.Exists(targetPath))
+            throw new InvalidOperationException("Cannot copy file: target file is a directory.");
+        File.Copy(sourcePath, targetPath);
     }
 
-    public override OperationStatus RenameDir(string oldName, string newName)
+    public override void CreateDir(string remotePath)
     {
-        try
-        {
-            var oldPath = GetLocalPath(oldName);
-            var newPath = GetLocalPath(newName);
+        var localPath = GetLocalPath(remotePath);
 
-            Directory.Move(oldPath, newPath);
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "directory renamed",
-                IsSuccess = true
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " directory not renamed",
-                IsSuccess = false
-            };
-        }
+        Directory.CreateDirectory(localPath);
     }
 
-    public override OperationStatus ChangeDirectory(string path)
+    public override void DeleteDir(string remotePath)
     {
-        try
+        var localPath = GetLocalPath(remotePath);
+
+        if (!Directory.Exists(localPath))
         {
-            var fullPath = GetLocalPath(path);
-
-            if (!Directory.Exists(fullPath))
-            {
-                throw new ArgumentException($"directory {path} not exists");
-            }
-
-            var newCurrentPath = Path.GetRelativePath(_rootPath, fullPath);
-
-            _currentPath = (newCurrentPath == ".") ? "" : newCurrentPath;
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "directory changed",
-                IsSuccess = true
-            };
+            throw new ArgumentException($"directory {remotePath} not exists");
         }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " directory not changed",
-                IsSuccess = false
-            };
-        }
+
+        Directory.Delete(localPath, recursive: true);
     }
 
-    public override OperationStatus ChangeFile(string path)
+    public override void RenameDir(string oldName, string newName)
     {
-        return new OperationStatus
-        {
-            Code = 0,
-            Message = "file changed",
-            IsSuccess = true
-        };
+        var oldPath = GetLocalPath(oldName);
+        var newPath = GetLocalPath(newName);
+
+        Directory.Move(oldPath, newPath);
     }
 
-    public override QueryResult<List<FileItem>> GetFiles(string path)
+    public override void ChangeDirectory(string path)
     {
-        try
+        var fullPath = GetLocalPath(path);
+
+        if (!Directory.Exists(fullPath))
         {
-            var localPath = GetLocalPath(path);
-
-            var dirInfo = new DirectoryInfo(localPath);
-
-            var data = dirInfo.GetFileSystemInfos()
-                .Select(info => new FileItem
-                {
-                    Name = info.Name,
-                    Size = (info is FileInfo f) ? f.Length : 0,
-                    LastModified = info.LastWriteTime,
-                    IsDirectory = info is DirectoryInfo,
-                    FullPath = Path.GetRelativePath(_rootPath, info.FullName),
-                    Permissions = GetPermissionsString(info)
-                })
-                .ToList();
-
-            return new QueryResult<List<FileItem>>
-            {
-                Data = data,
-                Status = new OperationStatus
-                {
-                    Code = 0,
-                    Message = "files received",
-                    IsSuccess = true
-                }
-            };
+            throw new ArgumentException($"directory {path} not exists");
         }
-        catch (Exception e)
-        {
-            return new QueryResult<List<FileItem>>
+
+        var newCurrentPath = Path.GetRelativePath(_rootPath, fullPath);
+
+        _currentPath = (newCurrentPath == ".") ? "" : newCurrentPath;
+    }
+
+    public override List<FileItem> GetFiles(string path)
+    {
+        var localPath = GetLocalPath(path);
+
+        var dirInfo = new DirectoryInfo(localPath);
+
+        return dirInfo.GetFileSystemInfos()
+            .Select(info => new FileItem
             {
-                Status = new OperationStatus
-                {
-                    Code = 1,
-                    Message = e.Message + " files not received",
-                    IsSuccess = false
-                }
-            };
-        }
+                Name = info.Name,
+                Size = info is FileInfo f ? f.Length : 0,
+                LastModified = info.LastWriteTime,
+                IsDirectory = info is DirectoryInfo,
+                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
+                Permissions = GetPermissionsString(info)
+            })
+            .ToList();
     }
 
     private static string GetPermissionsString(FileSystemInfo info)
@@ -375,93 +190,74 @@ public class LocalConnection : Connection
         return $"{r}{w}{x}{r}{w}{x}{r}{w}{x}";
     }
 
-    public override QueryResult<Stream> GetFile(string path)
+    public override Stream GetFile(string path)
     {
-        try
-        {
-            string localPath = GetLocalPath(path);
+        string localPath = GetLocalPath(path);
 
-            var data = new FileStream(
-                localPath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                4096,
-                useAsync: false);
-
-            return new QueryResult<Stream>
-            {
-                Data = data,
-                Status = new OperationStatus
-                {
-                    Code = 0,
-                    Message = "file received",
-                    IsSuccess = true
-                }
-            };
-        }
-        catch (Exception e)
-        {
-            return new QueryResult<Stream>
-            {
-                Status = new OperationStatus
-                {
-                    Code = 1,
-                    Message = e.Message + " file not received",
-                    IsSuccess = false
-                }
-            };
-        }
+        return new FileStream(
+            localPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            4096,
+            useAsync: false);
     }
 
-    public override QueryResult<List<string>> GetDirectories(string path)
+    public override List<string> GetDirectories(string path)
     {
-        try
-        {
-            var localPath = GetLocalPath(path);
+        var localPath = GetLocalPath(path);
 
-            var dirInfo = new DirectoryInfo(localPath);
+        var dirInfo = new DirectoryInfo(localPath);
 
-            var data = dirInfo.GetDirectories()
-                .Select(info => info.Name)
-                .ToList();
-
-            return new QueryResult<List<string>>
-            {
-                Data = data,
-                Status = new OperationStatus
-                {
-                    Code = 0,
-                    Message = "directories received",
-                    IsSuccess = true
-                }
-            };
-        }
-        catch (Exception e)
-        {
-            return new QueryResult<List<string>>
-            {
-                Status = new OperationStatus
-                {
-                    Code = 1,
-                    Message = e.Message + " directories not received",
-                    IsSuccess = false
-                }
-            };
-        }
+        return dirInfo.GetDirectories()
+            .Select(info => info.Name)
+            .ToList();
     }
 
-    public override QueryResult<string> GetWorkingDirectory()
+    public override string GetWorkingDirectory()
     {
-        return new QueryResult<string>
+        return _currentPath;
+    }
+
+    public override bool FileExists(string path)
+    {
+        return File.Exists(GetLocalPath(path));
+    }
+    public override bool DirectoryExists(string path)
+
+    {
+        return Directory.Exists(GetLocalPath(path));
+    }
+
+    public override FileItem GetInfo(string path)
+    {
+        var localPath = GetLocalPath(path);
+        if (Directory.Exists(localPath))
         {
-            Data = _currentPath,
-            Status = new OperationStatus
+            var info = new DirectoryInfo(path);
+            return new FileItem
             {
-                Code = 0,
-                Message = "Working directory received"
-            }
-        };
+                Name = info.Name,
+                Size = 0,
+                LastModified = info.LastWriteTime,
+                IsDirectory = true,
+                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
+                Permissions = GetPermissionsString(info)
+            };
+        }
+        else
+        {
+            var info = new FileInfo(path);
+            return new FileItem
+            {
+                Name = info.Name,
+                Size = info.Length,
+                LastModified = info.LastWriteTime,
+                IsDirectory = false,
+                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
+                Permissions = GetPermissionsString(info)
+            };
+        }
     }
 
     protected override void DisposeCore()

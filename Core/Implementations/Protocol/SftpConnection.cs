@@ -9,7 +9,8 @@ namespace Core.Implementations.Protocol;
 public class SftpConnection : Connection
 {
     private readonly SftpClient _client;
-    public override bool IsConnected =>  _client.IsConnected;
+
+    public override bool IsConnected => _client.IsConnected;
 
     public SftpConnection(HostProfile profile)
     {
@@ -17,387 +18,188 @@ public class SftpConnection : Connection
         {
             PasswordAuth(var user, var pwd)
                 => new SftpClient(profile.Host, profile.EffectivePort, user, pwd),
+
             KeyAuth(var user, var keyPath, var passphrase)
                 => new SftpClient(profile.Host, profile.EffectivePort, user, BuildKeySource(keyPath, passphrase)),
+
             AnonymousAuth
                 => throw new InvalidOperationException("Anonymous authentication doesn't supported by sftp authentication"),
-            _ => throw new  ArgumentOutOfRangeException(nameof(profile.Auth))
+
+            _ => throw new ArgumentOutOfRangeException(nameof(profile.Auth))
         };
     }
-    
-    public override OperationStatus Connect()
+
+    public override void Connect()
     {
-        try
-        {
-            _client.Connect();
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "Connected"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Connection failed"
-            };
-        }
+        _client.Connect();
     }
 
     private static IPrivateKeySource[] BuildKeySource(string keyPath, string? passphrase)
     {
-        var key = passphrase is null ? new PrivateKeyFile(keyPath) : new PrivateKeyFile(keyPath, passphrase);
+        var key = passphrase is null
+            ? new PrivateKeyFile(keyPath)
+            : new PrivateKeyFile(keyPath, passphrase);
+
         return [key];
     }
-    
-    public override OperationStatus Disconnect()
-    {
-        try
-        {
-            if (_client is { IsConnected: true })
-            {
-                _client.Disconnect();
-            }
 
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "Disconnected successfully"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Disconnection failed"
-            };
-        }
-    }
-    
-    public override QueryResult<List<FileItem>> GetFiles(string path)
+    public override void Disconnect()
     {
-        try
+        if (_client is { IsConnected: true })
         {
-            var files = _client.ListDirectory(path)
-                .Where(f => f.Name != "." && f.Name != "..") // в Filezilla точка передается, хз надо ли нам 
-                .Select(file => new FileItem
-                {
-                    Name = file.Name,
-                    Size = file.Length,
-                    LastModified = file.LastWriteTime,
-                    IsDirectory = file.IsDirectory,
-                    Permissions = GetPermissionsString(file.Attributes),
-                }).ToList();
-            return new QueryResult<List<FileItem>>
-            {
-                Data = files,
-                Status = new OperationStatus { Code = 0, Message = "All files received" }
-            };
-        }
-        catch (Exception e)
-        {
-            return new QueryResult<List<FileItem>>
-            {
-                Data = null,
-                Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive files" }
-            };
+            _client.Disconnect();
         }
     }
 
-    public override QueryResult<Stream> GetFile(string path)
+    public override List<FileItem> GetFiles(string path)
     {
-        try
-        {
-            var memoryStream = new MemoryStream();
-            _client.DownloadFile(path, memoryStream);
-            memoryStream.Position = 0;
-
-            return new QueryResult<Stream>
+        return _client.ListDirectory(path)
+            .Where(f => f.Name != "." && f.Name != "..")
+            .Select(file => new FileItem
             {
-                Data = memoryStream,
-                Status = new OperationStatus { Code = 0, Message = "File downloaded" }
-            };
-        }
-        catch (Exception e)
-        {
-            return new QueryResult<Stream>
-            {
-                Data = null,
-                Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to download file" }
-            };
-        }
+                Name = file.Name,
+                Size = file.Length,
+                LastModified = file.LastWriteTime,
+                FullPath = file.FullName,
+                IsDirectory = file.IsDirectory,
+                Permissions = GetPermissionsString(file.Attributes),
+            })
+            .ToList();
     }
 
-    public override QueryResult<List<string>> GetDirectories(string path)
+    public override Stream GetFile(string path)
     {
-        try
-        {
-            var dirs = _client.ListDirectory(path)
-                .Where(f => f.IsDirectory && f.Name != "." && f.Name != "..")
-                .Select(f => f.FullName)
-                .ToList();
+        var memoryStream = new MemoryStream();
 
-            return new QueryResult<List<string>>
-            {
-                Data = dirs,
-                Status = new OperationStatus { Code = 0, Message = "Directories received" }
-            };
-        }
-        catch (Exception e)
-        {
-            return new QueryResult<List<string>>
-            {
-                Data = null,
-                Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive directories" }
-            };
-        }
+        _client.DownloadFile(path, memoryStream);
+
+        memoryStream.Position = 0;
+
+        return memoryStream;
     }
 
-    public override QueryResult<string> GetWorkingDirectory()
+    public override List<string> GetDirectories(string path)
     {
-        try
-        {
-            return new QueryResult<string>
-            {
-                Data = _client.WorkingDirectory,
-                Status = new OperationStatus { Code = 0, Message = "Working directory received" }
-            };
-        }
-        catch (Exception e)
-        {
-            return new QueryResult<string>
-            {
-                Data = null,
-                Status = new OperationStatus { Code = 1, Message = e.Message + " Failed to receive working directory" }
-            };
-        }
-    }
-    
-    
-    public override OperationStatus SaveFile(string remotePath, Stream content)
-    {
-        try
-        {
-            if (content.CanSeek) content.Position = 0;
-            _client.UploadFile(content, remotePath, true);
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "File saved successfully"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to save file"
-            };
-        }
+        return _client.ListDirectory(path)
+            .Where(f => f.IsDirectory && f.Name != "." && f.Name != "..")
+            .Select(f => f.FullName)
+            .ToList();
     }
 
-    public override OperationStatus CreateFile(string remotePath)
+    public override string GetWorkingDirectory()
     {
-        try
-        {
-            using var stream = _client.Create(remotePath);
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "File created"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to create file"
-            };
-        }
+        return _client.WorkingDirectory;
     }
 
-    public override OperationStatus DeleteFile(string remotePath)
+    public override bool FileExists(string path)
     {
-        try
-        {
-            _client.DeleteFile(remotePath);
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "File deleted"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to delete file"
-            };
-        }
+        if (!_client.Exists(path)) return false;
+        return _client.GetAttributes(path).IsRegularFile;
     }
 
-    public override OperationStatus RenameFile(string oldName, string newName)
+    public override bool DirectoryExists(string path)
     {
-        try
-        {
-            _client.RenameFile(oldName, newName);
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "File renamed"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to rename file"
-            };
-        }
+        if (!_client.Exists(path)) return false;
+        return _client.GetAttributes(path).IsDirectory;
     }
 
-    public override OperationStatus CreateDir(string remotePath)
+    public override FileItem GetInfo(string path)
     {
-        try
+        var file = _client.Get(path);
+        return new FileItem
         {
-            _client.CreateDirectory(remotePath);
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "Directory created"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to create directory"
-            };
-        }
+            Name = file.Name,
+            Size = file.Length,
+            LastModified = file.LastWriteTime,
+            FullPath = file.FullName,
+            IsDirectory = file.IsDirectory,
+            Permissions = GetPermissionsString(file.Attributes),
+        };
     }
 
-    public override OperationStatus DeleteDir(string remotePath)
+    public override void SaveFile(string remotePath, Stream content)
     {
-        try
+        if (content.CanSeek)
+            content.Position = 0;
+
+        _client.UploadFile(content, remotePath, true);
+    }
+
+    public override void CreateFile(string remotePath)
+    {
+        using var stream = _client.Create(remotePath);
+    }
+
+    public override void DeleteFile(string remotePath)
+    {
+        _client.DeleteFile(remotePath);
+    }
+
+    public override void RenameFile(string oldName, string newName)
+    {
+        _client.RenameFile(oldName, newName);
+    }
+
+    public override void MoveFile(string sourcePath, string targetPath, bool canOverride = true)
+    {
+        if (_client.Exists(targetPath))
         {
-            DeleteDirectoryRecursive(remotePath);
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "Directory deleted"
-            };
+            if (!canOverride && !_client.GetAttributes(targetPath).IsRegularFile)
+                throw new InvalidOperationException("Cannot move file: target file already exists.");
+            else
+                throw new InvalidOperationException("Cannot move file: target file is a directory.");
         }
-        catch (Exception e)
+        _client.RenameFile(sourcePath, targetPath);
+    }
+
+    public override void CopyFile(string sourcePath, string targetPath, bool canOverride = true)
+    {
+        if (_client.Exists(targetPath))
         {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to delete directory"
-            };
-        }
+            if (!canOverride && !_client.GetAttributes(targetPath).IsRegularFile)
+                throw new InvalidOperationException("Cannot copy file: target file already exists.");
+            else
+                throw new InvalidOperationException("Cannot copy file: target file is a directory.");
+        }        
+        using var memoryStream = new MemoryStream();
+        _client.DownloadFile(sourcePath, memoryStream);
+        _client.UploadFile(memoryStream, targetPath);
+    }
+
+    public override void CreateDir(string remotePath)
+    {
+        _client.CreateDirectory(remotePath);
+    }
+
+    public override void DeleteDir(string remotePath)
+    {
+        DeleteDirectoryRecursive(remotePath);
     }
 
     private void DeleteDirectoryRecursive(string path)
     {
         foreach (var entry in _client.ListDirectory(path))
         {
-            if (entry.Name is "." or "..") continue;
+            if (entry.Name is "." or "..")
+                continue;
 
             if (entry.IsDirectory)
                 DeleteDirectoryRecursive(entry.FullName);
             else
                 _client.DeleteFile(entry.FullName);
         }
+
         _client.DeleteDirectory(path);
     }
 
-    public override OperationStatus RenameDir(string oldName, string newName)
+    public override void RenameDir(string oldName, string newName)
     {
-        try
-        {
-            _client.RenameFile(oldName, newName);
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = "Directory renamed"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to rename directory"
-            };
-        }
+        _client.RenameFile(oldName, newName);
     }
 
-    public override OperationStatus ChangeDirectory(string path)
+    public override void ChangeDirectory(string path)
     {
-        try
-        {
-            _client.ChangeDirectory(path);
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = $"Changed directory to {_client.WorkingDirectory}"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to change directory"
-            };
-        }
-    }
-
-    public override OperationStatus ChangeFile(string path)
-    {
-        try
-        {
-            if (!_client.Exists(path))
-            {
-                return new OperationStatus
-                {
-                    Code = 1,
-                    Message = "File does not exist"
-                };
-            }
-
-            var attrs = _client.GetAttributes(path);
-            if (attrs.IsDirectory)
-            {
-                return new OperationStatus
-                {
-                    Code = 1,
-                    Message = "Path is a directory, not a file"
-                };
-            }
-
-            return new OperationStatus
-            {
-                Code = 0,
-                Message = $"File selected: {path}"
-            };
-        }
-        catch (Exception e)
-        {
-            return new OperationStatus
-            {
-                Code = 1,
-                Message = e.Message + " Failed to access file"
-            };
-        }
+        _client.ChangeDirectory(path);
     }
 
     private static string GetPermissionsString(SftpFileAttributes attrs)
@@ -413,7 +215,7 @@ public class SftpConnection : Connection
                + (attrs.OthersCanWrite ? "w" : "-")
                + (attrs.OthersCanExecute ? "x" : "-");
     }
-    
+
     protected override void DisposeCore()
     {
         _client.Dispose();
