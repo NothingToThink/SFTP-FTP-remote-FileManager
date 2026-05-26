@@ -12,5 +12,4 @@ public interface ICommand
     void DeleteDir(string remotePath);
     void RenameDir(string oldName, string newName);
     void ChangeDirectory(string path);
-    void ChangeFile(string path);
 }

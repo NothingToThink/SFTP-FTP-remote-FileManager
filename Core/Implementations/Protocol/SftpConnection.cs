@@ -202,21 +202,6 @@ public class SftpConnection : Connection
         _client.ChangeDirectory(path);
     }
 
-    public override void ChangeFile(string path)
-    {
-        if (!_client.Exists(path))
-        {
-            throw new FileNotFoundException("File does not exist", path);
-        }
-
-        var attrs = _client.GetAttributes(path);
-
-        if (attrs.IsDirectory)
-        {
-            throw new InvalidOperationException("Path is a directory, not a file");
-        }
-    }
-
     private static string GetPermissionsString(SftpFileAttributes attrs)
     {
         return ""

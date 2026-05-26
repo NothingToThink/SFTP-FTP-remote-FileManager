@@ -190,19 +190,6 @@ public class FtpConnection : Connection
         _client.SetWorkingDirectory(path);
     }
 
-    public override void ChangeFile(string path)
-    {
-        if (!_client.FileExists(path))
-        {
-            throw new FileNotFoundException("File does not exist", path);
-        }
-
-        if (_client.GetObjectInfo(path).Type == FtpObjectType.Directory)
-        {
-            throw new InvalidOperationException("Path is a directory, not a file");
-        }
-    }
-
     private static string GetPermissionsString(int chmod)
     {
         bool ownerRead = (chmod & 0x100) != 0;
