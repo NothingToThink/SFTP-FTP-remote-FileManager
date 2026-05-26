@@ -1,3 +1,3 @@
 namespace Backend.DTO;
 
-public record MoveRequest(List<string> sourcePaths, string targetPath, bool overwrite);
+public record MoveRequest(string sourcePath, string targetPath, bool canOverride);

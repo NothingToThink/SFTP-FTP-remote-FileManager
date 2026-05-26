@@ -3,7 +3,7 @@ using Core.Interfaces.Manager;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
-[Route("connecion/{connectionId}/filesystem")]
+[Route("connecions/{connectionId}/filesystem")]
 public class ConnectionsFilesystemController(
         ILogger<ConnectionsFilesystemController> logger,
         IConnectionManager connectionManager
@@ -175,37 +175,35 @@ public class ConnectionsFilesystemController(
     [HttpPost("file/copy")]
     public IActionResult CopyFile([FromRoute] Guid connectionId, [FromBody] CopyRequest request)
     {
-        throw new NotImplementedException();
-        // try
-        // {
-        //     logger.LogInformation("Renaming file.");
-        //     var connection = connectionManager.GetConnection(connectionId);
-        //     connection.CopyFile(request.sourcePath, request.targetPath);
-        //     return Ok();
-        // }
-        // catch (Exception e)
-        // {
-        //     logger.LogError(e, "Error while renaming file.");
-        //     return BadRequest();
-        // }
+        try
+        {
+            logger.LogInformation("Copying file.");
+            var connection = connectionManager.GetConnection(connectionId);
+            connection.CopyFile(request.sourcePath, request.targetPath, request.canOverride);
+            return Ok();
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Error while copying file.");
+            return BadRequest();
+        }
     }
 
     [HttpPatch("file/move")]
     public IActionResult MoveFile([FromRoute] Guid connectionId, [FromBody] MoveRequest request)
     {
-        throw new NotImplementedException();
-        // try
-        // {
-        //     logger.LogInformation("Renaming file.");
-        //     var connection = connectionManager.GetConnection(connectionId);
-        //     connection.CopyFile(request.sourcePath, request.targetPath);
-        //     return Ok();
-        // }
-        // catch (Exception e)
-        // {
-        //     logger.LogError(e, "Error while renaming file.");
-        //     return BadRequest();
-        // }
+        try
+        {
+            logger.LogInformation("Moving file.");
+            var connection = connectionManager.GetConnection(connectionId);
+            connection.CopyFile(request.sourcePath, request.targetPath, request.canOverride);
+            return Ok();
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Error while moving file.");
+            return BadRequest();
+        }
     }
 
     [HttpPost("file/upload")]

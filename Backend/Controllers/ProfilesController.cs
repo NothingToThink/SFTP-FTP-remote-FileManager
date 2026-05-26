@@ -40,12 +40,12 @@ public class ProfilesController(
   {
     try
     {
-      logger.LogInformation("Deleting profile.");
+      logger.LogInformation("Getting profile.");
       return Ok(profileManager.GetProfile(profileId));
     }
     catch (Exception e)
     {
-      logger.LogError(e, "Error while deleting profile.");
+      logger.LogError(e, "Error while getting profile.");
       return BadRequest();
     }
   }
