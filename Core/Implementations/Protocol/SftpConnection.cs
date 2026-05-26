@@ -97,7 +97,7 @@ public class SftpConnection : Connection
         return _client.GetAttributes(path).IsRegularFile;
     }
 
-    public override bool DirecotryExists(string path)
+    public override bool DirectoryExists(string path)
     {
         if (!_client.Exists(path)) return false;
         return _client.GetAttributes(path).IsDirectory;
@@ -138,6 +138,32 @@ public class SftpConnection : Connection
     public override void RenameFile(string oldName, string newName)
     {
         _client.RenameFile(oldName, newName);
+    }
+
+    public override void MoveFile(string sourcePath, string targetPath, bool canOverride = true)
+    {
+        if (_client.Exists(targetPath))
+        {
+            if (!canOverride && !_client.GetAttributes(targetPath).IsRegularFile)
+                throw new InvalidOperationException("Cannot move file: target file already exists.");
+            else
+                throw new InvalidOperationException("Cannot move file: target file is a directory.");
+        }
+        _client.RenameFile(sourcePath, targetPath);
+    }
+
+    public override void CopyFile(string sourcePath, string targetPath, bool canOverride = true)
+    {
+        if (_client.Exists(targetPath))
+        {
+            if (!canOverride && !_client.GetAttributes(targetPath).IsRegularFile)
+                throw new InvalidOperationException("Cannot copy file: target file already exists.");
+            else
+                throw new InvalidOperationException("Cannot copy file: target file is a directory.");
+        }        
+        using var memoryStream = new MemoryStream();
+        _client.DownloadFile(sourcePath, memoryStream);
+        _client.UploadFile(memoryStream, targetPath);
     }
 
     public override void CreateDir(string remotePath)

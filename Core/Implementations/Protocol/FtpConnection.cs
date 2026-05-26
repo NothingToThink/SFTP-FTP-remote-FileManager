@@ -90,7 +90,7 @@ public class FtpConnection : Connection
         return _client.FileExists(path);
     }
 
-    public override bool DirecotryExists(string path)
+    public override bool DirectoryExists(string path)
     {
         return _client.DirectoryExists(path);
     }
@@ -132,6 +132,26 @@ public class FtpConnection : Connection
     public override void RenameFile(string oldName, string newName)
     {
         _client.Rename(oldName, newName);
+    }
+
+    public override void MoveFile(string sourcePath, string targetPath, bool canOverride = true)
+    {
+        if (!canOverride && _client.FileExists(targetPath))
+            throw new InvalidOperationException("Cannot move file: target file already exists.");
+        if (_client.DirectoryExists(targetPath))
+            throw new InvalidOperationException("Cannot move file: target file is a directory.");
+        _client.Rename(sourcePath, targetPath);
+    }
+
+    public override void CopyFile(string sourcePath, string targetPath, bool canOverride = true)
+    {
+        if (!canOverride && _client.FileExists(targetPath))
+            throw new InvalidOperationException("Cannot copy file: target file already exists.");
+        if (_client.DirectoryExists(targetPath))
+            throw new InvalidOperationException("Cannot copy file: target file is a directory.");
+
+        using var ftpStream = _client.OpenRead(sourcePath);
+        _client.UploadStream(ftpStream, targetPath);
     }
 
     public override void CreateDir(string remotePath)

@@ -10,7 +10,7 @@ public abstract class Connection : IQuery, ICommand, IDisposable
     public abstract void Disconnect();
     public abstract string GetWorkingDirectory();
     public abstract bool FileExists(string path);
-    public abstract bool DirecotryExists(string path);
+    public abstract bool DirectoryExists(string path);
     public abstract FileItem GetInfo(string path);
 
     public abstract bool IsConnected { get; }
@@ -22,6 +22,8 @@ public abstract class Connection : IQuery, ICommand, IDisposable
     public abstract void CreateFile(string remotePath);
     public abstract void DeleteFile(string remotePath);
     public abstract void RenameFile(string oldName, string newName);
+    public abstract void MoveFile(string sourcePath, string targetPath, bool canOverride = true);
+    public abstract void CopyFile(string sourcePath, string targetPath, bool canOverride = true);
     public abstract void CreateDir(string remotePath);
     public abstract void DeleteDir(string remotePath);
     public abstract void RenameDir(string oldName, string newName);
