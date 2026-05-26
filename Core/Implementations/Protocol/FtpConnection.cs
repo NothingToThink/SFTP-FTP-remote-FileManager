@@ -52,6 +52,7 @@ public class FtpConnection : Connection
                 Name = file.Name,
                 Size = file.Size,
                 LastModified = file.Modified,
+                FullPath = file.FullName,
                 IsDirectory = file.Type == FtpObjectType.Directory,
                 Permissions = GetPermissionsString(file.Chmod),
             })
@@ -82,6 +83,30 @@ public class FtpConnection : Connection
     public override string GetWorkingDirectory()
     {
         return _client.GetWorkingDirectory();
+    }
+
+    public override bool FileExists(string path)
+    {
+        return _client.FileExists(path);
+    }
+
+    public override bool DirecotryExists(string path)
+    {
+        return _client.DirectoryExists(path);
+    }
+
+    public override FileItem GetInfo(string path)
+    {
+        var file = _client.GetObjectInfo(path);
+        return new FileItem
+        {
+            Name = file.Name,
+            Size = file.Size,
+            LastModified = file.Modified,
+            FullPath = file.FullName,
+            IsDirectory = file.Type == FtpObjectType.Directory,
+            Permissions = GetPermissionsString(file.Chmod),
+        };
     }
 
     public override void SaveFile(string remotePath, Stream content)

@@ -8,7 +8,13 @@ public abstract class Connection : IQuery, ICommand, IDisposable
     public Guid Id { get; } = Guid.NewGuid();
     public abstract void Connect();
     public abstract void Disconnect();
+    public abstract string GetWorkingDirectory();
+    public abstract bool FileExists(string path);
+    public abstract bool DirecotryExists(string path);
+    public abstract FileItem GetInfo(string path);
+
     public abstract bool IsConnected { get; }
+
     public abstract List<FileItem> GetFiles(string path);
     public abstract Stream GetFile(string path);
     public abstract List<string> GetDirectories(string path);
@@ -30,5 +36,4 @@ public abstract class Connection : IQuery, ICommand, IDisposable
     }
 
     protected abstract void DisposeCore();
-    public abstract string GetWorkingDirectory();
 }
