@@ -21,7 +21,7 @@ public class ConnectionManager (IConnectionFactory connectionFactory) : IConnect
     
     public Connection GetConnection (Guid id)
     {
-        return _connections[id] ?? throw new InvalidOperationException($"Connection with id = {id} doesnt exists");
+        return _connections[id];
     }
 
     public void DeleteConnection (Guid id)
