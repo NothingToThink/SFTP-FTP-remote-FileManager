@@ -33,7 +33,7 @@ try
     
     builder.Services.AddSingleton<IConnectionFactory, ConnectionFactory>();
     builder.Services.AddSingleton<IConnectionManager, ConnectionManager>();
-    // builder.Services.AddSingleton<IProfileManager, IProfileManager>();
+    builder.Services.AddSingleton<IProfileManager, ProfileManager>();
 
 
     using var app = builder.Build();

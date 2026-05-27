@@ -8,7 +8,7 @@ namespace Backend.Controllers;
 
 [ApiController]
 [Route("files/{connectionId}")]
-public class Files(ILogger<Connections> logger, IConnectionManager connectionManager) : ControllerBase
+public class Files(ILogger<Files> logger, IConnectionManager connectionManager) : ControllerBase
 {
     private Connection GetConnection(Guid id)
     {
