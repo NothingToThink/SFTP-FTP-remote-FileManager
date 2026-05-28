@@ -8,61 +8,37 @@ namespace Backend.Controllers;
 [ApiController]
 [Route("profiles")]
 public class ProfilesController(
-  ILogger<ProfilesController> logger,
-  IProfileManager profileManager
+    ILogger<ProfilesController> logger,
+    IProfileManager profileManager
 ) : ControllerBase
 {
-  [HttpGet]
-  public IActionResult GetProfileIdList()
-  {
-    logger.LogInformation("Getting profile id list.");
-    var profileIdList = profileManager.GetProfileIdList();
-    return Ok(profileIdList);
-  }
+    [HttpGet]
+    public IActionResult GetProfileIdList()
+    {
+        logger.LogInformation("Getting profile id list.");
+        var profileIdList = profileManager.GetProfileIdList();
+        return Ok(profileIdList);
+    }
 
-  [HttpPost]
-  public IActionResult SaveProfile([FromBody] SavedProfile profile)
-  {
-    try
+    [HttpPost]
+    public IActionResult SaveProfile([FromBody] SavedProfile profile)
     {
-      logger.LogInformation("Saving profile.");
-      return Ok(profileManager.SaveProfile(profile));
+        logger.LogInformation("Saving profile.");
+        return Ok(profileManager.SaveProfile(profile));
     }
-    catch (Exception e)
-    {
-      logger.LogError(e, "Error while saving profile.");
-      return BadRequest();
-    }
-  }
-  
-  [HttpGet("{profileId}")]
-  public IActionResult GetProfile([FromRoute] Guid profileId)
-  {
-    try
-    {
-      logger.LogInformation("Getting profile.");
-      return Ok(profileManager.GetProfile(profileId));
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "Error while getting profile.");
-      return BadRequest();
-    }
-  }
 
-  [HttpDelete("{profileId}")]
-  public IActionResult DeleteProfile([FromRoute] Guid profileId)
-  {
-    try
+    [HttpGet("{profileId}")]
+    public IActionResult GetProfile([FromRoute] Guid profileId)
     {
-      logger.LogInformation("Deleting profile.");
-      profileManager.DeleteProfile(profileId);
-      return Ok();
+        logger.LogInformation("Getting profile.");
+        return Ok(profileManager.GetProfile(profileId));
     }
-    catch (Exception e)
+
+    [HttpDelete("{profileId}")]
+    public IActionResult DeleteProfile([FromRoute] Guid profileId)
     {
-      logger.LogError(e, "Error while deleting profile.");
-      return BadRequest();
+        logger.LogInformation("Deleting profile.");
+        profileManager.DeleteProfile(profileId);
+        return Ok();
     }
-  }
 }

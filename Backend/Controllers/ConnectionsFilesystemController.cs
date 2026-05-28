@@ -14,201 +14,105 @@ public class ConnectionsFilesystemController(
     [HttpGet]
     public IActionResult GetAllFiles([FromRoute] Guid connectionId)
     {
-        try
-        {
-            logger.LogInformation("Getting all files.");
-            var connection = connectionManager.GetConnection(connectionId);
-            return Ok(connection.GetFiles(connection.GetWorkingDirectory()));
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while getting all files.");
-            return BadRequest();
-        }
+        logger.LogInformation("Getting all files.");
+        var connection = connectionManager.GetConnection(connectionId);
+        return Ok(connection.GetFiles(connection.GetWorkingDirectory()));
     }
 
     [HttpGet("info")]
     public IActionResult GetFileInfo([FromRoute] Guid connectionId, [FromBody] string path)
     {
-        try
-        {
-            logger.LogInformation("Getting file info.");
-            var connection = connectionManager.GetConnection(connectionId);
-            return Ok(connection.GetInfo(path));
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while getting file info.");
-            return BadRequest();
-        }
+        logger.LogInformation("Getting file info.");
+        var connection = connectionManager.GetConnection(connectionId);
+        return Ok(connection.GetInfo(path));
     }
 
     [HttpPost("file")]
     public IActionResult CreateFile([FromRoute] Guid connectionId, [FromBody] string path)
     {
-        try
-        {
-            logger.LogInformation("Creating file.");
-            var connection = connectionManager.GetConnection(connectionId);
-            connection.CreateFile(path);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while creating file.");
-            return BadRequest();
-        }
+        logger.LogInformation("Creating file.");
+        var connection = connectionManager.GetConnection(connectionId);
+        connection.CreateFile(path);
+        return Ok();
     }
 
     [HttpPost("dir")]
     public IActionResult CreateDir([FromRoute] Guid connectionId, [FromBody] string path)
     {
-        try
-        {
-            logger.LogInformation("Creating directory.");
-            var connection = connectionManager.GetConnection(connectionId);
-            connection.CreateDir(path);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while creating directory.");
-            return BadRequest();
-        }
+        logger.LogInformation("Creating directory.");
+        var connection = connectionManager.GetConnection(connectionId);
+        connection.CreateDir(path);
+        return Ok();
     }
 
     [HttpDelete("file")]
     public IActionResult DeleteFile([FromRoute] Guid connectionId, [FromBody] string path)
     {
-        try
-        {
-            logger.LogInformation("Deleting file.");
-            var connection = connectionManager.GetConnection(connectionId);
-            connection.DeleteFile(path);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while deleting file.");
-            return BadRequest();
-        }
+        logger.LogInformation("Deleting file.");
+        var connection = connectionManager.GetConnection(connectionId);
+        connection.DeleteFile(path);
+        return Ok();
     }
 
     [HttpDelete("dir")]
     public IActionResult DeleteDir([FromRoute] Guid connectionId, [FromBody] string path)
     {
-        try
-        {
-            logger.LogInformation("Deleting directory.");
-            var connection = connectionManager.GetConnection(connectionId);
-            connection.DeleteDir(path);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while deleting directory.");
-            return BadRequest();
-        }
+        logger.LogInformation("Deleting directory.");
+        var connection = connectionManager.GetConnection(connectionId);
+        connection.DeleteDir(path);
+        return Ok();
     }
 
     [HttpPatch("file")]
     public IActionResult RenameFile([FromRoute] Guid connectionId, [FromBody] RenameRequest request)
     {
-        try
-        {
-            logger.LogInformation("Renaming file.");
-            var connection = connectionManager.GetConnection(connectionId);
-            connection.RenameFile(request.oldPath, request.newPath);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while renaming file.");
-            return BadRequest();
-        }
+        logger.LogInformation("Renaming file.");
+        var connection = connectionManager.GetConnection(connectionId);
+        connection.RenameFile(request.oldPath, request.newPath);
+        return Ok();
     }
 
     [HttpPatch("dir")]
     public IActionResult RenameDir([FromRoute] Guid connectionId, [FromBody] RenameRequest request)
     {
-        try
-        {
-            logger.LogInformation("Renaming directory.");
-            var connection = connectionManager.GetConnection(connectionId);
-            connection.RenameDir(request.oldPath, request.newPath);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while renaming directory.");
-            return BadRequest();
-        }
+        logger.LogInformation("Renaming directory.");
+        var connection = connectionManager.GetConnection(connectionId);
+        connection.RenameDir(request.oldPath, request.newPath);
+        return Ok();
     }
 
     [HttpGet("file/exists")]
     public IActionResult FileExists([FromRoute] Guid connectionId, [FromBody] string path)
     {
-        try
-        {
-            logger.LogInformation("Checking if the file exists.");
-            var connection = connectionManager.GetConnection(connectionId);
-            return Ok(connection.FileExists(path));
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while checking if the file exists.");
-            return BadRequest();
-        }
+        logger.LogInformation("Checking if the file exists.");
+        var connection = connectionManager.GetConnection(connectionId);
+        return Ok(connection.FileExists(path));
     }
 
     [HttpGet("dir/exists")]
     public IActionResult DirExists([FromRoute] Guid connectionId, [FromBody] string path)
     {
-        try
-        {
-            logger.LogInformation("Checking if the directory exists.");
-            var connection = connectionManager.GetConnection(connectionId);
-            return Ok(connection.DirExists(path));
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while checking if the directory exists.");
-            return BadRequest();
-        }
+        logger.LogInformation("Checking if the directory exists.");
+        var connection = connectionManager.GetConnection(connectionId);
+        return Ok(connection.DirExists(path));
     }
 
     [HttpPost("file/copy")]
     public IActionResult CopyFile([FromRoute] Guid connectionId, [FromBody] CopyRequest request)
     {
-        try
-        {
-            logger.LogInformation("Copying file.");
-            var connection = connectionManager.GetConnection(connectionId);
-            connection.CopyFile(request.sourcePath, request.targetPath, request.canOverride);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while copying file.");
-            return BadRequest();
-        }
+        logger.LogInformation("Copying file.");
+        var connection = connectionManager.GetConnection(connectionId);
+        connection.CopyFile(request.sourcePath, request.targetPath, request.canOverride);
+        return Ok();
     }
 
     [HttpPatch("file/move")]
     public IActionResult MoveFile([FromRoute] Guid connectionId, [FromBody] MoveRequest request)
     {
-        try
-        {
-            logger.LogInformation("Moving file.");
-            var connection = connectionManager.GetConnection(connectionId);
-            connection.MoveFile(request.sourcePath, request.targetPath, request.canOverride);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while moving file.");
-            return BadRequest();
-        }
+        logger.LogInformation("Moving file.");
+        var connection = connectionManager.GetConnection(connectionId);
+        connection.MoveFile(request.sourcePath, request.targetPath, request.canOverride);
+        return Ok();
     }
 
     [HttpPost("file/upload")]
@@ -217,18 +121,10 @@ public class ConnectionsFilesystemController(
         [FromQuery] string remotePath,
         IFormFile file)
     {
-        try
-        {
-            var connection = connectionManager.GetConnection(connectionId);
-            await using var stream = file.OpenReadStream();
-            connection.SaveFile(remotePath, stream);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while uploading file.");
-            return BadRequest();
-        }
+        var connection = connectionManager.GetConnection(connectionId);
+        await using var stream = file.OpenReadStream();
+        connection.SaveFile(remotePath, stream);
+        return Ok();
     }
 
     [HttpGet("file/download")]
@@ -236,48 +132,25 @@ public class ConnectionsFilesystemController(
         [FromRoute] Guid connectionId,
         [FromQuery] string path)
     {
-        try
-        {
-            var connection = connectionManager.GetConnection(connectionId);
-            var stream = connection.GetFile(path);
-            return File(stream, "application/octet-stream", Path.GetFileName(path));
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while downloading file.");
-            return BadRequest();
-        }
+        var connection = connectionManager.GetConnection(connectionId);
+        var stream = connection.GetFile(path);
+        return File(stream, "application/octet-stream", Path.GetFileName(path));
     }
+
     [HttpGet("dir/current")]
     public IActionResult GetCurrentDirectory([FromRoute] Guid connectionId)
     {
-        try
-        {
-            logger.LogInformation("Getting current directory.");
-            var connection = connectionManager.GetConnection(connectionId);
-            return Ok(connection.GetWorkingDirectory());
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while getting current directory");
-            return BadRequest();
-        }
+        logger.LogInformation("Getting current directory.");
+        var connection = connectionManager.GetConnection(connectionId);
+        return Ok(connection.GetWorkingDirectory());
     }
 
     [HttpPatch("dir/current")]
     public IActionResult ChangeCurrentDirectory([FromRoute] Guid connectionId, [FromBody] string path)
     {
-        try
-        {
-            logger.LogInformation("Changing current directory.");
-            var connection = connectionManager.GetConnection(connectionId);
-            connection.ChangeDirectory(path);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while changing current directory");
-            return BadRequest();
-        }
+        logger.LogInformation("Changing current directory.");
+        var connection = connectionManager.GetConnection(connectionId);
+        connection.ChangeDirectory(path);
+        return Ok();
     }
 }

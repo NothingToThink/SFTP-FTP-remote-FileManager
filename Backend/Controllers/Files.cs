@@ -4,8 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Backend.Controllers;
 
-
-
 [ApiController]
 [Route("files/{connectionId}")]
 public class Files(ILogger<Files> logger, IConnectionManager connectionManager) : ControllerBase
@@ -19,18 +17,8 @@ public class Files(ILogger<Files> logger, IConnectionManager connectionManager) 
     [HttpGet]
     public IActionResult GetFiles(Guid connectionId)
     {
-        try
-        {
-            var connection = GetConnection(connectionId);
-            var files = connection.GetFiles(connection.GetWorkingDirectory());
-            return Ok(files);
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, e.Message);
-            return BadRequest();
-        }
+        var connection = GetConnection(connectionId);
+        var files = connection.GetFiles(connection.GetWorkingDirectory());
+        return Ok(files);
     }
-    
-    
 }
