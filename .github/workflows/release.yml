@@ -27,21 +27,16 @@ jobs:
       - name: Build GUI
         run: py -m PyInstaller --noconfirm --clean --onefile --windowed --name FileManager GUI.py
 
-      - name: Build LocalServer
-        run: py -m PyInstaller --noconfirm --clean --onefile --console --add-data "api.json;." --add-data "docs.html;." --name LocalServer local_server.py
-
       - name: Publish release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ github.ref_name }}"
-          $notes = "GUI и LocalServer для Windows. Сначала запустить LocalServer.exe, затем FileManager.exe."
+          $notes = "Windows build of the GUI client."
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag dist\FileManager.exe dist\LocalServer.exe --title "GUI build $tag" --notes $notes
+            gh release create $tag dist\FileManager.exe --title "GUI build $tag" --notes $notes
           } else {
-            gh release delete-asset $tag FileManager-GUI.zip --yes 2>$null
-            gh release delete-asset $tag LocalServer.zip --yes 2>$null
-            gh release upload $tag dist\FileManager.exe dist\LocalServer.exe --clobber
+            gh release upload $tag dist\FileManager.exe --clobber
           }

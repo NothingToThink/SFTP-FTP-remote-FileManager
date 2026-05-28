@@ -3,7 +3,7 @@ import string
 import sys
 from pathlib import Path, PurePosixPath
 
-from PyQt5.QtCore import QSize, QTimer, Qt
+from PyQt5.QtCore import QObject, QSize, QThread, QTimer, Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication,
     QAbstractItemView,
@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFileIconProvider,
+    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -22,6 +23,7 @@ from PyQt5.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QStyle,
     QTableWidget,
     QTableWidgetItem,
@@ -30,14 +32,20 @@ from PyQt5.QtWidgets import (
 )
 
 from local_api import (
+    connect_profile,
     copy_path,
+    create_profile,
     create_folder,
+    delete_profile,
     delete_path,
+    disconnect_current,
     download_file,
     exists_path,
+    get_active_profile_name,
     get_file_info,
     get_home,
     list_files,
+    list_profiles,
     list_roots,
     move_path,
     rename_path,
@@ -81,6 +89,95 @@ class TextPromptDialog(QDialog):
         return self.text_input.text()
 
 
+class ProfileDialog(QDialog):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Add Profile")
+        self.resize(420, 260)
+
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignRight)
+
+        self.name_input = QLineEdit()
+        self.host_input = QLineEdit()
+
+        self.protocol_combo = QComboBox()
+        self.protocol_combo.addItems(["Sftp", "Ftp"])
+        self.protocol_combo.currentTextChanged.connect(self.sync_default_port)
+
+        self.port_input = QSpinBox()
+        self.port_input.setRange(1, 65535)
+        self.port_input.setValue(22)
+
+        self.auth_combo = QComboBox()
+        self.auth_combo.addItems(["password", "key", "anonymous"])
+        self.auth_combo.currentTextChanged.connect(self.update_auth_fields)
+
+        self.username_input = QLineEdit()
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.key_path_input = QLineEdit()
+        self.passphrase_input = QLineEdit()
+        self.passphrase_input.setEchoMode(QLineEdit.Password)
+
+        form.addRow("Name:", self.name_input)
+        form.addRow("Protocol:", self.protocol_combo)
+        form.addRow("Host:", self.host_input)
+        form.addRow("Port:", self.port_input)
+        form.addRow("Auth:", self.auth_combo)
+        form.addRow("Username:", self.username_input)
+        form.addRow("Password:", self.password_input)
+        form.addRow("Key path:", self.key_path_input)
+        form.addRow("Passphrase:", self.passphrase_input)
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.update_auth_fields()
+
+    def sync_default_port(self, *_):
+        self.port_input.setValue(22 if self.protocol_combo.currentText() == "Sftp" else 21)
+
+    def update_auth_fields(self, *_):
+        auth_type = self.auth_combo.currentText()
+        password_mode = auth_type == "password"
+        key_mode = auth_type == "key"
+        self.username_input.setEnabled(password_mode or key_mode)
+        self.password_input.setEnabled(password_mode)
+        self.key_path_input.setEnabled(key_mode)
+        self.passphrase_input.setEnabled(key_mode)
+
+    def profile_data(self):
+        auth_type = self.auth_combo.currentText()
+        if auth_type == "anonymous":
+            auth = {"$type": "anonymous"}
+        elif auth_type == "key":
+            auth = {
+                "$type": "key",
+                "Username": self.username_input.text().strip(),
+                "KeyPath": self.key_path_input.text().strip(),
+                "Passphrase": self.passphrase_input.text() or None,
+            }
+        else:
+            auth = {
+                "$type": "password",
+                "Username": self.username_input.text().strip(),
+                "Password": self.password_input.text(),
+            }
+
+        return {
+            "name": self.name_input.text().strip(),
+            "host": self.host_input.text().strip(),
+            "protocol": self.protocol_combo.currentText(),
+            "port": self.port_input.value(),
+            "auth": auth,
+        }
+
+
 class PlacesList(QListWidget):
     def __init__(self, parent_window):
         super().__init__()
@@ -88,6 +185,22 @@ class PlacesList(QListWidget):
         self.setMinimumWidth(128)
         self.setMaximumWidth(140)
         self.itemClicked.connect(self.parent_window.handle_place_clicked)
+
+
+class SearchWorker(QObject):
+    finished = pyqtSignal(list)
+    failed = pyqtSignal(str)
+
+    def __init__(self, path, query):
+        super().__init__()
+        self.path = path
+        self.query = query
+
+    def run(self):
+        try:
+            self.finished.emit(search_files(self.path, self.query))
+        except Exception as exc:
+            self.failed.emit(str(exc))
 
 
 class FileTable(QTableWidget):
@@ -196,8 +309,12 @@ class FileTable(QTableWidget):
 class FileManagerWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.current_path = get_home()
+        self.current_path = "/"
         self.current_items = []
+        self.profiles = []
+        self.connected = False
+        self.search_thread = None
+        self.search_worker = None
         self.current_view_mode = "details"
         self.icon_provider = QFileIconProvider()
 
@@ -206,8 +323,7 @@ class FileManagerWindow(QWidget):
 
         self.build_ui()
         self.apply_styles()
-        self.populate_places()
-        self.refresh_current_view()
+        self.safe_initial_load()
 
         self.refresh_timer = QTimer(self)
         self.refresh_timer.setInterval(5000)
@@ -224,14 +340,56 @@ class FileManagerWindow(QWidget):
         group_layout.setContentsMargins(8, 7, 8, 8)
         group_layout.setSpacing(7)
 
-        toolbar_row = QHBoxLayout()
-        toolbar_row.setSpacing(5)
+        profile_row = QHBoxLayout()
+        profile_row.setSpacing(6)
 
-        toolbar_row.addWidget(QLabel("Look in:"))
+        profile_label = QLabel("Profile:")
+        profile_label.setObjectName("toolbarLabel")
+        profile_row.addWidget(profile_label)
+        self.profile_combo = QComboBox()
+        self.profile_combo.setMinimumWidth(340)
+        self.profile_combo.setFixedHeight(30)
+        self.profile_combo.currentIndexChanged.connect(self.update_connection_controls)
+        profile_row.addWidget(self.profile_combo, 1)
+
+        self.connect_button = QPushButton("Connect")
+        self.connect_button.setFixedHeight(30)
+        self.connect_button.setMinimumWidth(76)
+        self.connect_button.clicked.connect(self.connect_selected_profile)
+        profile_row.addWidget(self.connect_button)
+
+        self.disconnect_button = QPushButton("Disconnect")
+        self.disconnect_button.setFixedHeight(30)
+        self.disconnect_button.setMinimumWidth(84)
+        self.disconnect_button.clicked.connect(self.disconnect_profile)
+        profile_row.addWidget(self.disconnect_button)
+
+        self.add_profile_button = QPushButton("+")
+        self.add_profile_button.setToolTip("Add profile")
+        self.add_profile_button.clicked.connect(self.add_profile)
+        profile_row.addWidget(self.add_profile_button)
+
+        self.delete_profile_button = QPushButton("-")
+        self.delete_profile_button.setToolTip("Delete profile")
+        self.delete_profile_button.clicked.connect(self.delete_selected_profile)
+        profile_row.addWidget(self.delete_profile_button)
+
+        for button in (self.add_profile_button, self.delete_profile_button):
+            button.setFixedSize(30, 30)
+
+        group_layout.addLayout(profile_row)
+
+        toolbar_row = QHBoxLayout()
+        toolbar_row.setSpacing(6)
+        look_in_label = QLabel("Look in:")
+        look_in_label.setObjectName("toolbarLabel")
+        toolbar_row.addWidget(look_in_label)
         self.path_combo = QComboBox()
         self.path_combo.setEditable(True)
-        self.path_combo.setFixedHeight(24)
+        self.path_combo.setFixedHeight(34)
+        self.path_combo.setMinimumWidth(520)
         self.path_combo.lineEdit().returnPressed.connect(self.change_path)
+        self.path_combo.lineEdit().setObjectName("pathLineEdit")
         toolbar_row.addWidget(self.path_combo, 1)
 
         self.back_button = QPushButton()
@@ -337,107 +495,130 @@ class FileManagerWindow(QWidget):
         self.setStyleSheet(
             """
             QWidget {
-                background: #0a1017;
-                color: #f2f5f8;
+                background: #0b1118;
+                color: #eef3f8;
                 font-size: 12px;
             }
             QGroupBox {
-                border: 1px solid #2e4052;
-                border-radius: 5px;
-                margin-top: 9px;
-                padding-top: 3px;
+                border: 1px solid #24384a;
+                border-radius: 9px;
+                margin-top: 10px;
+                padding-top: 6px;
                 font-weight: 600;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 subcontrol-position: top left;
-                left: 10px;
-                padding: 0 4px;
+                left: 12px;
+                padding: 0 6px;
                 color: #ffffff;
-                background: #0a1017;
+                background: #0b1118;
             }
             QLabel {
-                color: #f0f3f7;
+                color: #edf2f7;
+            }
+            QLabel#toolbarLabel {
+                font-size: 13px;
+                font-weight: 600;
+                padding-right: 4px;
             }
             QLineEdit, QComboBox, QListWidget, QTableWidget {
-                background: #0d1620;
-                color: #f2f5f8;
-                border: 1px solid #2e4052;
-                selection-background-color: #246aa8;
+                background: #0f1822;
+                color: #eef3f8;
+                border: 1px solid #294055;
+                border-radius: 6px;
+                selection-background-color: #2b6ea5;
                 selection-color: #ffffff;
             }
             QLineEdit, QComboBox {
-                padding: 1px 4px;
+                padding: 3px 8px;
+            }
+            QComboBox#lineEdit, QLineEdit#pathLineEdit {
+                font-size: 14px;
+            }
+            QComboBox {
+                min-height: 30px;
+            }
+            QPushButton {
+                min-height: 30px;
             }
             QComboBox::drop-down {
                 width: 20px;
                 border: none;
             }
             QComboBox QAbstractItemView {
-                background: #0d1620;
-                border: 1px solid #2e4052;
-                selection-background-color: #246aa8;
+                background: #0f1822;
+                border: 1px solid #294055;
+                selection-background-color: #2b6ea5;
             }
             QPushButton {
-                background: #101a25;
-                color: #f2f5f8;
-                border: 1px solid transparent;
-                border-radius: 2px;
-                padding: 1px;
+                background: #13202c;
+                color: #eef3f8;
+                border: 1px solid #2a3f52;
+                border-radius: 6px;
+                padding: 3px 10px;
             }
             QPushButton:hover {
-                background: #1a2a3b;
-                border-color: #49657e;
+                background: #1a2b3b;
+                border-color: #54718a;
             }
             QPushButton:pressed {
-                background: #0c151f;
+                background: #101922;
             }
             QPushButton:checked {
-                background: #243f5a;
-                border-color: #5c7fa0;
+                background: #24435d;
+                border-color: #6b8aa8;
+            }
+            QPushButton:disabled {
+                color: #7f92a5;
+                background: #101821;
+                border-color: #1b2a38;
             }
             QListWidget {
                 outline: none;
             }
             QListWidget::item {
-                min-height: 21px;
-                padding: 2px 6px;
+                min-height: 23px;
+                padding: 3px 8px;
+                border-radius: 4px;
             }
             QListWidget::item:selected {
-                background: #246aa8;
+                background: #2b6ea5;
             }
             QTableWidget {
                 outline: none;
-                gridline-color: #223343;
-                background: #0b141d;
+                gridline-color: #1f3344;
+                background: #0d1620;
             }
             QTableWidget::item {
-                padding: 1px 4px;
+                padding: 2px 6px;
                 border: none;
             }
             QTableWidget::item:selected {
-                background: #246aa8;
+                background: #2b6ea5;
                 color: #ffffff;
             }
             QHeaderView::section {
-                background: #172536;
+                background: #172637;
                 color: #ffffff;
                 border: none;
-                border-right: 1px solid #2e4052;
-                border-bottom: 1px solid #2e4052;
-                padding: 3px 5px;
-                min-height: 22px;
+                border-right: 1px solid #2a3f52;
+                border-bottom: 1px solid #2a3f52;
+                padding: 4px 7px;
+                min-height: 24px;
             }
             QMenu {
-                background: #111b26;
-                color: #f2f5f8;
-                border: 1px solid #2e4052;
+                background: #13202c;
+                color: #eef3f8;
+                border: 1px solid #294055;
+                border-radius: 6px;
             }
             QMenu::item {
-                padding: 5px 24px 5px 20px;
+                padding: 6px 26px 6px 20px;
+                border-radius: 4px;
             }
             QMenu::item:selected {
-                background: #246aa8;
+                background: #2b6ea5;
             }
             """
         )
@@ -461,16 +642,157 @@ class FileManagerWindow(QWidget):
             icon_type = QFileIconProvider.Drive if root.get("kind") == "drive" else QFileIconProvider.Folder
             root_item = QListWidgetItem(self.icon_provider.icon(icon_type), root["name"])
             root_item.setData(Qt.UserRole, root["path"])
+            root_item.setToolTip(root["path"])
             self.places_list.addItem(root_item)
 
     def set_status(self, message):
         self.status_label.setText(message)
 
+    def require_connection(self, action="This action"):
+        if self.connected:
+            return True
+        self.set_status(f"{action} requires connection.")
+        self.show_info("Not connected", "Select a profile and press Connect first.")
+        return False
+
+    def safe_initial_load(self):
+        self.refresh_profile_list()
+        self.path_combo.clear()
+        self.path_combo.addItem(self.current_path)
+        self.path_combo.setEditText(self.current_path)
+        self.update_connection_controls()
+        self.set_status("Select a profile.")
+
+    def refresh_profile_list(self, selected_id=None):
+        try:
+            self.profiles = list_profiles()
+        except Exception as exc:
+            self.profiles = []
+            self.profile_combo.clear()
+            self.set_status(f"Unable to load profiles: {exc}")
+            return
+
+        previous_id = selected_id
+        if previous_id is None and self.profile_combo.count():
+            current_data = self.profile_combo.currentData()
+            previous_id = current_data.get("id") if current_data else None
+
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        for profile in self.profiles:
+            label = self.format_profile_label(profile)
+            self.profile_combo.addItem(label, profile)
+            if previous_id and profile["id"] == previous_id:
+                self.profile_combo.setCurrentIndex(self.profile_combo.count() - 1)
+        self.profile_combo.blockSignals(False)
+        self.update_connection_controls()
+
+    def format_profile_label(self, profile):
+        host = profile.get("host") or "-"
+        protocol = profile.get("protocol") or "?"
+        return f"{profile.get('name') or 'Profile'}  [{protocol} {host}]"
+
+    def selected_profile(self):
+        return self.profile_combo.currentData()
+
+    def update_connection_controls(self, *_):
+        has_profile = self.profile_combo.count() > 0
+        self.connect_button.setEnabled(has_profile and not self.connected)
+        self.disconnect_button.setEnabled(self.connected)
+        profile = self.selected_profile()
+        can_delete = bool(profile and not self.connected)
+        self.delete_profile_button.setEnabled(can_delete)
+
+    def connect_selected_profile(self):
+        profile = self.selected_profile()
+        if not profile:
+            self.show_info("Connect", "No profile selected.")
+            return
+
+        try:
+            self.set_status(f"Connecting: {profile.get('name') or profile.get('host')}")
+            connect_profile(profile["id"])
+            self.current_path = get_home()
+            self.connected = True
+            self.populate_places()
+            self.refresh_current_view()
+        except Exception as exc:
+            self.connected = False
+            self.set_status(f"Connect failed: {exc}")
+            self.show_error("Unable to connect", exc)
+        finally:
+            self.update_connection_controls()
+
+    def disconnect_profile(self):
+        try:
+            disconnect_current()
+        except Exception as exc:
+            self.set_status(f"Disconnect failed: {exc}")
+            return
+        self.connected = False
+        self.current_items = []
+        self.current_path = "/"
+        self.file_table.setRowCount(0)
+        self.places_list.clear()
+        self.path_combo.clear()
+        self.path_combo.addItem(self.current_path)
+        self.path_combo.setEditText(self.current_path)
+        self.sync_selection_fields()
+        self.update_connection_controls()
+        self.set_status("Disconnected.")
+
+    def add_profile(self):
+        dialog = ProfileDialog(self)
+        if dialog.exec_() != QDialog.Accepted:
+            self.set_status("Add profile cancelled.")
+            return
+
+        data = dialog.profile_data()
+        try:
+            profile = create_profile(
+                data["name"],
+                data["host"],
+                data["protocol"],
+                data["port"],
+                data["auth"],
+            )
+            self.refresh_profile_list(profile["id"])
+            self.set_status(f"Profile added: {profile.get('name')}")
+        except Exception as exc:
+            self.show_error("Unable to add profile", exc)
+
+    def delete_selected_profile(self):
+        profile = self.selected_profile()
+        if not profile:
+            self.show_info("Delete profile", "No profile selected.")
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "Delete profile",
+            f"Delete profile '{profile.get('name')}'?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            self.set_status("Delete profile cancelled.")
+            return
+
+        try:
+            delete_profile(profile["id"])
+            self.refresh_profile_list()
+            self.set_status(f"Profile deleted: {profile.get('name')}")
+        except Exception as exc:
+            self.show_error("Unable to delete profile", exc)
+
     def refresh_current_view(self):
+        if not self.connected:
+            self.set_status("Select a profile.")
+            return
         try:
             response = list_files(self.current_path)
         except Exception as exc:
-            self.show_error("Unable to load files", exc)
+            self.set_status(f"Unable to load files: {exc}")
             return
 
         self.current_path = response["path"]
@@ -502,7 +824,11 @@ class FileManagerWindow(QWidget):
 
         self.sync_selection_fields()
         self.highlight_current_place()
-        self.set_status(f"Current folder: {self.current_path}")
+        profile_name = get_active_profile_name()
+        if profile_name:
+            self.set_status(f"{profile_name} | Current folder: {self.current_path}")
+        else:
+            self.set_status(f"Current folder: {self.current_path}")
 
     def highlight_current_place(self):
         for index in range(self.places_list.count()):
@@ -520,6 +846,9 @@ class FileManagerWindow(QWidget):
         self.refresh_current_view()
 
     def change_path(self):
+        if not self.connected:
+            self.set_status("Connect before changing folder.")
+            return
         new_path = self.path_combo.currentText().strip()
         if not new_path:
             return
@@ -530,6 +859,9 @@ class FileManagerWindow(QWidget):
         self.refresh_current_view()
 
     def go_up(self):
+        if not self.connected:
+            self.set_status("Connect before changing folder.")
+            return
         current = PurePosixPath(self.current_path)
         parent = current.parent
         if str(parent) == str(current):
@@ -611,6 +943,8 @@ class FileManagerWindow(QWidget):
             self.export_selected()
 
     def create_folder(self):
+        if not self.require_connection("Create folder"):
+            return
         dialog = TextPromptDialog(self, "New Folder", "Folder name:")
         if dialog.exec_() != QDialog.Accepted:
             self.set_status("Create folder cancelled.")
@@ -624,6 +958,8 @@ class FileManagerWindow(QWidget):
             self.show_error("Unable to create folder", exc)
 
     def rename_selected(self):
+        if not self.require_connection("Rename"):
+            return
         items = self.selected_items()
         if len(items) != 1:
             self.show_info("Rename", "Select exactly one file or folder to rename.")
@@ -641,6 +977,8 @@ class FileManagerWindow(QWidget):
             self.show_error("Unable to rename item", exc)
 
     def delete_selected(self):
+        if not self.require_connection("Delete"):
+            return
         items = self.selected_items()
         if not items:
             self.show_info("Delete", "Select one or more items to delete.")
@@ -669,6 +1007,8 @@ class FileManagerWindow(QWidget):
         self.set_status(f"Delete finished. Completed: {completed}, Failed: {failed}.")
 
     def copy_selected(self):
+        if not self.require_connection("Copy"):
+            return
         items = self.selected_items()
         if not items:
             self.show_info("Copy", "Select one or more items to copy.")
@@ -690,10 +1030,12 @@ class FileManagerWindow(QWidget):
                 completed += 1
             except Exception as exc:
                 failed += 1
-                self.set_status(f"Copy failed for {item['name']}: {exc}")
+                self.set_status(f"Copy failed for {item['name']}: {self._friendly_error(exc)}")
         self.set_status(f"Copy finished. Completed: {completed}, Failed: {failed}.")
 
     def move_selected(self):
+        if not self.require_connection("Move"):
+            return
         items = self.selected_items()
         if not items:
             self.show_info("Move", "Select one or more items to move.")
@@ -715,11 +1057,13 @@ class FileManagerWindow(QWidget):
                 completed += 1
             except Exception as exc:
                 failed += 1
-                self.set_status(f"Move failed for {item['name']}: {exc}")
+                self.set_status(f"Move failed for {item['name']}: {self._friendly_error(exc)}")
         self.refresh_current_view()
         self.set_status(f"Move finished. Completed: {completed}, Failed: {failed}.")
 
     def get_fileinfo(self):
+        if not self.require_connection("File details"):
+            return
         items = self.selected_items()
         if len(items) != 1:
             self.show_info("File Details", "Select exactly one file or folder.")
@@ -742,6 +1086,11 @@ class FileManagerWindow(QWidget):
         )
 
     def search_items(self):
+        if not self.require_connection("Search"):
+            return
+        if self.search_thread is not None:
+            self.set_status("Search is already running.")
+            return
         dialog = TextPromptDialog(self, "Search", "Search current tree for file name:")
         if dialog.exec_() != QDialog.Accepted:
             self.set_status("Search cancelled.")
@@ -751,12 +1100,19 @@ class FileManagerWindow(QWidget):
             self.set_status("Search cancelled.")
             return
 
-        try:
-            results = search_files(self.current_path, query)
-        except Exception as exc:
-            self.show_error("Unable to search files", exc)
-            return
+        self.set_status(f"Searching for '{query}'...")
+        self.search_thread = QThread(self)
+        self.search_worker = SearchWorker(self.current_path, query)
+        self.search_worker.moveToThread(self.search_thread)
+        self.search_thread.started.connect(self.search_worker.run)
+        self.search_worker.finished.connect(lambda results: self.on_search_finished(query, results))
+        self.search_worker.failed.connect(self.on_search_failed)
+        self.search_worker.finished.connect(self.search_thread.quit)
+        self.search_worker.failed.connect(self.search_thread.quit)
+        self.search_thread.finished.connect(self.cleanup_search)
+        self.search_thread.start()
 
+    def on_search_finished(self, query, results):
         if not results:
             self.show_info("Search", "No matching files found.")
             self.set_status(f"No matches for '{query}'.")
@@ -767,23 +1123,40 @@ class FileManagerWindow(QWidget):
         self.show_info("Search Results", f"Found {len(results)} item(s):\n{preview}{suffix}")
         self.set_status(f"Found {len(results)} matching item(s).")
 
+    def on_search_failed(self, message):
+        self.show_error("Unable to search files", message)
+
+    def cleanup_search(self):
+        if self.search_worker is not None:
+            self.search_worker.deleteLater()
+        if self.search_thread is not None:
+            self.search_thread.deleteLater()
+        self.search_worker = None
+        self.search_thread = None
+
     def upload_dropped_paths(self, paths):
+        if not self.require_connection("Upload"):
+            return
         completed = 0
         failed = 0
         for path in paths:
             path_obj = Path(path)
             if path_obj.is_dir():
                 failed += 1
+                self.set_status("Folder upload is not implemented by current API.")
                 continue
             try:
                 upload_file(str(path_obj), self.current_path)
                 completed += 1
-            except Exception:
+            except Exception as exc:
                 failed += 1
+                self.set_status(f"Upload failed for {path_obj.name}: {self._friendly_error(exc)}")
         self.refresh_current_view()
         self.set_status(f"Upload finished. Completed: {completed}, Failed: {failed}.")
 
     def export_selected(self):
+        if not self.require_connection("Download"):
+            return
         items = self.selected_items()
         if not items:
             self.show_info("Download", "Select file(s) first.")
@@ -799,14 +1172,22 @@ class FileManagerWindow(QWidget):
         for item in items:
             if item["is_dir"]:
                 failed += 1
+                self.set_status("Folder download is not implemented by current API.")
                 continue
             try:
                 download_file(item["path"], target_dir)
                 completed += 1
             except Exception as exc:
                 failed += 1
-                self.set_status(f"Download failed for {item['name']}: {exc}")
+                self.set_status(f"Download failed for {item['name']}: {self._friendly_error(exc)}")
         self.set_status(f"Download finished. Completed: {completed}, Failed: {failed}.")
+
+    def _friendly_error(self, error):
+        message = str(error)
+        lowered = message.lower()
+        if "not supported by the current api" in lowered:
+            return "This operation is not available on the server."
+        return message
 
     def show_info(self, title, message):
         QMessageBox.information(self, title, message)
