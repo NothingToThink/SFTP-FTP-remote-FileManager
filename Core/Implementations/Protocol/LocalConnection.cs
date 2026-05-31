@@ -42,33 +42,18 @@ public class LocalConnection : Connection
         return fullPath;
     }
 
-    public override void Connect()
-    {
-        _isConnected = true;
-    }
-
-    public override void Disconnect()
-    {
-        _isConnected = false;
-    }
-
     public override bool IsConnected => _isConnected;
 
-    public override void SaveFile(string remotePath, Stream content)
+    public override Task ConnectAsync(CancellationToken ct = default)
     {
-        var localPath = GetLocalPath(remotePath);
+        _isConnected = true;
+        return Task.CompletedTask;
+    }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-
-        using var fileStream = new FileStream(
-            localPath,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None,
-            4096,
-            useAsync: false);
-
-        content.CopyTo(fileStream);
+    public override Task DisconnectAsync(CancellationToken ct = default)
+    {
+        _isConnected = false;
+        return Task.CompletedTask;
     }
 
     public override async Task SaveFileAsync(string remotePath, Stream content, CancellationToken ct = default)
@@ -80,14 +65,14 @@ public class LocalConnection : Connection
         await content.CopyToAsync(fileStream, ct);
     }
 
-    public override void CreateFile(string remotePath)
+    public override Task CreateFileAsync(string remotePath, CancellationToken ct = default)
     {
         var localPath = GetLocalPath(remotePath);
-
         File.Create(localPath).Dispose();
+        return Task.CompletedTask;
     }
 
-    public override void DeleteFile(string remotePath)
+    public override Task DeleteFileAsync(string remotePath, CancellationToken ct = default)
     {
         var localPath = GetLocalPath(remotePath);
 
@@ -97,53 +82,55 @@ public class LocalConnection : Connection
         }
 
         File.Delete(localPath);
+        return Task.CompletedTask;
     }
 
-    public override void RenameFile(string oldName, string newName)
+    public override Task RenameFileAsync(string oldName, string newName, CancellationToken ct = default)
     {
         var oldPath = GetLocalPath(oldName);
         var newPath = GetLocalPath(newName);
 
         File.Move(oldPath, newPath);
+        return Task.CompletedTask;
     }
 
-    public override void MoveFile(string sourcePath, string targetPath, bool canOverride = true)
+    public override Task MoveFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
-        if (!canOverride && File.Exists(targetPath))
+        var localSource = GetLocalPath(sourcePath);
+        var localTarget = GetLocalPath(targetPath);
+
+        if (!canOverride && File.Exists(localTarget))
             throw new InvalidOperationException("Cannot move file: target file already exists.");
-        if (Directory.Exists(targetPath))
+        if (Directory.Exists(localTarget))
             throw new InvalidOperationException("Cannot move file: target file is a directory.");
-        File.Move(sourcePath, targetPath);
-    }
-
-    public override void CopyFile(string sourcePath, string targetPath, bool canOverride = true)
-    {
-        if (!canOverride && File.Exists(targetPath))
-            throw new InvalidOperationException("Cannot copy file: target file already exists.");
-        if (Directory.Exists(targetPath))
-            throw new InvalidOperationException("Cannot copy file: target file is a directory.");
-        File.Copy(sourcePath, targetPath);
+        
+        File.Move(localSource, localTarget, canOverride);
+        return Task.CompletedTask;
     }
 
     public override async Task CopyFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
-        if (!canOverride && File.Exists(targetPath))
+        var localSource = GetLocalPath(sourcePath);
+        var localTarget = GetLocalPath(targetPath);
+
+        if (!canOverride && File.Exists(localTarget))
             throw new InvalidOperationException("Cannot copy file: target file already exists.");
-        if (Directory.Exists(targetPath))
+        if (Directory.Exists(localTarget))
             throw new InvalidOperationException("Cannot copy file: target file is a directory.");
-        await using var src = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-        await using var dst = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
+        
+        await using var src = new FileStream(localSource, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+        await using var dst = new FileStream(localTarget, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
         await src.CopyToAsync(dst, ct);
     }
 
-    public override void CreateDir(string remotePath)
+    public override Task CreateDirAsync(string remotePath, CancellationToken ct = default)
     {
         var localPath = GetLocalPath(remotePath);
-
         Directory.CreateDirectory(localPath);
+        return Task.CompletedTask;
     }
 
-    public override void DeleteDir(string remotePath)
+    public override Task DeleteDirAsync(string remotePath, CancellationToken ct = default)
     {
         var localPath = GetLocalPath(remotePath);
 
@@ -153,17 +140,19 @@ public class LocalConnection : Connection
         }
 
         Directory.Delete(localPath, recursive: true);
+        return Task.CompletedTask;
     }
 
-    public override void RenameDir(string oldName, string newName)
+    public override Task RenameDirAsync(string oldName, string newName, CancellationToken ct = default)
     {
         var oldPath = GetLocalPath(oldName);
         var newPath = GetLocalPath(newName);
 
         Directory.Move(oldPath, newPath);
+        return Task.CompletedTask;
     }
 
-    public override void ChangeDirectory(string path)
+    public override Task ChangeDirectoryAsync(string path, CancellationToken ct = default)
     {
         var fullPath = GetLocalPath(path);
 
@@ -173,27 +162,8 @@ public class LocalConnection : Connection
         }
 
         var newCurrentPath = Path.GetRelativePath(_rootPath, fullPath);
-
         _currentPath = (newCurrentPath == ".") ? "" : newCurrentPath;
-    }
-
-    public override List<FileItem> GetFiles(string path)
-    {
-        var localPath = GetLocalPath(path);
-
-        var dirInfo = new DirectoryInfo(localPath);
-
-        return dirInfo.GetFileSystemInfos()
-            .Select(info => new FileItem
-            {
-                Name = info.Name,
-                Size = info is FileInfo f ? f.Length : 0,
-                LastModified = info.LastWriteTime,
-                IsDirectory = info is DirectoryInfo,
-                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
-                Permissions = GetPermissionsString(info)
-            })
-            .ToList();
+        return Task.CompletedTask;
     }
 
     public override Task<List<FileItem>> GetFilesAsync(string path, CancellationToken ct = default)
@@ -216,10 +186,65 @@ public class LocalConnection : Connection
         return Task.FromResult(result);
     }
 
+    public override Task<List<string>> GetDirectoriesAsync(string path, CancellationToken ct = default)
+    {
+        var localPath = GetLocalPath(path);
+        var dirInfo = new DirectoryInfo(localPath);
+        var result = dirInfo.GetDirectories()
+            .Select(info => info.Name)
+            .ToList();
+        return Task.FromResult(result);
+    }
+
+    public override Task<string> GetWorkingDirectoryAsync(CancellationToken ct = default)
+    {
+        return Task.FromResult(_currentPath);
+    }
+
+    public override Task<bool> FileExistsAsync(string path, CancellationToken ct = default)
+    {
+        return Task.FromResult(File.Exists(GetLocalPath(path)));
+    }
+
+    public override Task<bool> DirExistsAsync(string path, CancellationToken ct = default)
+    {
+        return Task.FromResult(Directory.Exists(GetLocalPath(path)));
+    }
+
+    public override Task<FileItem> GetInfoAsync(string path, CancellationToken ct = default)
+    {
+        var localPath = GetLocalPath(path);
+        if (Directory.Exists(localPath))
+        {
+            var info = new DirectoryInfo(localPath);
+            return Task.FromResult(new FileItem
+            {
+                Name = info.Name,
+                Size = 0,
+                LastModified = info.LastWriteTime,
+                IsDirectory = true,
+                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
+                Permissions = GetPermissionsString(info)
+            });
+        }
+        else
+        {
+            var info = new FileInfo(localPath);
+            return Task.FromResult(new FileItem
+            {
+                Name = info.Name,
+                Size = info.Length,
+                LastModified = info.LastWriteTime,
+                IsDirectory = false,
+                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
+                Permissions = GetPermissionsString(info)
+            });
+        }
+    }
+
     private static string GetPermissionsString(FileSystemInfo info)
     {
         var attrs = info.Attributes;
-
         bool isDir = attrs.HasFlag(FileAttributes.Directory);
         bool isReadOnly = attrs.HasFlag(FileAttributes.ReadOnly);
 
@@ -230,19 +255,6 @@ public class LocalConnection : Connection
         return $"{r}{w}{x}{r}{w}{x}{r}{w}{x}";
     }
 
-    public override Stream GetFile(string path)
-    {
-        string localPath = GetLocalPath(path);
-
-        return new FileStream(
-            localPath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            4096,
-            useAsync: false);
-    }
-
     public override Task<Stream> GetFileAsync(string path, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
@@ -251,65 +263,7 @@ public class LocalConnection : Connection
         return Task.FromResult(stream);
     }
 
-    public override List<string> GetDirectories(string path)
-    {
-        var localPath = GetLocalPath(path);
-
-        var dirInfo = new DirectoryInfo(localPath);
-
-        return dirInfo.GetDirectories()
-            .Select(info => info.Name)
-            .ToList();
-    }
-
-    public override string GetWorkingDirectory()
-    {
-        return _currentPath;
-    }
-
-    public override bool FileExists(string path)
-    {
-        return File.Exists(GetLocalPath(path));
-    }
-    public override bool DirExists(string path)
-
-    {
-        return Directory.Exists(GetLocalPath(path));
-    }
-
-    public override FileItem GetInfo(string path)
-    {
-        var localPath = GetLocalPath(path);
-        if (Directory.Exists(localPath))
-        {
-            var info = new DirectoryInfo(path);
-            return new FileItem
-            {
-                Name = info.Name,
-                Size = 0,
-                LastModified = info.LastWriteTime,
-                IsDirectory = true,
-                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
-                Permissions = GetPermissionsString(info)
-            };
-        }
-        else
-        {
-            var info = new FileInfo(path);
-            return new FileItem
-            {
-                Name = info.Name,
-                Size = info.Length,
-                LastModified = info.LastWriteTime,
-                IsDirectory = false,
-                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
-                Permissions = GetPermissionsString(info)
-            };
-        }
-    }
-
     protected override void DisposeCore()
     {
-
     }
 }

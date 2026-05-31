@@ -23,15 +23,10 @@ public class SftpConnection : Connection
                 => new SftpClient(profile.Host, profile.EffectivePort, user, BuildKeySource(keyPath, passphrase)),
 
             AnonymousAuth
-                => throw new InvalidOperationException("Anonymous authentication doesn't supported by sftp authentication"),
+                => throw new InvalidOperationException("Anonymous authentication is not supported by SFTP."),
 
             _ => throw new ArgumentOutOfRangeException(nameof(profile.Auth))
         };
-    }
-
-    public override void Connect()
-    {
-        _client.Connect();
     }
 
     private static IPrivateKeySource[] BuildKeySource(string keyPath, string? passphrase)
@@ -43,28 +38,58 @@ public class SftpConnection : Connection
         return [key];
     }
 
-    public override void Disconnect()
+    public override async Task ConnectAsync(CancellationToken ct = default)
     {
-        if (_client is { IsConnected: true })
+        await _client.ConnectAsync(ct);
+    }
+
+    public override Task DisconnectAsync(CancellationToken ct = default)
+    {
+        if (_client.IsConnected)
         {
             _client.Disconnect();
         }
+
+        return Task.CompletedTask;
     }
 
-    public override List<FileItem> GetFiles(string path)
+    public override Task<string> GetWorkingDirectoryAsync(CancellationToken ct = default)
     {
-        return _client.ListDirectory(path)
-            .Where(f => f.Name != "." && f.Name != "..")
-            .Select(file => new FileItem
-            {
-                Name = file.Name,
-                Size = file.Length,
-                LastModified = file.LastWriteTime,
-                FullPath = file.FullName,
-                IsDirectory = file.IsDirectory,
-                Permissions = GetPermissionsString(file.Attributes),
-            })
-            .ToList();
+        return Task.FromResult(_client.WorkingDirectory);
+    }
+
+    public override Task ChangeDirectoryAsync(string path, CancellationToken ct = default)
+    {
+        _client.ChangeDirectory(path);
+        return Task.CompletedTask;
+    }
+
+    public override async Task<bool> FileExistsAsync(string path, CancellationToken ct = default)
+    {
+        if (!await _client.ExistsAsync(path, ct)) return false;
+        var attrs = await _client.GetAttributesAsync(path, ct);
+        return attrs.IsRegularFile;
+    }
+
+    public override async Task<bool> DirExistsAsync(string path, CancellationToken ct = default)
+    {
+        if (!await _client.ExistsAsync(path, ct)) return false;
+        var attrs = await _client.GetAttributesAsync(path, ct);
+        return attrs.IsDirectory;
+    }
+
+    public override async Task<FileItem> GetInfoAsync(string path, CancellationToken ct = default)
+    {
+        var attrs = await _client.GetAttributesAsync(path, ct);
+        return new FileItem
+        {
+            Name = Path.GetFileName(path),
+            Size = attrs.Size,
+            LastModified = attrs.LastWriteTime,
+            FullPath = path,
+            IsDirectory = attrs.IsDirectory,
+            Permissions = GetPermissionsString(attrs),
+        };
     }
 
     public override async Task<List<FileItem>> GetFilesAsync(string path, CancellationToken ct = default)
@@ -86,15 +111,17 @@ public class SftpConnection : Connection
         return files;
     }
 
-    public override Stream GetFile(string path)
+    public override async Task<List<string>> GetDirectoriesAsync(string path, CancellationToken ct = default)
     {
-        var memoryStream = new MemoryStream();
-
-        _client.DownloadFile(path, memoryStream);
-
-        memoryStream.Position = 0;
-
-        return memoryStream;
+        var dirs = new List<string>();
+        await foreach (var file in _client.ListDirectoryAsync(path, ct))
+        {
+            if (file.IsDirectory && file.Name != "." && file.Name != "..")
+            {
+                dirs.Add(file.FullName);
+            }
+        }
+        return dirs;
     }
 
     public override async Task<Stream> GetFileAsync(string path, CancellationToken ct = default)
@@ -105,53 +132,6 @@ public class SftpConnection : Connection
         return memoryStream;
     }
 
-    public override List<string> GetDirectories(string path)
-    {
-        return _client.ListDirectory(path)
-            .Where(f => f.IsDirectory && f.Name != "." && f.Name != "..")
-            .Select(f => f.FullName)
-            .ToList();
-    }
-
-    public override string GetWorkingDirectory()
-    {
-        return _client.WorkingDirectory;
-    }
-
-    public override bool FileExists(string path)
-    {
-        if (!_client.Exists(path)) return false;
-        return _client.GetAttributes(path).IsRegularFile;
-    }
-
-    public override bool DirExists(string path)
-    {
-        if (!_client.Exists(path)) return false;
-        return _client.GetAttributes(path).IsDirectory;
-    }
-
-    public override FileItem GetInfo(string path)
-    {
-        var file = _client.Get(path);
-        return new FileItem
-        {
-            Name = file.Name,
-            Size = file.Length,
-            LastModified = file.LastWriteTime,
-            FullPath = file.FullName,
-            IsDirectory = file.IsDirectory,
-            Permissions = GetPermissionsString(file.Attributes),
-        };
-    }
-
-    public override void SaveFile(string remotePath, Stream content)
-    {
-        if (content.CanSeek)
-            content.Position = 0;
-
-        _client.UploadFile(content, remotePath, true);
-    }
-
     public override async Task SaveFileAsync(string remotePath, Stream content, CancellationToken ct = default)
     {
         if (content.CanSeek)
@@ -160,94 +140,80 @@ public class SftpConnection : Connection
         await _client.UploadFileAsync(content, remotePath, ct);
     }
 
-    public override void CreateFile(string remotePath)
+    public override async Task CreateFileAsync(string remotePath, CancellationToken ct = default)
     {
-        using var stream = _client.Create(remotePath);
+        await _client.UploadFileAsync(Stream.Null, remotePath, ct);
     }
 
-    public override void DeleteFile(string remotePath)
+    public override async Task DeleteFileAsync(string remotePath, CancellationToken ct = default)
     {
-        _client.DeleteFile(remotePath);
+        await _client.DeleteFileAsync(remotePath, ct);
     }
 
-    public override void RenameFile(string oldName, string newName)
+    public override async Task RenameFileAsync(string oldName, string newName, CancellationToken ct = default)
     {
-        _client.RenameFile(oldName, newName);
+        await _client.RenameFileAsync(oldName, newName, ct);
     }
 
-    public override void MoveFile(string sourcePath, string targetPath, bool canOverride = true)
+    public override async Task MoveFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
-        if (_client.Exists(targetPath))
+        if (await _client.ExistsAsync(targetPath, ct))
         {
-            if (!canOverride && !_client.GetAttributes(targetPath).IsRegularFile)
+            var attrs = await _client.GetAttributesAsync(targetPath, ct);
+            if (!canOverride && !attrs.IsRegularFile)
                 throw new InvalidOperationException("Cannot move file: target file already exists.");
-            else
-                throw new InvalidOperationException("Cannot move file: target file is a directory.");
+            
+            throw new InvalidOperationException("Cannot move file: target file is a directory.");
         }
-        _client.RenameFile(sourcePath, targetPath);
-    }
-
-    public override void CopyFile(string sourcePath, string targetPath, bool canOverride = true)
-    {
-        if (_client.Exists(targetPath))
-        {
-            if (!canOverride && !_client.GetAttributes(targetPath).IsRegularFile)
-                throw new InvalidOperationException("Cannot copy file: target file already exists.");
-            throw new InvalidOperationException("Cannot copy file: target file is a directory.");
-        }
-        using var memoryStream = new MemoryStream();
-        _client.DownloadFile(sourcePath, memoryStream);
-        _client.UploadFile(memoryStream, targetPath);
+        await _client.RenameFileAsync(sourcePath, targetPath, ct);
     }
 
     public override async Task CopyFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
         if (await _client.ExistsAsync(targetPath, ct))
         {
-            if (!canOverride && !(await _client.GetAttributesAsync(targetPath, ct)).IsRegularFile)
+            var attrs = await _client.GetAttributesAsync(targetPath, ct);
+            if (!canOverride && !attrs.IsRegularFile)
                 throw new InvalidOperationException("Cannot copy file: target file already exists.");
+            
             throw new InvalidOperationException("Cannot copy file: target file is a directory.");
         }
+        
         using var memoryStream = new MemoryStream();
         await _client.DownloadFileAsync(sourcePath, memoryStream, ct);
         memoryStream.Position = 0;
         await _client.UploadFileAsync(memoryStream, targetPath, ct);
     }
 
-    public override void CreateDir(string remotePath)
+    public override async Task CreateDirAsync(string remotePath, CancellationToken ct = default)
     {
-        _client.CreateDirectory(remotePath);
+        await _client.CreateDirectoryAsync(remotePath, ct);
     }
 
-    public override void DeleteDir(string remotePath)
+    public override async Task DeleteDirAsync(string remotePath, CancellationToken ct = default)
     {
-        DeleteDirectoryRecursive(remotePath);
+        await DeleteDirectoryRecursiveAsync(remotePath, ct);
     }
 
-    private void DeleteDirectoryRecursive(string path)
+    private async Task DeleteDirectoryRecursiveAsync(string path, CancellationToken ct)
     {
-        foreach (var entry in _client.ListDirectory(path))
+        await foreach (var entry in _client.ListDirectoryAsync(path, ct))
         {
             if (entry.Name is "." or "..")
                 continue;
 
             if (entry.IsDirectory)
-                DeleteDirectoryRecursive(entry.FullName);
+                await DeleteDirectoryRecursiveAsync(entry.FullName, ct);
             else
-                _client.DeleteFile(entry.FullName);
+                await _client.DeleteFileAsync(entry.FullName, ct);
         }
 
-        _client.DeleteDirectory(path);
+        await _client.DeleteDirectoryAsync(path, ct);
     }
 
-    public override void RenameDir(string oldName, string newName)
+    public override async Task RenameDirAsync(string oldName, string newName, CancellationToken ct = default)
     {
-        _client.RenameFile(oldName, newName);
-    }
-
-    public override void ChangeDirectory(string path)
-    {
-        _client.ChangeDirectory(path);
+        await _client.RenameFileAsync(oldName, newName, ct);
     }
 
     private static string GetPermissionsString(SftpFileAttributes attrs)

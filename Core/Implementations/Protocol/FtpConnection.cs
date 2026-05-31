@@ -29,15 +29,18 @@ public class FtpConnection : Connection
 
     public override bool IsConnected => _client.IsConnected;
 
-    public override void Connect() => _client.Connect().GetAwaiter().GetResult();
-
-    public override void Disconnect()
+    public override async Task ConnectAsync(CancellationToken ct = default)
     {
-        if (_client.IsConnected)
-            _client.Disconnect().GetAwaiter().GetResult();
+        await _client.Connect(ct);
     }
 
-    public override List<FileItem> GetFiles(string path) => GetFilesAsync(path).GetAwaiter().GetResult();
+    public override async Task DisconnectAsync(CancellationToken ct = default)
+    {
+        if (_client.IsConnected)
+        {
+            await _client.Disconnect(ct);
+        }
+    }
 
     public override async Task<List<FileItem>> GetFilesAsync(string path, CancellationToken ct = default)
     {
@@ -56,34 +59,45 @@ public class FtpConnection : Connection
             .ToList();
     }
 
-    public override Stream GetFile(string path) => GetFileAsync(path).GetAwaiter().GetResult();
-
     public override async Task<Stream> GetFileAsync(string path, CancellationToken ct = default)
     {
-        await using var ftpStream = await _client.OpenRead(path, token: ct);
         var memoryStream = new MemoryStream();
-        await ftpStream.CopyToAsync(memoryStream, ct);
+        await using (var ftpStream = await _client.OpenRead(path, token: ct))
+        {
+            await ftpStream.CopyToAsync(memoryStream, ct);
+        }
+
         memoryStream.Position = 0;
         return memoryStream;
     }
 
-    public override List<string> GetDirectories(string path)
+    public override async Task<List<string>> GetDirectoriesAsync(string path, CancellationToken ct = default)
     {
-        return _client.GetListing(path).GetAwaiter().GetResult()
+        var listing = await _client.GetListing(path, token: ct);
+        return listing
             .Where(f => f.Type == FtpObjectType.Directory && f.Name != "." && f.Name != "..")
             .Select(f => f.FullName)
             .ToList();
     }
 
-    public override string GetWorkingDirectory() => _client.GetWorkingDirectory().GetAwaiter().GetResult();
-
-    public override bool FileExists(string path) => _client.FileExists(path).GetAwaiter().GetResult();
-
-    public override bool DirExists(string path) => _client.DirectoryExists(path).GetAwaiter().GetResult();
-
-    public override FileItem GetInfo(string path)
+    public override async Task<string> GetWorkingDirectoryAsync(CancellationToken ct = default)
     {
-        var file = _client.GetObjectInfo(path).GetAwaiter().GetResult()
+        return await _client.GetWorkingDirectory(ct);
+    }
+
+    public override async Task<bool> FileExistsAsync(string path, CancellationToken ct = default)
+    {
+        return await _client.FileExists(path, ct);
+    }
+
+    public override async Task<bool> DirExistsAsync(string path, CancellationToken ct = default)
+    {
+        return await _client.DirectoryExists(path, ct);
+    }
+
+    public override async Task<FileItem> GetInfoAsync(string path, CancellationToken ct = default)
+    {
+        var file = await _client.GetObjectInfo(path, token: ct)
             ?? throw new FileNotFoundException($"Path not found: {path}");
         return new FileItem
         {
@@ -96,35 +110,35 @@ public class FtpConnection : Connection
         };
     }
 
-    public override void SaveFile(string remotePath, Stream content) => SaveFileAsync(remotePath, content).GetAwaiter().GetResult();
-
     public override async Task SaveFileAsync(string remotePath, Stream content, CancellationToken ct = default)
     {
         if (content.CanSeek) content.Position = 0;
         await _client.UploadStream(content, remotePath, token: ct);
     }
 
-    public override void CreateFile(string remotePath)
+    public override async Task CreateFileAsync(string remotePath, CancellationToken ct = default)
     {
-        using var stream = _client.OpenWrite(remotePath).GetAwaiter().GetResult();
-        stream.Close();
+        await using var stream = await _client.OpenWrite(remotePath, token: ct);
     }
 
-    public override void DeleteFile(string remotePath) => _client.DeleteFile(remotePath).GetAwaiter().GetResult();
-
-    public override void RenameFile(string oldName, string newName) => _client.Rename(oldName, newName).GetAwaiter().GetResult();
-
-    public override void MoveFile(string sourcePath, string targetPath, bool canOverride = true)
+    public override async Task DeleteFileAsync(string remotePath, CancellationToken ct = default)
     {
-        if (!canOverride && _client.FileExists(targetPath).GetAwaiter().GetResult())
+        await _client.DeleteFile(remotePath, ct);
+    }
+
+    public override async Task RenameFileAsync(string oldName, string newName, CancellationToken ct = default)
+    {
+        await _client.Rename(oldName, newName, ct);
+    }
+
+    public override async Task MoveFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {
+        if (!canOverride && await _client.FileExists(targetPath, ct))
             throw new InvalidOperationException("Cannot move file: target file already exists.");
-        if (_client.DirectoryExists(targetPath).GetAwaiter().GetResult())
+        if (await _client.DirectoryExists(targetPath, ct))
             throw new InvalidOperationException("Cannot move file: target file is a directory.");
-        _client.Rename(sourcePath, targetPath).GetAwaiter().GetResult();
+        await _client.Rename(sourcePath, targetPath, ct);
     }
-
-    public override void CopyFile(string sourcePath, string targetPath, bool canOverride = true) =>
-        CopyFileAsync(sourcePath, targetPath, canOverride).GetAwaiter().GetResult();
 
     public override async Task CopyFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
@@ -137,13 +151,25 @@ public class FtpConnection : Connection
         await _client.UploadStream(ftpStream, targetPath, token: ct);
     }
 
-    public override void CreateDir(string remotePath) => _client.CreateDirectory(remotePath).GetAwaiter().GetResult();
+    public override async Task CreateDirAsync(string remotePath, CancellationToken ct = default)
+    {
+        await _client.CreateDirectory(remotePath, token: ct);
+    }
 
-    public override void DeleteDir(string remotePath) => _client.DeleteDirectory(remotePath).GetAwaiter().GetResult();
+    public override async Task DeleteDirAsync(string remotePath, CancellationToken ct = default)
+    {
+        await _client.DeleteDirectory(remotePath, token: ct);
+    }
 
-    public override void RenameDir(string oldName, string newName) => _client.Rename(oldName, newName).GetAwaiter().GetResult();
+    public override async Task RenameDirAsync(string oldName, string newName, CancellationToken ct = default)
+    {
+        await _client.Rename(oldName, newName, ct);
+    }
 
-    public override void ChangeDirectory(string path) => _client.SetWorkingDirectory(path).GetAwaiter().GetResult();
+    public override async Task ChangeDirectoryAsync(string path, CancellationToken ct = default)
+    {
+        await _client.SetWorkingDirectory(path, ct);
+    }
 
     private static string GetPermissionsString(int chmod)
     {

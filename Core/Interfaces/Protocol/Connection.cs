@@ -2,43 +2,59 @@ using Core.Models;
 
 namespace Core.Interfaces.Protocol;
 
-public abstract class Connection : IQuery, ICommand, IDisposable
+public abstract class Connection : IQuery, ICommand, IDisposable, IAsyncDisposable
 {
     private bool _disposed = false;
+    
     public Guid Id { get; } = Guid.NewGuid();
-    public abstract void Connect();
-    public abstract void Disconnect();
-    public abstract string GetWorkingDirectory();
-    public abstract bool FileExists(string path);
-    public abstract bool DirExists(string path);
-    public abstract FileItem GetInfo(string path);
-
+    
     public abstract bool IsConnected { get; }
+    
+    public abstract Task ConnectAsync(CancellationToken ct = default);
+    public abstract Task DisconnectAsync(CancellationToken ct = default);
+    
+    public abstract Task<string> GetWorkingDirectoryAsync(CancellationToken ct = default);
+    public abstract Task ChangeDirectoryAsync(string path, CancellationToken ct = default);
+    
+    public abstract Task<bool> FileExistsAsync(string path, CancellationToken ct = default);
+    public abstract Task<bool> DirExistsAsync(string path, CancellationToken ct = default);
+    public abstract Task<FileItem> GetInfoAsync(string path, CancellationToken ct = default);
 
-    public abstract List<FileItem> GetFiles(string path);
     public abstract Task<List<FileItem>> GetFilesAsync(string path, CancellationToken ct = default);
-    public abstract Stream GetFile(string path);
+    public abstract Task<List<string>> GetDirectoriesAsync(string path, CancellationToken ct = default);
+    
     public abstract Task<Stream> GetFileAsync(string path, CancellationToken ct = default);
-    public abstract List<string> GetDirectories(string path);
-    public abstract void SaveFile(string remotePath, Stream content);
     public abstract Task SaveFileAsync(string remotePath, Stream content, CancellationToken ct = default);
-    public abstract void CreateFile(string remotePath);
-    public abstract void DeleteFile(string remotePath);
-    public abstract void RenameFile(string oldName, string newName);
-    public abstract void MoveFile(string sourcePath, string targetPath, bool canOverride = true);
-    public abstract void CopyFile(string sourcePath, string targetPath, bool canOverride = true);
+    
+    public abstract Task CreateFileAsync(string remotePath, CancellationToken ct = default);
+    public abstract Task DeleteFileAsync(string remotePath, CancellationToken ct = default);
+    public abstract Task RenameFileAsync(string oldName, string newName, CancellationToken ct = default);
+    public abstract Task MoveFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default);
     public abstract Task CopyFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default);
-    public abstract void CreateDir(string remotePath);
-    public abstract void DeleteDir(string remotePath);
-    public abstract void RenameDir(string oldName, string newName);
-    public abstract void ChangeDirectory(string path);
-
+    
+    public abstract Task CreateDirAsync(string remotePath, CancellationToken ct = default);
+    public abstract Task DeleteDirAsync(string remotePath, CancellationToken ct = default);
+    public abstract Task RenameDirAsync(string oldName, string newName, CancellationToken ct = default);
+    
     public void Dispose()
     {
-        if (!_disposed) return;
+        if (_disposed) return;
         _disposed = true;
+        
         DisposeCore();
+        GC.SuppressFinalize(this);
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        await DisposeCoreAsync();
+        DisposeCoreAsync();
+        GC.SuppressFinalize(this);
     }
 
     protected abstract void DisposeCore();
+    protected virtual ValueTask DisposeCoreAsync() => ValueTask.CompletedTask;
 }
