@@ -23,6 +23,13 @@ public class ProfileManager : IProfileManager
         _profiles[profile.Id] = profile;
         return profile.Id;
     }
+
+    public async Task<Guid> SaveProfileAsync(SavedProfile profile, CancellationToken ct = default)
+    {
+        await _storage.SaveAsync(profile, ct);
+        _profiles[profile.Id] = profile;
+        return profile.Id;
+    }
     
     public List<Guid> GetProfileIdList()
     {
@@ -39,6 +46,12 @@ public class ProfileManager : IProfileManager
     public void DeleteProfile(Guid id)
     {
         _storage.Delete(id);
+        _profiles.TryRemove(id, out _);
+    }
+
+    public async Task DeleteProfileAsync(Guid id, CancellationToken ct = default)
+    {
+        await _storage.DeleteAsync(id, ct);
         _profiles.TryRemove(id, out _);
     }
     

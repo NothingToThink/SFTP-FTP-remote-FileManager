@@ -8,17 +8,17 @@ namespace Core.Implementations.Protocol;
 
 public class FtpConnection : Connection
 {
-    private readonly FtpClient _client;
+    private readonly IAsyncFtpClient _client;
 
     public FtpConnection(HostProfile profile)
     {
         _client = profile.Auth switch
         {
             PasswordAuth(var user, var pwd)
-                => new FtpClient(profile.Host, new NetworkCredential(user, pwd), profile.EffectivePort),
+                => new AsyncFtpClient(profile.Host, new NetworkCredential(user, pwd), profile.EffectivePort),
 
             AnonymousAuth
-                => new FtpClient(profile.Host, new NetworkCredential("anonymous", "anonymous@example.com"), profile.EffectivePort),
+                => new AsyncFtpClient(profile.Host, new NetworkCredential("anonymous", "anonymous@example.com"), profile.EffectivePort),
 
             KeyAuth
                 => throw new InvalidOperationException("Key authentication is not supported by FTP. Use SFTP instead."),
@@ -27,25 +27,22 @@ public class FtpConnection : Connection
         };
     }
 
-    public override void Connect()
-    {
-        _client.Connect();
-    }
+    public override bool IsConnected => _client.IsConnected;
+
+    public override void Connect() => _client.Connect().GetAwaiter().GetResult();
 
     public override void Disconnect()
     {
-        if (_client is { IsConnected: true })
-        {
-            _client.Disconnect();
-            _client.Dispose();
-        }
+        if (_client.IsConnected)
+            _client.Disconnect().GetAwaiter().GetResult();
     }
 
-    public override bool IsConnected => _client.IsConnected;
+    public override List<FileItem> GetFiles(string path) => GetFilesAsync(path).GetAwaiter().GetResult();
 
-    public override List<FileItem> GetFiles(string path)
+    public override async Task<List<FileItem>> GetFilesAsync(string path, CancellationToken ct = default)
     {
-        return _client.GetListing(path)
+        var listing = await _client.GetListing(path, token: ct);
+        return listing
             .Where(f => f.Name != "." && f.Name != "..")
             .Select(file => new FileItem
             {
@@ -59,45 +56,35 @@ public class FtpConnection : Connection
             .ToList();
     }
 
-    public override Stream GetFile(string path)
+    public override Stream GetFile(string path) => GetFileAsync(path).GetAwaiter().GetResult();
+
+    public override async Task<Stream> GetFileAsync(string path, CancellationToken ct = default)
     {
-        using var ftpStream = _client.OpenRead(path);
-
+        await using var ftpStream = await _client.OpenRead(path, token: ct);
         var memoryStream = new MemoryStream();
-
-        ftpStream.CopyTo(memoryStream);
-
+        await ftpStream.CopyToAsync(memoryStream, ct);
         memoryStream.Position = 0;
-
         return memoryStream;
     }
 
     public override List<string> GetDirectories(string path)
     {
-        return _client.GetListing(path)
+        return _client.GetListing(path).GetAwaiter().GetResult()
             .Where(f => f.Type == FtpObjectType.Directory && f.Name != "." && f.Name != "..")
             .Select(f => f.FullName)
             .ToList();
     }
 
-    public override string GetWorkingDirectory()
-    {
-        return _client.GetWorkingDirectory();
-    }
+    public override string GetWorkingDirectory() => _client.GetWorkingDirectory().GetAwaiter().GetResult();
 
-    public override bool FileExists(string path)
-    {
-        return _client.FileExists(path);
-    }
+    public override bool FileExists(string path) => _client.FileExists(path).GetAwaiter().GetResult();
 
-    public override bool DirExists(string path)
-    {
-        return _client.DirectoryExists(path);
-    }
+    public override bool DirExists(string path) => _client.DirectoryExists(path).GetAwaiter().GetResult();
 
     public override FileItem GetInfo(string path)
     {
-        var file = _client.GetObjectInfo(path);
+        var file = _client.GetObjectInfo(path).GetAwaiter().GetResult()
+            ?? throw new FileNotFoundException($"Path not found: {path}");
         return new FileItem
         {
             Name = file.Name,
@@ -109,111 +96,77 @@ public class FtpConnection : Connection
         };
     }
 
-    public override void SaveFile(string remotePath, Stream content)
-    {
-        if (content.CanSeek)
-            content.Position = 0;
+    public override void SaveFile(string remotePath, Stream content) => SaveFileAsync(remotePath, content).GetAwaiter().GetResult();
 
-        _client.UploadStream(content, remotePath);
+    public override async Task SaveFileAsync(string remotePath, Stream content, CancellationToken ct = default)
+    {
+        if (content.CanSeek) content.Position = 0;
+        await _client.UploadStream(content, remotePath, token: ct);
     }
 
     public override void CreateFile(string remotePath)
     {
-        using var stream = _client.OpenWrite(remotePath);
-
+        using var stream = _client.OpenWrite(remotePath).GetAwaiter().GetResult();
         stream.Close();
     }
 
-    public override void DeleteFile(string remotePath)
-    {
-        _client.DeleteFile(remotePath);
-    }
+    public override void DeleteFile(string remotePath) => _client.DeleteFile(remotePath).GetAwaiter().GetResult();
 
-    public override void RenameFile(string oldName, string newName)
-    {
-        _client.Rename(oldName, newName);
-    }
+    public override void RenameFile(string oldName, string newName) => _client.Rename(oldName, newName).GetAwaiter().GetResult();
 
     public override void MoveFile(string sourcePath, string targetPath, bool canOverride = true)
     {
-        if (!canOverride && _client.FileExists(targetPath))
+        if (!canOverride && _client.FileExists(targetPath).GetAwaiter().GetResult())
             throw new InvalidOperationException("Cannot move file: target file already exists.");
-        if (_client.DirectoryExists(targetPath))
+        if (_client.DirectoryExists(targetPath).GetAwaiter().GetResult())
             throw new InvalidOperationException("Cannot move file: target file is a directory.");
-        _client.Rename(sourcePath, targetPath);
+        _client.Rename(sourcePath, targetPath).GetAwaiter().GetResult();
     }
 
-    public override void CopyFile(string sourcePath, string targetPath, bool canOverride = true)
+    public override void CopyFile(string sourcePath, string targetPath, bool canOverride = true) =>
+        CopyFileAsync(sourcePath, targetPath, canOverride).GetAwaiter().GetResult();
+
+    public override async Task CopyFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
-        if (!canOverride && _client.FileExists(targetPath))
+        if (!canOverride && await _client.FileExists(targetPath, ct))
             throw new InvalidOperationException("Cannot copy file: target file already exists.");
-        if (_client.DirectoryExists(targetPath))
+        if (await _client.DirectoryExists(targetPath, ct))
             throw new InvalidOperationException("Cannot copy file: target file is a directory.");
 
-        using var ftpStream = _client.OpenRead(sourcePath);
-        _client.UploadStream(ftpStream, targetPath);
+        await using var ftpStream = await _client.OpenRead(sourcePath, token: ct);
+        await _client.UploadStream(ftpStream, targetPath, token: ct);
     }
 
-    public override void CreateDir(string remotePath)
-    {
-        _client.CreateDirectory(remotePath);
-    }
+    public override void CreateDir(string remotePath) => _client.CreateDirectory(remotePath).GetAwaiter().GetResult();
 
-    public override void DeleteDir(string remotePath)
-    {
-        DeleteDirectoryRecursive(remotePath);
-    }
+    public override void DeleteDir(string remotePath) => _client.DeleteDirectory(remotePath).GetAwaiter().GetResult();
 
-    private void DeleteDirectoryRecursive(string path)
-    {
-        foreach (var entry in _client.GetListing(path))
-        {
-            if (entry.Name is "." or "..")
-                continue;
+    public override void RenameDir(string oldName, string newName) => _client.Rename(oldName, newName).GetAwaiter().GetResult();
 
-            if (entry.Type == FtpObjectType.Directory)
-                DeleteDirectoryRecursive(entry.FullName);
-            else
-                _client.DeleteFile(entry.FullName);
-        }
-
-        _client.DeleteDirectory(path);
-    }
-
-    public override void RenameDir(string oldName, string newName)
-    {
-        _client.Rename(oldName, newName);
-    }
-
-    public override void ChangeDirectory(string path)
-    {
-        _client.SetWorkingDirectory(path);
-    }
+    public override void ChangeDirectory(string path) => _client.SetWorkingDirectory(path).GetAwaiter().GetResult();
 
     private static string GetPermissionsString(int chmod)
     {
-        bool ownerRead = (chmod & 0x100) != 0;
-        bool ownerWrite = (chmod & 0x80) != 0;
-        bool ownerExecute = (chmod & 0x40) != 0;
-
-        bool groupRead = (chmod & 0x20) != 0;
-        bool groupWrite = (chmod & 0x10) != 0;
-        bool groupExecute = (chmod & 0x08) != 0;
-
-        bool othersRead = (chmod & 0x04) != 0;
-        bool othersWrite = (chmod & 0x02) != 0;
-        bool othersExecute = (chmod & 0x01) != 0;
+        bool ownerRead    = (chmod & 0x100) != 0;
+        bool ownerWrite   = (chmod & 0x080) != 0;
+        bool ownerExecute = (chmod & 0x040) != 0;
+        bool groupRead    = (chmod & 0x020) != 0;
+        bool groupWrite   = (chmod & 0x010) != 0;
+        bool groupExecute = (chmod & 0x008) != 0;
+        bool othersRead   = (chmod & 0x004) != 0;
+        bool othersWrite  = (chmod & 0x002) != 0;
+        bool othersExecute= (chmod & 0x001) != 0;
 
         return ""
-               + (ownerRead ? "r" : "-")
-               + (ownerWrite ? "w" : "-")
+               + (ownerRead    ? "r" : "-")
+               + (ownerWrite   ? "w" : "-")
                + (ownerExecute ? "x" : "-")
-               + (groupRead ? "r" : "-")
-               + (groupWrite ? "w" : "-")
+               + (groupRead    ? "r" : "-")
+               + (groupWrite   ? "w" : "-")
                + (groupExecute ? "x" : "-")
-               + (othersRead ? "r" : "-")
-               + (othersWrite ? "w" : "-")
-               + (othersExecute ? "x" : "-");
+               + (othersRead   ? "r" : "-")
+               + (othersWrite  ? "w" : "-")
+               + (othersExecute? "x" : "-");
     }
 
     protected override void DisposeCore()

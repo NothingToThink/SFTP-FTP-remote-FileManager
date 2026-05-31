@@ -21,12 +21,12 @@ public class ProfilesController(
   }
 
   [HttpPost]
-  public IActionResult SaveProfile([FromBody] SavedProfile profile)
+  public async Task<IActionResult> SaveProfile([FromBody] SavedProfile profile)
   {
     try
     {
       logger.LogInformation("Saving profile.");
-      return Ok(profileManager.SaveProfile(profile));
+      return Ok(await profileManager.SaveProfileAsync(profile));
     }
     catch (Exception e)
     {
@@ -51,12 +51,12 @@ public class ProfilesController(
   }
 
   [HttpDelete("{profileId}")]
-  public IActionResult DeleteProfile([FromRoute] Guid profileId)
+  public async Task<IActionResult> DeleteProfile([FromRoute] Guid profileId)
   {
     try
     {
       logger.LogInformation("Deleting profile.");
-      profileManager.DeleteProfile(profileId);
+      await profileManager.DeleteProfileAsync(profileId);
       return Ok();
     }
     catch (Exception e)

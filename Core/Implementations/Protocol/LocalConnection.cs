@@ -71,6 +71,15 @@ public class LocalConnection : Connection
         content.CopyTo(fileStream);
     }
 
+    public override async Task SaveFileAsync(string remotePath, Stream content, CancellationToken ct = default)
+    {
+        var localPath = GetLocalPath(remotePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
+        if (content.CanSeek) content.Position = 0;
+        await using var fileStream = new FileStream(localPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
+        await content.CopyToAsync(fileStream, ct);
+    }
+
     public override void CreateFile(string remotePath)
     {
         var localPath = GetLocalPath(remotePath);
@@ -114,6 +123,17 @@ public class LocalConnection : Connection
         if (Directory.Exists(targetPath))
             throw new InvalidOperationException("Cannot copy file: target file is a directory.");
         File.Copy(sourcePath, targetPath);
+    }
+
+    public override async Task CopyFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {
+        if (!canOverride && File.Exists(targetPath))
+            throw new InvalidOperationException("Cannot copy file: target file already exists.");
+        if (Directory.Exists(targetPath))
+            throw new InvalidOperationException("Cannot copy file: target file is a directory.");
+        await using var src = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+        await using var dst = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
+        await src.CopyToAsync(dst, ct);
     }
 
     public override void CreateDir(string remotePath)
@@ -176,6 +196,26 @@ public class LocalConnection : Connection
             .ToList();
     }
 
+    public override Task<List<FileItem>> GetFilesAsync(string path, CancellationToken ct = default)
+    {
+        var localPath = GetLocalPath(path);
+        var result = new List<FileItem>();
+        foreach (var info in new DirectoryInfo(localPath).EnumerateFileSystemInfos())
+        {
+            ct.ThrowIfCancellationRequested();
+            result.Add(new FileItem
+            {
+                Name = info.Name,
+                Size = info is FileInfo f ? f.Length : 0,
+                LastModified = info.LastWriteTime,
+                IsDirectory = info is DirectoryInfo,
+                FullPath = Path.GetRelativePath(_rootPath, info.FullName),
+                Permissions = GetPermissionsString(info)
+            });
+        }
+        return Task.FromResult(result);
+    }
+
     private static string GetPermissionsString(FileSystemInfo info)
     {
         var attrs = info.Attributes;
@@ -201,6 +241,14 @@ public class LocalConnection : Connection
             FileShare.Read,
             4096,
             useAsync: false);
+    }
+
+    public override Task<Stream> GetFileAsync(string path, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        string localPath = GetLocalPath(path);
+        Stream stream = new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+        return Task.FromResult(stream);
     }
 
     public override List<string> GetDirectories(string path)

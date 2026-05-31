@@ -67,6 +67,25 @@ public class SftpConnection : Connection
             .ToList();
     }
 
+    public override async Task<List<FileItem>> GetFilesAsync(string path, CancellationToken ct = default)
+    {
+        var files = new List<FileItem>();
+        await foreach (var file in _client.ListDirectoryAsync(path, ct))
+        {
+            if (file.Name is "." or "..") continue;
+            files.Add(new FileItem
+            {
+                Name = file.Name,
+                Size = file.Length,
+                LastModified = file.LastWriteTime,
+                FullPath = file.FullName,
+                IsDirectory = file.IsDirectory,
+                Permissions = GetPermissionsString(file.Attributes),
+            });
+        }
+        return files;
+    }
+
     public override Stream GetFile(string path)
     {
         var memoryStream = new MemoryStream();
@@ -75,6 +94,14 @@ public class SftpConnection : Connection
 
         memoryStream.Position = 0;
 
+        return memoryStream;
+    }
+
+    public override async Task<Stream> GetFileAsync(string path, CancellationToken ct = default)
+    {
+        var memoryStream = new MemoryStream();
+        await _client.DownloadFileAsync(path, memoryStream, ct);
+        memoryStream.Position = 0;
         return memoryStream;
     }
 
@@ -125,6 +152,14 @@ public class SftpConnection : Connection
         _client.UploadFile(content, remotePath, true);
     }
 
+    public override async Task SaveFileAsync(string remotePath, Stream content, CancellationToken ct = default)
+    {
+        if (content.CanSeek)
+            content.Position = 0;
+
+        await _client.UploadFileAsync(content, remotePath, ct);
+    }
+
     public override void CreateFile(string remotePath)
     {
         using var stream = _client.Create(remotePath);
@@ -158,12 +193,25 @@ public class SftpConnection : Connection
         {
             if (!canOverride && !_client.GetAttributes(targetPath).IsRegularFile)
                 throw new InvalidOperationException("Cannot copy file: target file already exists.");
-            else
-                throw new InvalidOperationException("Cannot copy file: target file is a directory.");
-        }        
+            throw new InvalidOperationException("Cannot copy file: target file is a directory.");
+        }
         using var memoryStream = new MemoryStream();
         _client.DownloadFile(sourcePath, memoryStream);
         _client.UploadFile(memoryStream, targetPath);
+    }
+
+    public override async Task CopyFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {
+        if (await _client.ExistsAsync(targetPath, ct))
+        {
+            if (!canOverride && !(await _client.GetAttributesAsync(targetPath, ct)).IsRegularFile)
+                throw new InvalidOperationException("Cannot copy file: target file already exists.");
+            throw new InvalidOperationException("Cannot copy file: target file is a directory.");
+        }
+        using var memoryStream = new MemoryStream();
+        await _client.DownloadFileAsync(sourcePath, memoryStream, ct);
+        memoryStream.Position = 0;
+        await _client.UploadFileAsync(memoryStream, targetPath, ct);
     }
 
     public override void CreateDir(string remotePath)

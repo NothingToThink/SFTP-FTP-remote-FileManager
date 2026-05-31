@@ -12,13 +12,13 @@ public class ConnectionsFilesystemController(
 ) : ControllerBase
 {
     [HttpGet]
-    public IActionResult GetAllFiles([FromRoute] Guid connectionId)
+    public async Task<IActionResult> GetAllFiles([FromRoute] Guid connectionId)
     {
         try
         {
             logger.LogInformation("Getting all files.");
             var connection = connectionManager.GetConnection(connectionId);
-            return Ok(connection.GetFiles(connection.GetWorkingDirectory()));
+            return Ok(await connection.GetFilesAsync(connection.GetWorkingDirectory()));
         }
         catch (Exception e)
         {
@@ -178,13 +178,13 @@ public class ConnectionsFilesystemController(
     }
 
     [HttpPost("file/copy")]
-    public IActionResult CopyFile([FromRoute] Guid connectionId, [FromBody] CopyRequest request)
+    public async Task<IActionResult> CopyFile([FromRoute] Guid connectionId, [FromBody] CopyRequest request)
     {
         try
         {
             logger.LogInformation("Copying file.");
             var connection = connectionManager.GetConnection(connectionId);
-            connection.CopyFile(request.sourcePath, request.targetPath, request.canOverride);
+            await connection.CopyFileAsync(request.sourcePath, request.targetPath, request.canOverride);
             return Ok();
         }
         catch (Exception e)
@@ -221,7 +221,7 @@ public class ConnectionsFilesystemController(
         {
             var connection = connectionManager.GetConnection(connectionId);
             await using var stream = file.OpenReadStream();
-            connection.SaveFile(remotePath, stream);
+            await connection.SaveFileAsync(remotePath, stream);
             return Ok();
         }
         catch (Exception e)
@@ -232,14 +232,14 @@ public class ConnectionsFilesystemController(
     }
 
     [HttpGet("file/download")]
-    public IActionResult Download(
+    public async Task<IActionResult> Download(
         [FromRoute] Guid connectionId,
         [FromQuery] string path)
     {
         try
         {
             var connection = connectionManager.GetConnection(connectionId);
-            var stream = connection.GetFile(path);
+            var stream = await connection.GetFileAsync(path);
             return File(stream, "application/octet-stream", Path.GetFileName(path));
         }
         catch (Exception e)
@@ -248,6 +248,7 @@ public class ConnectionsFilesystemController(
             return BadRequest();
         }
     }
+    
     [HttpGet("dir/current")]
     public IActionResult GetCurrentDirectory([FromRoute] Guid connectionId)
     {
