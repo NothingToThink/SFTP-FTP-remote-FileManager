@@ -4,8 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Backend.Controllers;
 
-
-
 [ApiController]
 [Route("files/{connectionId}")]
 public class Files(ILogger<Files> logger, IConnectionManager connectionManager) : ControllerBase
@@ -17,12 +15,13 @@ public class Files(ILogger<Files> logger, IConnectionManager connectionManager) 
     }
 
     [HttpGet]
-    public IActionResult GetFiles(Guid connectionId)
+    public async Task<IActionResult> GetFiles([FromRoute] Guid connectionId, CancellationToken ct)
     {
         try
         {
             var connection = GetConnection(connectionId);
-            var files = connection.GetFiles(connection.GetWorkingDirectory());
+            var workingDir = await connection.GetWorkingDirectoryAsync(ct);
+            var files = await connection.GetFilesAsync(workingDir, ct);
             return Ok(files);
         }
         catch (Exception e)
@@ -31,6 +30,4 @@ public class Files(ILogger<Files> logger, IConnectionManager connectionManager) 
             return BadRequest();
         }
     }
-    
-    
 }
