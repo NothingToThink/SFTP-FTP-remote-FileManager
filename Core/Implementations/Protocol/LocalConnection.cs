@@ -103,7 +103,7 @@ public class LocalConnection : Connection
             throw new InvalidOperationException("Cannot move file: target file already exists.");
         if (Directory.Exists(localTarget))
             throw new InvalidOperationException("Cannot move file: target file is a directory.");
-        
+
         File.Move(localSource, localTarget, canOverride);
         return Task.CompletedTask;
     }
@@ -117,7 +117,7 @@ public class LocalConnection : Connection
             throw new InvalidOperationException("Cannot copy file: target file already exists.");
         if (Directory.Exists(localTarget))
             throw new InvalidOperationException("Cannot copy file: target file is a directory.");
-        
+
         await using var src = new FileStream(localSource, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
         await using var dst = new FileStream(localTarget, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
         await src.CopyToAsync(dst, ct);

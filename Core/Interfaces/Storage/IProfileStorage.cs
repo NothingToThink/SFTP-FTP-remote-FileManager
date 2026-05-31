@@ -13,4 +13,3 @@ public interface IProfileStorage
     void Delete(Guid id);
     Task DeleteAsync(Guid id, CancellationToken ct = default);
 }
-

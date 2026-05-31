@@ -173,26 +173,26 @@ public class FtpConnection : Connection
 
     private static string GetPermissionsString(int chmod)
     {
-        bool ownerRead    = (chmod & 0x100) != 0;
-        bool ownerWrite   = (chmod & 0x080) != 0;
+        bool ownerRead = (chmod & 0x100) != 0;
+        bool ownerWrite = (chmod & 0x080) != 0;
         bool ownerExecute = (chmod & 0x040) != 0;
-        bool groupRead    = (chmod & 0x020) != 0;
-        bool groupWrite   = (chmod & 0x010) != 0;
+        bool groupRead = (chmod & 0x020) != 0;
+        bool groupWrite = (chmod & 0x010) != 0;
         bool groupExecute = (chmod & 0x008) != 0;
-        bool othersRead   = (chmod & 0x004) != 0;
-        bool othersWrite  = (chmod & 0x002) != 0;
-        bool othersExecute= (chmod & 0x001) != 0;
+        bool othersRead = (chmod & 0x004) != 0;
+        bool othersWrite = (chmod & 0x002) != 0;
+        bool othersExecute = (chmod & 0x001) != 0;
 
         return ""
-               + (ownerRead    ? "r" : "-")
-               + (ownerWrite   ? "w" : "-")
+               + (ownerRead ? "r" : "-")
+               + (ownerWrite ? "w" : "-")
                + (ownerExecute ? "x" : "-")
-               + (groupRead    ? "r" : "-")
-               + (groupWrite   ? "w" : "-")
+               + (groupRead ? "r" : "-")
+               + (groupWrite ? "w" : "-")
                + (groupExecute ? "x" : "-")
-               + (othersRead   ? "r" : "-")
-               + (othersWrite  ? "w" : "-")
-               + (othersExecute? "x" : "-");
+               + (othersRead ? "r" : "-")
+               + (othersWrite ? "w" : "-")
+               + (othersExecute ? "x" : "-");
     }
 
     protected override void DisposeCore()

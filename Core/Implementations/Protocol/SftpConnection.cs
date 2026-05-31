@@ -162,7 +162,7 @@ public class SftpConnection : Connection
             var attrs = await _client.GetAttributesAsync(targetPath, ct);
             if (!canOverride && !attrs.IsRegularFile)
                 throw new InvalidOperationException("Cannot move file: target file already exists.");
-            
+
             throw new InvalidOperationException("Cannot move file: target file is a directory.");
         }
         await _client.RenameFileAsync(sourcePath, targetPath, ct);
@@ -175,10 +175,10 @@ public class SftpConnection : Connection
             var attrs = await _client.GetAttributesAsync(targetPath, ct);
             if (!canOverride && !attrs.IsRegularFile)
                 throw new InvalidOperationException("Cannot copy file: target file already exists.");
-            
+
             throw new InvalidOperationException("Cannot copy file: target file is a directory.");
         }
-        
+
         using var memoryStream = new MemoryStream();
         await _client.DownloadFileAsync(sourcePath, memoryStream, ct);
         memoryStream.Position = 0;

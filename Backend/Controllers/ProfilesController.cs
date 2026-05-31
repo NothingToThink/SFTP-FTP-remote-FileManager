@@ -1,4 +1,3 @@
-using Backend.DTO;
 using Core.Interfaces.Manager;
 using Core.Models.Credentials;
 using Microsoft.AspNetCore.Mvc;
@@ -23,46 +22,23 @@ public class ProfilesController(
   [HttpPost]
   public async Task<IActionResult> SaveProfile([FromBody] SavedProfile profile)
   {
-    try
-    {
       logger.LogInformation("Saving profile.");
       return Ok(await profileManager.SaveProfileAsync(profile));
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "Error while saving profile.");
-      return BadRequest();
-    }
   }
   
   [HttpGet("{profileId}")]
   public IActionResult GetProfile([FromRoute] Guid profileId)
   {
-    try
-    {
       logger.LogInformation("Getting profile.");
       return Ok(profileManager.GetProfile(profileId));
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "Error while getting profile.");
-      return BadRequest();
-    }
   }
 
   [HttpDelete("{profileId}")]
   public async Task<IActionResult> DeleteProfile([FromRoute] Guid profileId)
   {
-    try
-    {
       logger.LogInformation("Deleting profile.");
       await profileManager.DeleteProfileAsync(profileId);
       return Ok();
-    }
-    catch (Exception e)
-    {
-      logger.LogError(e, "Error while deleting profile.");
-      return BadRequest();
-    }
+    
   }
 }

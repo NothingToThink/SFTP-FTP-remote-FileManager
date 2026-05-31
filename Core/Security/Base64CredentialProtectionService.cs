@@ -9,7 +9,7 @@ public class Base64CredentialProtectionService : ICredentialProtectionService
 
     public string Encrypt(string password)
     {
-        if(password == null)
+        if (password == null)
         {
             throw new ArgumentNullException(nameof(password));
         }
@@ -21,12 +21,12 @@ public class Base64CredentialProtectionService : ICredentialProtectionService
     }
     public string Decrypt(string encryptedPassword)
     {
-        if(encryptedPassword == null)
+        if (encryptedPassword == null)
         {
             throw new ArgumentNullException(nameof(encryptedPassword));
         }
 
-        if(!encryptedPassword.StartsWith(Prefix, StringComparison.Ordinal))
+        if (!encryptedPassword.StartsWith(Prefix, StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Wrong credential protection format.");
         }
