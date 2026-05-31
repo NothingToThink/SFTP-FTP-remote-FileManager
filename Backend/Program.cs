@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Backend.Middleware;
 using Core.Implementations.Factory;
 using Core.Implementations.Manager;
 using Core.Implementations.Storage;
@@ -43,8 +44,9 @@ try
         app.UseSwagger();
         app.UseSwaggerUI();
     }
-
+    
     app.UseCors(policy => policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
+    app.UseMiddleware<ExceptionMiddleware>();
     app.MapControllers();
     app.Run();
 }
