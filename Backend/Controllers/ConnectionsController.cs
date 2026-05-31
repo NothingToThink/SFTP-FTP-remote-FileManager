@@ -22,81 +22,42 @@ public class ConnectionsController(
     [HttpPost]
     public IActionResult CreateConnection([FromBody] SavedProfile profile)
     {
-        try
-        {
-            logger.LogInformation("Creating connection.");
-            return Ok(connectionManager.CreateConnection(profile));
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while creating connection.");
-            return BadRequest();
-        }
+        logger.LogInformation("Creating connection.");
+        return Ok(connectionManager.CreateConnection(profile));
     }
 
     [HttpDelete("{connectionId}")]
     public IActionResult DeleteConnection([FromRoute] Guid connectionId)
     {
-        try
-        {
-            logger.LogInformation("Deleting connection.");
-            connectionManager.DeleteConnection(connectionId);
-            return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while deleting connection.");
-            return BadRequest();
-        }
+        logger.LogInformation("Deleting connection.");
+        connectionManager.DeleteConnection(connectionId);
+        return Ok();
     }
 
     [HttpPost("{connectionId}/connect")]
     public async Task<IActionResult> ConnectConnection([FromRoute] Guid connectionId, CancellationToken ct)
     {
-        try
-        {
             logger.LogInformation("Connecting connection.");
             var connection = connectionManager.GetConnection(connectionId);
             await connection.ConnectAsync(ct);
             return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while connecting connection.");
-            return BadRequest();
-        }
     }
 
     [HttpPost("{connectionId}/disconnect")]
     public async Task<IActionResult> DisconnectConnection([FromRoute] Guid connectionId, CancellationToken ct)
     {
-        try
-        {
             logger.LogInformation("Disconnecting connection.");
             var connection = connectionManager.GetConnection(connectionId);
             await connection.DisconnectAsync(ct);
             return Ok();
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while disconnecting connection.");
-            return BadRequest();
-        }
+        
     }
 
     [HttpGet("{connectionId}/state")]
     public IActionResult GetConnectionState([FromRoute] Guid connectionId)
     {
-        try
-        {
-            logger.LogInformation("Getting connection state.");
-            var connection = connectionManager.GetConnection(connectionId);
-            return Ok(connection.IsConnected);
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Error while getting connection state.");
-            return BadRequest();
-        }
+        logger.LogInformation("Getting connection state.");
+        var connection = connectionManager.GetConnection(connectionId);
+        return Ok(connection.IsConnected);
     }
 }
