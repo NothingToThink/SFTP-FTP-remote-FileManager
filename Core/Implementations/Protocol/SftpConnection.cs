@@ -238,9 +238,7 @@ public class SftpConnection : Connection
         }
         else await _client.CreateDirectoryAsync(targetPath, ct);
         
-        var items = await GetFilesAsync(sourcePath, ct);
-
-        foreach (var item in items)
+        foreach (var item in await GetFilesAsync(sourcePath, ct))
         {
             var sourceItemPath = Path.Combine(sourcePath, item.Name);
             var targetItemPath = Path.Combine(targetPath, item.Name);

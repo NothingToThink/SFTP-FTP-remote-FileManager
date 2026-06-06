@@ -187,9 +187,8 @@ public class FtpConnection : Connection
         if (await _client.FileExists(targetPath, ct))
             throw new InvalidOperationException("Cannot copy directory: target directory is a file.");
         
-        var items = await GetFilesAsync(sourcePath, ct);
 
-        foreach (var item in items)
+        foreach (var item in await GetFilesAsync(sourcePath, ct))
         {
             var sourceItemPath = Path.Combine(sourcePath, item.Name);
             var targetItemPath = Path.Combine(targetPath, item.Name);

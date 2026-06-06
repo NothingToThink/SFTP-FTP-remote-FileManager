@@ -11,4 +11,5 @@ public interface IQuery
     Task<bool> FileExistsAsync(string path, CancellationToken ct = default);
     Task<bool> DirExistsAsync(string path, CancellationToken ct = default);
     Task<FileItem> GetInfoAsync(string path, CancellationToken ct = default);
+    Task<long> GetDirectorySizeAsync(string path, CancellationToken ct = default);
 }
