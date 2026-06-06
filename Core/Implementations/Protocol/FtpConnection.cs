@@ -166,6 +166,41 @@ public class FtpConnection : Connection
         await _client.Rename(oldName, newName, ct);
     }
 
+    public override async Task MoveDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {
+        if (!canOverride && await _client.DirectoryExists(targetPath, ct))
+            throw new InvalidOperationException("Cannot move directory: target directory already exists.");
+        if (await _client.FileExists(targetPath, ct))
+            throw new InvalidOperationException("Cannot move directory: target directory is a file.");
+        await _client.MoveDirectory(sourcePath, targetPath, token: ct);
+    }
+    
+    public override async Task CopyDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {
+        if (!canOverride)
+        {
+            if (await _client.DirectoryExists(targetPath, ct))
+                throw new InvalidOperationException("Cannot copy directory: target directory already exists.");
+            else
+                await _client.CreateDirectory(targetPath, token: ct);
+        }
+        if (await _client.FileExists(targetPath, ct))
+            throw new InvalidOperationException("Cannot copy directory: target directory is a file.");
+        
+        var items = await GetFilesAsync(sourcePath, ct);
+
+        foreach (var item in items)
+        {
+            var sourceItemPath = Path.Combine(sourcePath, item.Name);
+            var targetItemPath = Path.Combine(targetPath, item.Name);
+
+            if (item.IsDirectory)
+                await CopyDirAsync(sourceItemPath, targetItemPath, canOverride, ct);
+            else
+                await CopyFileAsync(sourceItemPath, targetItemPath, canOverride, ct);
+        }
+    }
+
     public override async Task ChangeDirectoryAsync(string path, CancellationToken ct = default)
     {
         await _client.SetWorkingDirectory(path, ct);
@@ -173,26 +208,26 @@ public class FtpConnection : Connection
 
     private static string GetPermissionsString(int chmod)
     {
-        bool ownerRead = (chmod & 0x100) != 0;
-        bool ownerWrite = (chmod & 0x080) != 0;
+        bool ownerRead    = (chmod & 0x100) != 0;
+        bool ownerWrite   = (chmod & 0x080) != 0;
         bool ownerExecute = (chmod & 0x040) != 0;
-        bool groupRead = (chmod & 0x020) != 0;
-        bool groupWrite = (chmod & 0x010) != 0;
+        bool groupRead    = (chmod & 0x020) != 0;
+        bool groupWrite   = (chmod & 0x010) != 0;
         bool groupExecute = (chmod & 0x008) != 0;
-        bool othersRead = (chmod & 0x004) != 0;
-        bool othersWrite = (chmod & 0x002) != 0;
-        bool othersExecute = (chmod & 0x001) != 0;
+        bool othersRead   = (chmod & 0x004) != 0;
+        bool othersWrite  = (chmod & 0x002) != 0;
+        bool othersExecute= (chmod & 0x001) != 0;
 
         return ""
-               + (ownerRead ? "r" : "-")
-               + (ownerWrite ? "w" : "-")
+               + (ownerRead    ? "r" : "-")
+               + (ownerWrite   ? "w" : "-")
                + (ownerExecute ? "x" : "-")
-               + (groupRead ? "r" : "-")
-               + (groupWrite ? "w" : "-")
+               + (groupRead    ? "r" : "-")
+               + (groupWrite   ? "w" : "-")
                + (groupExecute ? "x" : "-")
-               + (othersRead ? "r" : "-")
-               + (othersWrite ? "w" : "-")
-               + (othersExecute ? "x" : "-");
+               + (othersRead   ? "r" : "-")
+               + (othersWrite  ? "w" : "-")
+               + (othersExecute? "x" : "-");
     }
 
     protected override void DisposeCore()

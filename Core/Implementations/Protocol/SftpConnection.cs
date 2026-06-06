@@ -160,9 +160,8 @@ public class SftpConnection : Connection
         if (await _client.ExistsAsync(targetPath, ct))
         {
             var attrs = await _client.GetAttributesAsync(targetPath, ct);
-            if (!canOverride && !attrs.IsRegularFile)
+            if (!canOverride && attrs.IsRegularFile)
                 throw new InvalidOperationException("Cannot move file: target file already exists.");
-
             throw new InvalidOperationException("Cannot move file: target file is a directory.");
         }
         await _client.RenameFileAsync(sourcePath, targetPath, ct);
@@ -173,9 +172,8 @@ public class SftpConnection : Connection
         if (await _client.ExistsAsync(targetPath, ct))
         {
             var attrs = await _client.GetAttributesAsync(targetPath, ct);
-            if (!canOverride && !attrs.IsRegularFile)
+            if (!canOverride && attrs.IsRegularFile)
                 throw new InvalidOperationException("Cannot copy file: target file already exists.");
-
             throw new InvalidOperationException("Cannot copy file: target file is a directory.");
         }
 
@@ -214,6 +212,44 @@ public class SftpConnection : Connection
     public override async Task RenameDirAsync(string oldName, string newName, CancellationToken ct = default)
     {
         await _client.RenameFileAsync(oldName, newName, ct);
+    }
+
+    public override async Task MoveDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {
+        if (await _client.ExistsAsync(targetPath, ct))
+        {
+            var attrs = await _client.GetAttributesAsync(targetPath, ct);
+            if (!canOverride && attrs.IsDirectory)
+                throw new InvalidOperationException("Cannot move directory: target directory already exists.");
+
+            throw new InvalidOperationException("Cannot move directory: target directory is a file.");
+        }
+        await _client.RenameFileAsync(sourcePath, targetPath, cancellationToken: ct);
+    }
+    
+    public override async Task CopyDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {
+        if (await _client.ExistsAsync(targetPath, ct))
+        {
+            var attrs = await _client.GetAttributesAsync(targetPath, ct);
+            if (!canOverride && attrs.IsDirectory)
+                throw new InvalidOperationException("Cannot copy directory: target directory already exists.");
+            throw new InvalidOperationException("Cannot copy directory: target directory is a file.");
+        }
+        else await _client.CreateDirectoryAsync(targetPath, ct);
+        
+        var items = await GetFilesAsync(sourcePath, ct);
+
+        foreach (var item in items)
+        {
+            var sourceItemPath = Path.Combine(sourcePath, item.Name);
+            var targetItemPath = Path.Combine(targetPath, item.Name);
+
+            if (item.IsDirectory)
+                await CopyDirAsync(sourceItemPath, targetItemPath, canOverride, ct);
+            else
+                await CopyFileAsync(sourceItemPath, targetItemPath, canOverride, ct);
+        }
     }
 
     private static string GetPermissionsString(SftpFileAttributes attrs)

@@ -35,6 +35,8 @@ public abstract class Connection : IQuery, ICommand, IDisposable, IAsyncDisposab
     public abstract Task CreateDirAsync(string remotePath, CancellationToken ct = default);
     public abstract Task DeleteDirAsync(string remotePath, CancellationToken ct = default);
     public abstract Task RenameDirAsync(string oldName, string newName, CancellationToken ct = default);
+    public abstract Task MoveDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default);
+    public abstract Task CopyDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default);
 
     public void Dispose()
     {
