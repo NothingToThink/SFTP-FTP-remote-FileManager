@@ -31,7 +31,7 @@ try
         return new JsonProfileStorage(AppPaths
             .GetProfilesFilePath(), protection);
     });
-    
+
     builder.Services.AddSingleton<IConnectionFactory, ConnectionFactory>();
     builder.Services.AddSingleton<IConnectionManager, ConnectionManager>();
     builder.Services.AddSingleton<IProfileManager, ProfileManager>();
@@ -44,7 +44,7 @@ try
         app.UseSwagger();
         app.UseSwaggerUI();
     }
-    
+
     app.UseCors(policy => policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
     app.UseMiddleware<ExceptionMiddleware>();
     app.MapControllers();

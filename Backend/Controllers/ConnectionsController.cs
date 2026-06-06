@@ -37,20 +37,20 @@ public class ConnectionsController(
     [HttpPost("{connectionId}/connect")]
     public async Task<IActionResult> ConnectConnection([FromRoute] Guid connectionId, CancellationToken ct)
     {
-            logger.LogInformation("Connecting connection.");
-            var connection = connectionManager.GetConnection(connectionId);
-            await connection.ConnectAsync(ct);
-            return Ok();
+        logger.LogInformation("Connecting connection.");
+        var connection = connectionManager.GetConnection(connectionId);
+        await connection.ConnectAsync(ct);
+        return Ok();
     }
 
     [HttpPost("{connectionId}/disconnect")]
     public async Task<IActionResult> DisconnectConnection([FromRoute] Guid connectionId, CancellationToken ct)
     {
-            logger.LogInformation("Disconnecting connection.");
-            var connection = connectionManager.GetConnection(connectionId);
-            await connection.DisconnectAsync(ct);
-            return Ok();
-        
+        logger.LogInformation("Disconnecting connection.");
+        var connection = connectionManager.GetConnection(connectionId);
+        await connection.DisconnectAsync(ct);
+        return Ok();
+
     }
 
     [HttpGet("{connectionId}/state")]

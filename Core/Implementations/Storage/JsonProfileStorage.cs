@@ -50,8 +50,7 @@ public class JsonProfileStorage : IProfileStorage
 
         _filePath = filePath;
 
-        _credentialProtectionService = credentialProtectionService
-            ?? throw new ArgumentNullException(nameof(credentialProtectionService));
+        _credentialProtectionService = credentialProtectionService;
     }
 
     public List<SavedProfile> GetAll()
@@ -111,9 +110,6 @@ public class JsonProfileStorage : IProfileStorage
 
     public void Save(SavedProfile profile)
     {
-        if (profile is null)
-            throw new ArgumentNullException(nameof(profile));
-
         _fileLock.Wait();
         try
         {
@@ -130,9 +126,6 @@ public class JsonProfileStorage : IProfileStorage
 
     public async Task SaveAsync(SavedProfile profile, CancellationToken ct = default)
     {
-        if (profile is null)
-            throw new ArgumentNullException(nameof(profile));
-
         await _fileLock.WaitAsync(ct);
         try
         {

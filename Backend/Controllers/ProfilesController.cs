@@ -22,23 +22,23 @@ public class ProfilesController(
   [HttpPost]
   public async Task<IActionResult> SaveProfile([FromBody] SavedProfile profile)
   {
-      logger.LogInformation("Saving profile.");
-      return Ok(await profileManager.SaveProfileAsync(profile));
+    logger.LogInformation("Saving profile.");
+    return Ok(await profileManager.SaveProfileAsync(profile));
   }
-  
+
   [HttpGet("{profileId}")]
   public IActionResult GetProfile([FromRoute] Guid profileId)
   {
-      logger.LogInformation("Getting profile.");
-      return Ok(profileManager.GetProfile(profileId));
+    logger.LogInformation("Getting profile.");
+    return Ok(profileManager.GetProfile(profileId));
   }
 
   [HttpDelete("{profileId}")]
   public async Task<IActionResult> DeleteProfile([FromRoute] Guid profileId)
   {
-      logger.LogInformation("Deleting profile.");
-      await profileManager.DeleteProfileAsync(profileId);
-      return Ok();
-    
+    logger.LogInformation("Deleting profile.");
+    await profileManager.DeleteProfileAsync(profileId);
+    return Ok();
+
   }
 }
