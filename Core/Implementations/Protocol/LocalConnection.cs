@@ -152,6 +152,41 @@ public class LocalConnection : Connection
         return Task.CompletedTask;
     }
 
+    public override Task MoveDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {
+        var localSource = GetLocalPath(sourcePath);
+        var localTarget = GetLocalPath(targetPath);
+
+        if (!canOverride && Directory.Exists(localTarget))
+             throw new InvalidOperationException("Cannot move directory: target directory already exists.");
+        if (File.Exists(localTarget))
+            throw new InvalidOperationException("Cannot move directory: target directory is a file.");
+        Directory.Move(localSource, localTarget);
+        return Task.CompletedTask;
+    }
+    
+    public override async Task CopyDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {var localSource = GetLocalPath(sourcePath);
+        var localTarget = GetLocalPath(targetPath);
+
+        if (!canOverride && Directory.Exists(localTarget))
+            throw new InvalidOperationException("Cannot directory file: target directory already exists.");
+        else if (File.Exists(localTarget))
+            throw new InvalidOperationException("Cannot copy directory: target directory is a file.");
+        else await CreateDirAsync(targetPath);
+
+        foreach (var item in await GetFilesAsync(sourcePath, ct))
+        {
+            var sourceItemPath = Path.Combine(sourcePath, item.Name);
+            var targetItemPath = Path.Combine(targetPath, item.Name);
+
+            if (item.IsDirectory)
+                await CopyDirAsync(sourceItemPath, targetItemPath, canOverride, ct);
+            else
+                await CopyFileAsync(sourceItemPath, targetItemPath, canOverride, ct);
+        }
+    }
+
     public override Task ChangeDirectoryAsync(string path, CancellationToken ct = default)
     {
         var fullPath = GetLocalPath(path);
