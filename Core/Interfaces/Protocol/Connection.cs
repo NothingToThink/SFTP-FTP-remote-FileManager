@@ -49,7 +49,7 @@ public abstract class Connection : IQuery, ICommand, IDisposable, IAsyncDisposab
         }
         return size;
     }
-
+    
     public void Dispose()
     {
         if (_disposed) return;
