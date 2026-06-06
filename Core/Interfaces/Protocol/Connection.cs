@@ -38,13 +38,13 @@ public abstract class Connection : IQuery, ICommand, IDisposable, IAsyncDisposab
     public abstract Task MoveDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default);
     public abstract Task CopyDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default);
 
-    public async Task<long> GetDirectorySizeAsync(string path, CancellationToken ct = default)
+    public async Task<long> GetDirSizeAsync(string path, CancellationToken ct = default)
     {
         long size = 0;
         foreach (FileItem item in await GetFilesAsync(path, ct))
         {
             var itemPath = Path.Combine(path, item.Name);
-            if (item.IsDirectory) size += await GetDirectorySizeAsync(itemPath, ct);
+            if (item.IsDirectory) size += await GetDirSizeAsync(itemPath, ct);
             else size += item.Size;
         }
         return size;

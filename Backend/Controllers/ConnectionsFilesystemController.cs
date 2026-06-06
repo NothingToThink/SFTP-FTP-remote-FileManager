@@ -31,10 +31,9 @@ public class ConnectionsFilesystemController(
   [HttpGet("dir/size")]
   public async Task<IActionResult> GetDirSize([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
   {
-        throw new NotImplementedException();
-    // logger.LogInformation("Getting file info.");
-    // var connection = connectionManager.GetConnection(connectionId);
-    // return Ok(await connection.GetInfoAsync(path, ct));
+    logger.LogInformation("Getting direcotory size.");
+    var connection = connectionManager.GetConnection(connectionId);
+    return Ok(await connection.GetDirSizeAsync(path, ct));
   }
 
   [HttpPost("file")]
@@ -123,6 +122,24 @@ public class ConnectionsFilesystemController(
     logger.LogInformation("Moving file.");
     var connection = connectionManager.GetConnection(connectionId);
     await connection.MoveFileAsync(request.sourcePath, request.targetPath, request.canOverride, ct);
+    return Ok();
+  }
+
+  [HttpPost("dir/copy")]
+  public async Task<IActionResult> CopyDir([FromRoute] Guid connectionId, [FromBody] CopyRequest request, CancellationToken ct)
+  {
+    logger.LogInformation("Copying directory.");
+    var connection = connectionManager.GetConnection(connectionId);
+    await connection.CopyDirAsync(request.sourcePath, request.targetPath, request.canOverride, ct);
+    return Ok();
+  }
+
+  [HttpPatch("dir/move")]
+  public async Task<IActionResult> MoveDir([FromRoute] Guid connectionId, [FromBody] MoveRequest request, CancellationToken ct)
+  {
+    logger.LogInformation("Moving directory.");
+    var connection = connectionManager.GetConnection(connectionId);
+    await connection.MoveDirAsync(request.sourcePath, request.targetPath, request.canOverride, ct);
     return Ok();
   }
 
