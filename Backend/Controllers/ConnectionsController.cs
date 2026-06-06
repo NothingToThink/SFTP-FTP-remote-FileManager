@@ -1,4 +1,3 @@
-using Backend.DTO;
 using Core.Interfaces.Manager;
 using Core.Models.Credentials;
 using Microsoft.AspNetCore.Mvc;
@@ -36,21 +35,22 @@ public class ConnectionsController(
     }
 
     [HttpPost("{connectionId}/connect")]
-    public IActionResult ConnectConnecion([FromRoute] Guid connectionId)
+    public async Task<IActionResult> ConnectConnection([FromRoute] Guid connectionId, CancellationToken ct)
     {
         logger.LogInformation("Connecting connection.");
         var connection = connectionManager.GetConnection(connectionId);
-        connection.Connect();
+        await connection.ConnectAsync(ct);
         return Ok();
     }
 
     [HttpPost("{connectionId}/disconnect")]
-    public IActionResult DisconnectConnection([FromRoute] Guid connectionId)
+    public async Task<IActionResult> DisconnectConnection([FromRoute] Guid connectionId, CancellationToken ct)
     {
         logger.LogInformation("Disconnecting connection.");
         var connection = connectionManager.GetConnection(connectionId);
-        connection.Disconnect();
+        await connection.DisconnectAsync(ct);
         return Ok();
+
     }
 
     [HttpGet("{connectionId}/state")]

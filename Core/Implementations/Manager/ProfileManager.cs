@@ -9,13 +9,14 @@ public class ProfileManager : IProfileManager
 {
     private readonly IProfileStorage _storage;
     private ConcurrentDictionary<Guid, SavedProfile> _profiles = new();
-    public ProfileManager(IProfileStorage storage) {
+    public ProfileManager(IProfileStorage storage)
+    {
         _storage = storage;
-            var storageProfiles = _storage.GetProfiles();
-            foreach (var profile in storageProfiles)
-            {
-                _profiles[profile.Id] = profile;
-            }
+        var storageProfiles = _storage.GetProfiles();
+        foreach (var profile in storageProfiles)
+        {
+            _profiles[profile.Id] = profile;
+        }
     }
     public Guid SaveProfile(SavedProfile profile)
     {
@@ -23,7 +24,14 @@ public class ProfileManager : IProfileManager
         _profiles[profile.Id] = profile;
         return profile.Id;
     }
-    
+
+    public async Task<Guid> SaveProfileAsync(SavedProfile profile, CancellationToken ct = default)
+    {
+        await _storage.SaveAsync(profile, ct);
+        _profiles[profile.Id] = profile;
+        return profile.Id;
+    }
+
     public List<Guid> GetProfileIdList()
     {
         return _profiles.Keys.ToList();
@@ -41,5 +49,11 @@ public class ProfileManager : IProfileManager
         _storage.Delete(id);
         _profiles.TryRemove(id, out _);
     }
-    
+
+    public async Task DeleteProfileAsync(Guid id, CancellationToken ct = default)
+    {
+        await _storage.DeleteAsync(id, ct);
+        _profiles.TryRemove(id, out _);
+    }
+
 }

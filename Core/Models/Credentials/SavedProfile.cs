@@ -9,4 +9,4 @@ public record SavedProfile(
     public static SavedProfile Create(string name, HostProfile hostProfile)
         => new(Guid.NewGuid(), name, hostProfile);
 
-};
+}

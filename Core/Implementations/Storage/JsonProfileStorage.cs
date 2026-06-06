@@ -37,6 +37,7 @@ public class JsonProfileStorage : IProfileStorage
         WriteIndented = true
     };
 
+    private readonly SemaphoreSlim _fileLock = new(1, 1);
     private readonly ICredentialProtectionService _credentialProtectionService;
     private readonly string _filePath;
 
@@ -49,8 +50,7 @@ public class JsonProfileStorage : IProfileStorage
 
         _filePath = filePath;
 
-        _credentialProtectionService = credentialProtectionService
-            ?? throw new ArgumentNullException(nameof(credentialProtectionService));
+        _credentialProtectionService = credentialProtectionService;
     }
 
     public List<SavedProfile> GetAll()
@@ -61,18 +61,46 @@ public class JsonProfileStorage : IProfileStorage
 
     public SavedProfile GetProfile(Guid id)
     {
-        var file = ReadStorageFile();
-        var stored = file.Profiles.FirstOrDefault(p => p.Id == id);
-        if (stored is null)
+        _fileLock.Wait();
+        try
         {
-            throw new KeyNotFoundException($"Profile with id {id} not found");
+            var file = ReadStorageFile();
+            var stored = file.Profiles.FirstOrDefault(p => p.Id == id);
+            if (stored is null)
+                throw new KeyNotFoundException($"Profile with id {id} not found");
+            return ToSavedProfile(stored);
         }
-        return ToSavedProfile(stored);
+        finally
+        {
+            _fileLock.Release();
+        }
     }
 
     public List<SavedProfile> GetProfiles()
     {
-        return GetAll();
+        _fileLock.Wait();
+        try
+        {
+            return ReadStorageFile().Profiles.Select(ToSavedProfile).ToList();
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+    }
+
+    public async Task<List<SavedProfile>> GetProfilesAsync(CancellationToken ct = default)
+    {
+        await _fileLock.WaitAsync(ct);
+        try
+        {
+            var file = await ReadStorageFileAsync(ct);
+            return file.Profiles.Select(ToSavedProfile).ToList();
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
     }
 
     public void DownloadConfig(List<SavedProfile> profiles)
@@ -82,24 +110,64 @@ public class JsonProfileStorage : IProfileStorage
 
     public void Save(SavedProfile profile)
     {
-        if (profile is null)
-            throw new ArgumentNullException(nameof(profile));
+        _fileLock.Wait();
+        try
+        {
+            var file = ReadStorageFile();
+            file.Profiles.RemoveAll(p => p.Id == profile.Id);
+            file.Profiles.Add(ToStoredProfile(profile));
+            WriteStorageFile(file);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+    }
 
-        var file = ReadStorageFile();
-
-        file.Profiles.RemoveAll(p => p.Id == profile.Id);
-        file.Profiles.Add(ToStoredProfile(profile));
-
-        WriteStorageFile(file);
+    public async Task SaveAsync(SavedProfile profile, CancellationToken ct = default)
+    {
+        await _fileLock.WaitAsync(ct);
+        try
+        {
+            var file = await ReadStorageFileAsync(ct);
+            file.Profiles.RemoveAll(p => p.Id == profile.Id);
+            file.Profiles.Add(ToStoredProfile(profile));
+            await WriteStorageFileAsync(file, ct);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
     }
 
     public void Delete(Guid id)
     {
-        var file = ReadStorageFile();
+        _fileLock.Wait();
+        try
+        {
+            var file = ReadStorageFile();
+            file.Profiles.RemoveAll(p => p.Id == id);
+            WriteStorageFile(file);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+    }
 
-        file.Profiles.RemoveAll(p => p.Id == id);
-
-        WriteStorageFile(file);
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        await _fileLock.WaitAsync(ct);
+        try
+        {
+            var file = await ReadStorageFileAsync(ct);
+            file.Profiles.RemoveAll(p => p.Id == id);
+            await WriteStorageFileAsync(file, ct);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
     }
 
     private StoredProfile ToStoredProfile(SavedProfile profile)
@@ -193,23 +261,37 @@ public class JsonProfileStorage : IProfileStorage
         if (string.IsNullOrWhiteSpace(json))
             return new StoredProfilesFile();
 
-        var file = JsonSerializer.Deserialize<StoredProfilesFile>(json, JsonOptions);
+        return JsonSerializer.Deserialize<StoredProfilesFile>(json, JsonOptions) ?? new StoredProfilesFile();
+    }
 
-        return file ?? new StoredProfilesFile();
+    private async Task<StoredProfilesFile> ReadStorageFileAsync(CancellationToken ct)
+    {
+        if (!File.Exists(_filePath))
+            return new StoredProfilesFile();
+
+        var json = await File.ReadAllTextAsync(_filePath, ct);
+
+        if (string.IsNullOrWhiteSpace(json))
+            return new StoredProfilesFile();
+
+        return JsonSerializer.Deserialize<StoredProfilesFile>(json, JsonOptions) ?? new StoredProfilesFile();
     }
 
     private void WriteStorageFile(StoredProfilesFile storedFile)
     {
-        if (storedFile is null)
-            throw new ArgumentNullException(nameof(storedFile));
-
         var directoryPath = Path.GetDirectoryName(_filePath);
-
         if (!string.IsNullOrWhiteSpace(directoryPath))
             Directory.CreateDirectory(directoryPath);
 
-        var json = JsonSerializer.Serialize(storedFile, JsonOptions);
+        File.WriteAllText(_filePath, JsonSerializer.Serialize(storedFile, JsonOptions));
+    }
 
-        File.WriteAllText(_filePath, json);
+    private async Task WriteStorageFileAsync(StoredProfilesFile storedFile, CancellationToken ct)
+    {
+        var directoryPath = Path.GetDirectoryName(_filePath);
+        if (!string.IsNullOrWhiteSpace(directoryPath))
+            Directory.CreateDirectory(directoryPath);
+
+        await File.WriteAllTextAsync(_filePath, JsonSerializer.Serialize(storedFile, JsonOptions), ct);
     }
 }
