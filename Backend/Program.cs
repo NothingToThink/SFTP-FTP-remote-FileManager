@@ -21,7 +21,7 @@ try
         .AddJsonOptions(options =>
         {
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-            options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
         });
 
     builder.Services.AddSingleton<ICredentialProtectionService, Base64CredentialProtectionService>();
