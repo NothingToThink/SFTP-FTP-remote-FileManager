@@ -2,12 +2,16 @@ using Core.Interfaces.Factory;
 using Core.Models.Credentials;
 using Core.Interfaces.Protocol;
 using Core.Implementations.Protocol;
+using Core.Ssh;
+using Core.Ssh.HostKey;
 using System.Diagnostics;
 
 namespace Core.Implementations.Factory;
 
-public class ConnectionFactory : IConnectionFactory
+public class ConnectionFactory(IHostKeyStore hostKeyStore, SshSessionOptions? sshOptions = null) : IConnectionFactory
 {
+    private readonly SshSessionOptions _sshOptions = sshOptions ?? new SshSessionOptions();
+
     public Connection CreateConnection(HostProfile profile)
     {
         switch (profile.Protocol)
@@ -17,7 +21,7 @@ public class ConnectionFactory : IConnectionFactory
             case Models.Protocol.Ftp:
                 return new FtpConnection(profile);
             case Models.Protocol.Sftp:
-                return new SftpConnection(profile);
+                return new SftpConnection(new SshSession(profile, hostKeyStore, _sshOptions));
             default:
                 throw new UnreachableException($"Unknown protocol: {profile.Protocol}");
         }

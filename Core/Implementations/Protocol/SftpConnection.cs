@@ -1,86 +1,58 @@
 using Core.Interfaces.Protocol;
 using Core.Models;
-using Core.Models.Credentials;
-using Renci.SshNet;
+using Core.Ssh;
 using Renci.SshNet.Sftp;
 
 namespace Core.Implementations.Protocol;
 
-public class SftpConnection : Connection
+/// <summary>
+/// SFTP file operations on top of a shared <see cref="ISshSession"/>. The session owns the
+/// transport, host key verification and lifetime; this class only speaks the file protocol.
+/// </summary>
+public class SftpConnection(ISshSession session) : Connection, ISshSessionProvider
 {
-    private readonly SftpClient _client;
+    public ISshSession Session { get; } = session ?? throw new ArgumentNullException(nameof(session));
 
-    public override bool IsConnected => _client.IsConnected;
+    public override bool IsConnected => Session.IsConnected;
 
-    public SftpConnection(HostProfile profile)
-    {
-        _client = profile.Auth switch
-        {
-            PasswordAuth(var user, var pwd)
-                => new SftpClient(profile.Host, profile.EffectivePort, user, pwd),
-
-            KeyAuth(var user, var keyPath, var passphrase)
-                => new SftpClient(profile.Host, profile.EffectivePort, user, BuildKeySource(keyPath, passphrase)),
-
-            AnonymousAuth
-                => throw new InvalidOperationException("Anonymous authentication is not supported by SFTP."),
-
-            _ => throw new ArgumentOutOfRangeException(nameof(profile.Auth))
-        };
-    }
-
-    private static IPrivateKeySource[] BuildKeySource(string keyPath, string? passphrase)
-    {
-        var key = passphrase is null
-            ? new PrivateKeyFile(keyPath)
-            : new PrivateKeyFile(keyPath, passphrase);
-
-        return [key];
-    }
-
-    public override async Task ConnectAsync(CancellationToken ct = default)
-    {
-        await _client.ConnectAsync(ct);
-    }
+    public override Task ConnectAsync(CancellationToken ct = default)
+        => Session.ConnectAsync(ct);
 
     public override Task DisconnectAsync(CancellationToken ct = default)
-    {
-        if (_client.IsConnected)
-        {
-            _client.Disconnect();
-        }
+        => Session.DisconnectAsync(ct);
 
-        return Task.CompletedTask;
+    public override async Task<string> GetWorkingDirectoryAsync(CancellationToken ct = default)
+    {
+        var client = await Session.GetSftpAsync(ct);
+        return client.WorkingDirectory;
     }
 
-    public override Task<string> GetWorkingDirectoryAsync(CancellationToken ct = default)
+    public override async Task ChangeDirectoryAsync(string path, CancellationToken ct = default)
     {
-        return Task.FromResult(_client.WorkingDirectory);
-    }
-
-    public override Task ChangeDirectoryAsync(string path, CancellationToken ct = default)
-    {
-        _client.ChangeDirectory(path);
-        return Task.CompletedTask;
+        var client = await Session.GetSftpAsync(ct);
+        client.ChangeDirectory(path);
     }
 
     public override async Task<bool> FileExistsAsync(string path, CancellationToken ct = default)
     {
-        if (!await _client.ExistsAsync(path, ct)) return false;
-        var attrs = await _client.GetAttributesAsync(path, ct);
+        var client = await Session.GetSftpAsync(ct);
+        if (!await client.ExistsAsync(path, ct)) return false;
+        var attrs = await client.GetAttributesAsync(path, ct);
         return attrs.IsRegularFile;
     }
 
     public override async Task<bool> DirExistsAsync(string path, CancellationToken ct = default)
     {
-        if (!await _client.ExistsAsync(path, ct)) return false;
-        var attrs = await _client.GetAttributesAsync(path, ct);
+        var client = await Session.GetSftpAsync(ct);
+        if (!await client.ExistsAsync(path, ct)) return false;
+        var attrs = await client.GetAttributesAsync(path, ct);
         return attrs.IsDirectory;
     }
 
     public override async Task<FileItem> GetInfoAsync(string path, CancellationToken ct = default)
     {
-        var attrs = await _client.GetAttributesAsync(path, ct);
+        var client = await Session.GetSftpAsync(ct);
+        var attrs = await client.GetAttributesAsync(path, ct);
         return new FileItem
         {
             Name = Path.GetFileName(path),
@@ -94,8 +66,9 @@ public class SftpConnection : Connection
 
     public override async Task<List<FileItem>> GetFilesAsync(string path, CancellationToken ct = default)
     {
+        var client = await Session.GetSftpAsync(ct);
         var files = new List<FileItem>();
-        await foreach (var file in _client.ListDirectoryAsync(path, ct))
+        await foreach (var file in client.ListDirectoryAsync(path, ct))
         {
             if (file.Name is "." or "..") continue;
             files.Add(new FileItem
@@ -113,8 +86,9 @@ public class SftpConnection : Connection
 
     public override async Task<List<string>> GetDirectoriesAsync(string path, CancellationToken ct = default)
     {
+        var client = await Session.GetSftpAsync(ct);
         var dirs = new List<string>();
-        await foreach (var file in _client.ListDirectoryAsync(path, ct))
+        await foreach (var file in client.ListDirectoryAsync(path, ct))
         {
             if (file.IsDirectory && file.Name != "." && file.Name != "..")
             {
@@ -126,94 +100,116 @@ public class SftpConnection : Connection
 
     public override async Task<Stream> GetFileAsync(string path, CancellationToken ct = default)
     {
+        var client = await Session.GetSftpAsync(ct);
         var memoryStream = new MemoryStream();
-        await _client.DownloadFileAsync(path, memoryStream, ct);
+        await client.DownloadFileAsync(path, memoryStream, ct);
         memoryStream.Position = 0;
         return memoryStream;
     }
 
     public override async Task SaveFileAsync(string remotePath, Stream content, CancellationToken ct = default)
     {
+        var client = await Session.GetSftpAsync(ct);
         if (content.CanSeek)
             content.Position = 0;
 
-        await _client.UploadFileAsync(content, remotePath, ct);
+        await client.UploadFileAsync(content, remotePath, ct);
     }
 
     public override async Task CreateFileAsync(string remotePath, CancellationToken ct = default)
     {
-        await _client.UploadFileAsync(Stream.Null, remotePath, ct);
+        var client = await Session.GetSftpAsync(ct);
+        await client.UploadFileAsync(Stream.Null, remotePath, ct);
     }
 
     public override async Task DeleteFileAsync(string remotePath, CancellationToken ct = default)
     {
-        await _client.DeleteFileAsync(remotePath, ct);
+        var client = await Session.GetSftpAsync(ct);
+        await client.DeleteFileAsync(remotePath, ct);
     }
 
     public override async Task RenameFileAsync(string oldName, string newName, CancellationToken ct = default)
     {
-        await _client.RenameFileAsync(oldName, newName, ct);
+        var client = await Session.GetSftpAsync(ct);
+        await client.RenameFileAsync(oldName, newName, ct);
     }
 
     public override async Task MoveFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
-        if (await _client.ExistsAsync(targetPath, ct))
-        {
-            var attrs = await _client.GetAttributesAsync(targetPath, ct);
-            if (!canOverride && !attrs.IsRegularFile)
-                throw new InvalidOperationException("Cannot move file: target file already exists.");
-
-            throw new InvalidOperationException("Cannot move file: target file is a directory.");
-        }
-        await _client.RenameFileAsync(sourcePath, targetPath, ct);
+        var client = await Session.GetSftpAsync(ct);
+        await EnsureTargetWritableAsync(client, targetPath, canOverride, "move", ct);
+        await client.RenameFileAsync(sourcePath, targetPath, ct);
     }
 
     public override async Task CopyFileAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
-        if (await _client.ExistsAsync(targetPath, ct))
-        {
-            var attrs = await _client.GetAttributesAsync(targetPath, ct);
-            if (!canOverride && !attrs.IsRegularFile)
-                throw new InvalidOperationException("Cannot copy file: target file already exists.");
-
-            throw new InvalidOperationException("Cannot copy file: target file is a directory.");
-        }
+        var client = await Session.GetSftpAsync(ct);
+        await EnsureTargetWritableAsync(client, targetPath, canOverride, "copy", ct);
 
         using var memoryStream = new MemoryStream();
-        await _client.DownloadFileAsync(sourcePath, memoryStream, ct);
+        await client.DownloadFileAsync(sourcePath, memoryStream, ct);
         memoryStream.Position = 0;
-        await _client.UploadFileAsync(memoryStream, targetPath, ct);
+        await client.UploadFileAsync(memoryStream, targetPath, ct);
     }
 
     public override async Task CreateDirAsync(string remotePath, CancellationToken ct = default)
     {
-        await _client.CreateDirectoryAsync(remotePath, ct);
+        var client = await Session.GetSftpAsync(ct);
+        await client.CreateDirectoryAsync(remotePath, ct);
     }
 
     public override async Task DeleteDirAsync(string remotePath, CancellationToken ct = default)
     {
-        await DeleteDirectoryRecursiveAsync(remotePath, ct);
+        var client = await Session.GetSftpAsync(ct);
+        await DeleteDirectoryRecursiveAsync(client, remotePath, ct);
     }
 
-    private async Task DeleteDirectoryRecursiveAsync(string path, CancellationToken ct)
+    public override async Task RenameDirAsync(string oldName, string newName, CancellationToken ct = default)
     {
-        await foreach (var entry in _client.ListDirectoryAsync(path, ct))
+        var client = await Session.GetSftpAsync(ct);
+        await client.RenameFileAsync(oldName, newName, ct);
+    }
+
+    /// <summary>
+    /// Rejects a target that cannot be written: a directory never can, and an existing file only
+    /// when overwriting was allowed.
+    /// </summary>
+    private static async Task EnsureTargetWritableAsync(
+        Renci.SshNet.SftpClient client,
+        string targetPath,
+        bool canOverride,
+        string operation,
+        CancellationToken ct)
+    {
+        if (!await client.ExistsAsync(targetPath, ct))
+            return;
+
+        var attrs = await client.GetAttributesAsync(targetPath, ct);
+
+        if (attrs.IsDirectory)
+            throw new InvalidOperationException($"Cannot {operation} file: target is a directory.");
+
+        if (!canOverride)
+            throw new InvalidOperationException($"Cannot {operation} file: target file already exists.");
+    }
+
+    private static async Task DeleteDirectoryRecursiveAsync(
+        Renci.SshNet.SftpClient client,
+        string path,
+        CancellationToken ct)
+    {
+        await foreach (var entry in client.ListDirectoryAsync(path, ct))
         {
             if (entry.Name is "." or "..")
                 continue;
 
             if (entry.IsDirectory)
-                await DeleteDirectoryRecursiveAsync(entry.FullName, ct);
+                await DeleteDirectoryRecursiveAsync(client, entry.FullName, ct);
             else
-                await _client.DeleteFileAsync(entry.FullName, ct);
+                await client.DeleteFileAsync(entry.FullName, ct);
         }
 
-        await _client.DeleteDirectoryAsync(path, ct);
-    }
-
-    public override async Task RenameDirAsync(string oldName, string newName, CancellationToken ct = default)
-    {
-        await _client.RenameFileAsync(oldName, newName, ct);
+        await client.DeleteDirectoryAsync(path, ct);
     }
 
     private static string GetPermissionsString(SftpFileAttributes attrs)
@@ -232,6 +228,9 @@ public class SftpConnection : Connection
 
     protected override void DisposeCore()
     {
-        _client.Dispose();
+        // The session owns the transport; disposing it is what actually closes the sockets.
+        Session.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
+
+    protected override ValueTask DisposeCoreAsync() => Session.DisposeAsync();
 }
