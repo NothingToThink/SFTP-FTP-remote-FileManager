@@ -4,9 +4,11 @@ using Backend.Middleware;
 using Core.Implementations.Factory;
 using Core.Implementations.Manager;
 using Core.Implementations.Storage;
+using Core.Implementations.ServerClient;
 using Core.Interfaces.Factory;
 using Core.Interfaces.Manager;
 using Core.Interfaces.Storage;
+using Core.Interfaces.ServerClient;
 using Core.Security;
 using Core.Utils;
 
@@ -35,7 +37,11 @@ try
     builder.Services.AddSingleton<IConnectionFactory, ConnectionFactory>();
     builder.Services.AddSingleton<IConnectionManager, ConnectionManager>();
     builder.Services.AddSingleton<IProfileManager, ProfileManager>();
-
+    builder.Services.AddSingleton<IServerSessionService, ServerSessionService>();
+    builder.Services.AddHttpClient<IProfileServerClient, ProfileServerClient>(client =>
+    {
+        client.BaseAddress = new Uri("https://localhost:5227");
+    });
 
     using var app = builder.Build();
 
