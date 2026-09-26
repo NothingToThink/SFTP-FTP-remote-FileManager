@@ -5,16 +5,16 @@ using Core.Interfaces.ServerClient;
 namespace Backend.Controllers;
 
 [ApiController]
-[Route("api/Server")]
-public class ServerProfilesController : ControllerBase
+[Route("cloud")]
+public class CloudProfilesController : ControllerBase
 {
-    private readonly ILogger<ServerProfilesController> _logger;
+    private readonly ILogger<CloudProfilesController> _logger;
     private readonly IProfileServerClient _client;
     private readonly IProfileManager _profileManager;
     private readonly IServerSessionService _sessionService;
 
-    public ServerProfilesController(
-        ILogger<ServerProfilesController> logger,
+    public CloudProfilesController(
+        ILogger<CloudProfilesController> logger,
         IProfileServerClient client, 
         IProfileManager profileManager, 
         IServerSessionService sessionService)
@@ -58,7 +58,7 @@ public class ServerProfilesController : ControllerBase
         return Ok("User registered successfully.");
     }
 
-    [HttpPost("sync/download")]
+    [HttpGet("download")]
     public async Task<IActionResult> DownloadProfiles(CancellationToken ct)
     {
         _logger.LogInformation("Downloading profiles from the cloud.");
@@ -82,10 +82,10 @@ public class ServerProfilesController : ControllerBase
         return Ok(new { Message = $"Downloaded and saved {savedIds.Count} profiles locally." });
     }
 
-    [HttpPost("sync/upload")]
-    public async Task<IActionResult> UploadProfiles(CancellationToken ct)
+    [HttpPost("upload/{id}")]
+    public async Task<IActionResult> UploadProfiles(CancellationToken ct, [FromRoute] Guid id)
     {
-        _logger.LogInformation("Uploading profiles to the cloud.");
+        _logger.LogInformation("Uploading profile to the cloud.");
 
         if (!_sessionService.IsLoggedIn)
         {
@@ -93,20 +93,22 @@ public class ServerProfilesController : ControllerBase
             return Unauthorized("Please sign in to the cloud first.");
         }
 
-        var localIds = _profileManager.GetProfileIdList();
-        int uploadedCount = 0;
+        bool isUploaded = false;
 
-        foreach (var id in localIds)
+        var localProfile = _profileManager.GetProfile(id);
+        if (localProfile != null)
         {
-            var localProfile = _profileManager.GetProfile(id);
-            if (localProfile != null)
-            {
-                var uploaded = await _client.UploadProfileAsync(_sessionService.CurrentUserId!.Value, localProfile, ct);
-                if (uploaded != null) uploadedCount++;
-            }
+            var uploaded = await _client.UploadProfileAsync(_sessionService.CurrentUserId!.Value, localProfile, ct);
+            if (uploaded != null) isUploaded = true;
         }
 
-        _logger.LogInformation("Uploaded {ProfileCount} profiles to the cloud.", uploadedCount);
-        return Ok(new { Message = $"Uploaded {uploadedCount} profiles to the server." });
+        if (!isUploaded)
+        {
+            _logger.LogWarning("Failed to upload profile with id = {id} to the cloud.", id);
+            return BadRequest(new { Message = $"Failed to upload profile with id = {id} to the cloud." });
+        }
+
+        _logger.LogInformation("Profile with id = {id} uploaded to the cloud.", id);
+        return Ok(new { Message = $"Profile with id = {id} uploaded to the cloud." });
     }
 }

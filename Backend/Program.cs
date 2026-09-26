@@ -40,7 +40,7 @@ try
     builder.Services.AddSingleton<IServerSessionService, ServerSessionService>();
     builder.Services.AddHttpClient<IProfileServerClient, ProfileServerClient>(client =>
     {
-        client.BaseAddress = new Uri("https://localhost:5227");
+        client.BaseAddress = new Uri("http://176.53.160.4");
     });
 
     using var app = builder.Build();
