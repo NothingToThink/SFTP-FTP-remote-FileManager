@@ -17,10 +17,10 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-static async Task<UsernameAccount?> Authorize(ServerDbContext db, Guid userId, string key)
+static async Task<UsernameAccount?> IsAuthorized(ServerDbContext db, Guid userId)
 {
     var account = await db.Accounts.FirstOrDefaultAsync(u => u.Account.Id == userId);
-    return account is not null && Crypto.Verify(key, account.Account.Password) ? account : null; 
+    return account;
 }
 
 app.MapPost("/auth/register", async (RegisterRequest request, ServerDbContext db) =>
@@ -52,26 +52,26 @@ app.MapPost("/auth/login", async (LoginRequest request, ServerDbContext db) =>
     return Results.Ok(new { userId = user.Id });
 });
 
-app.MapGet("/profiles", async (Guid userId, [FromHeader(Name = "X-Key")] string key, ServerDbContext db) =>
+app.MapGet("/profiles", async (Guid userId, ServerDbContext db) =>
 {
-    if (await Authorize(db, userId, key) is null) 
+    if (await IsAuthorized(db, userId) is null) 
         return Results.Unauthorized();
 
     var list = await db.Profiles.Where(p => p.UserId == userId).ToListAsync();
     return Results.Ok(list.Select(p =>
-        JsonSerializer.Deserialize<SavedProfile>(Crypto.Decrypt(p.ProfileJson, key))).ToList());
+        JsonSerializer.Deserialize<SavedProfile>(Crypto.Decrypt(p.ProfileJson))).ToList());
 });
 
-app.MapPost("/profiles", async (Guid userId, SavedProfile profile, [FromHeader(Name = "X-Key")] string key, ServerDbContext db) =>
+app.MapPost("/profiles", async (Guid userId, SavedProfile profile, ServerDbContext db) =>
 {
-    if (await Authorize(db, userId, key) is null) 
+    if (await IsAuthorized(db, userId) is null) 
         return Results.Unauthorized();
 
     await db.Profiles.AddAsync(
     new UserProfile
     {
         UserId = userId,
-        ProfileJson = Crypto.Encrypt(JsonSerializer.Serialize(profile), key)
+        ProfileJson = Crypto.Encrypt(JsonSerializer.Serialize(profile))
     });
     await db.SaveChangesAsync();
     return Results.Ok(profile);

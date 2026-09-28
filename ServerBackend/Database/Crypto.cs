@@ -9,23 +9,28 @@ public static class Crypto
   public static bool Verify(string key, string hash) =>
     hasher.VerifyHashedPassword(null!, hash, key) != PasswordVerificationResult.Failed;
 
-  static Aes CreateAes(string key)
+  static readonly byte[] Key = LoadKey();
+
+  static byte[] LoadKey()
   {
-    var aes = Aes.Create();
-    aes.Key = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-    return aes;
+    const string path = "app.key";
+    if (!File.Exists(path))
+      File.WriteAllBytes(path, RandomNumberGenerator.GetBytes(32));
+    return File.ReadAllBytes(path);
   }
 
-  public static string Encrypt(string text, string key)
+  public static string Encrypt(string text)
   {
-    using var aes = CreateAes(key);
+    using var aes = Aes.Create();
+    aes.Key = Key;
     var cipher = aes.EncryptCbc(Encoding.UTF8.GetBytes(text), aes.IV);
     return Convert.ToBase64String(aes.IV.Concat(cipher).ToArray());
   }
 
-  public static string Decrypt(string b64, string key)
+  public static string Decrypt(string b64)
   {
-    using var aes = CreateAes(key);
+    using var aes = Aes.Create();
+    aes.Key = Key;
     var data = Convert.FromBase64String(b64);
     return Encoding.UTF8.GetString(aes.DecryptCbc(data[16..], data[..16]));
   }
