@@ -1,76 +1,73 @@
 using Core.Models.Credentials;
 using ProfileServer.DTO;
 using ProfileServer.Models;
-
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddDbContext<ServerDbContext>(opt =>
+    opt.UseSqlite("Data Source=app.db"));
+
 var app = builder.Build();
 
-var users = new Dictionary<string, UserAccount>();
-var profiles = new Dictionary<Guid, List<SavedProfile>>();
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ServerDbContext>();
+    db.Database.Migrate();
+}
+
 var storageLock = new object();
 
-app.MapPost("/auth/register", (RegisterRequest request) =>
+app.MapPost("/auth/register", async (RegisterRequest request, ServerDbContext db) =>
 {
     if(string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
         return Results.BadRequest("Username and password are required.");
 
-    lock (storageLock)
-    {
-        if(users.ContainsKey(request.Username))
-            return Results.Conflict("Username already exists.");
-        
-        Guid id = Guid.NewGuid();
-        users[request.Username] = new UserAccount(id, request.Password);
-        profiles[id] = new List<SavedProfile>();
+    if (await db.Accounts.AnyAsync(u => u.Username == request.Username))
+        return Results.Conflict("Username already exists.");
 
-        return Results.StatusCode(201);
-    }
+    Guid id = Guid.NewGuid();
+
+    await db.Accounts.AddAsync(new UsernameAccount {
+        Username = request.Username,
+        Account = new UserAccount(id, request.Password)
+    });
+    await db.SaveChangesAsync();
+
+    return Results.StatusCode(201);
 });
 
-app.MapPost("/auth/login", (LoginRequest request) =>
+app.MapPost("/auth/login", async (LoginRequest request, ServerDbContext db) =>
 {
     if(string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
         return Results.BadRequest("Username and password are required.");
 
-    lock (storageLock)
-    {
-        if(!users.ContainsKey(request.Username))
-            return Results.Unauthorized();
-        
-        var user = users[request.Username];
-        if(user.Password != request.Password)
-            return Results.Unauthorized();
+    var user = (await db.Accounts.FindAsync(request.Username))?.Account;
+    if (user is null) return Results.Unauthorized();
+    if(user.Password != request.Password)
+        return Results.Unauthorized();
 
-        return Results.Ok(new { userId = user.Id });
-    }
+    return Results.Ok(new { userId = user.Id });
 });
 
-app.MapGet("/profiles", (Guid userId) =>
+app.MapGet("/profiles", async (Guid userId, ServerDbContext db) =>
 {
-    lock (storageLock)
-    {
-        if(!profiles.ContainsKey(userId))
-            return Results.Unauthorized();
+    if (!await db.Accounts.AnyAsync(u => u.Account.Id == userId)) 
+        return Results.Unauthorized();
 
-        return Results.Ok(new List<SavedProfile>(profiles[userId]));
-    }   
+    return Results.Ok(db.Profiles.Where(p => p.UserId == userId).Select(p => p.Profile).ToList());
 });
 
-app.MapPost("/profiles", (Guid userId, ProfileRequest request) =>
+app.MapPost("/profiles", async (Guid userId, SavedProfile profile, ServerDbContext db) =>
 {
-    lock (storageLock)
-    {
-        if(!profiles.ContainsKey(userId))
-            return Results.Unauthorized();
+    if (!await db.Accounts.AnyAsync(u => u.Account.Id == userId)) 
+        return Results.Unauthorized();
 
-        if(string.IsNullOrWhiteSpace(request.Name) || request.HostProfile == null)
-            return Results.BadRequest("Name and HostProfile are required.");
-
-        var profile = SavedProfile.Create(request.Name, request.HostProfile);
-        profiles[userId].Add(profile);
-        return Results.Ok(profile);
-    }
+    await db.Profiles.AddAsync(
+    new UserProfile {
+            UserId = userId,
+            Profile = profile
+    });
+    return Results.Ok(profile);
 });
 
 app.Run("https://localhost:5227");
