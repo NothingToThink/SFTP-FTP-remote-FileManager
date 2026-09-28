@@ -9,6 +9,7 @@ using Core.Interfaces.Manager;
 using Core.Interfaces.Storage;
 using Core.Security;
 using Core.Utils;
+using System.Reflection;
 
 try
 {
@@ -36,6 +37,13 @@ try
     builder.Services.AddSingleton<IConnectionManager, ConnectionManager>();
     builder.Services.AddSingleton<IProfileManager, ProfileManager>();
 
+
+    builder.Services.AddSwaggerGen(options =>
+    {
+        var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+        options.IncludeXmlComments(xmlPath);
+    });
 
     using var app = builder.Build();
 
