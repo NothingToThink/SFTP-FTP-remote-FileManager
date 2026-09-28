@@ -36,13 +36,7 @@ public class ProfileServerClient : IProfileServerClient
 
     public async Task<SavedProfile?> UploadProfileAsync(Guid userId, SavedProfile profile, CancellationToken ct = default)
     {
-        var payload = new 
-        { 
-            name = profile.Name, 
-            hostProfile = profile.HostProfile 
-        };
-
-        var response = await _httpClient.PostAsJsonAsync($"/profiles?userId={userId}", payload, ct);
+        var response = await _httpClient.PostAsJsonAsync($"/profiles?userId={userId}", profile, ct);
         if (!response.IsSuccessStatusCode) return null;
 
         return await response.Content.ReadFromJsonAsync<SavedProfile>(cancellationToken: ct);
