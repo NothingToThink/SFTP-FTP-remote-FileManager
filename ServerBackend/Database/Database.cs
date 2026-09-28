@@ -8,14 +8,9 @@ using System.Text.Json;
 public class UserProfile
 {
   [Key]
+  public Guid Id { get; set; } = new Guid();
   public Guid UserId { get; set; }
-  public string ProfileJson { get; private set; } = "{}";
-  [NotMapped]
-  public SavedProfile Profile
-  {
-    get => JsonSerializer.Deserialize<SavedProfile>(ProfileJson)!;
-    set => JsonSerializer.Serialize(value);
-  }
+  public string ProfileJson { get; set; } = "";
 }
 
 public class UsernameAccount
