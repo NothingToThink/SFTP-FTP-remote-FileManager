@@ -1,0 +1,236 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="FileManagerClient.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <ResourceDictionary>
+
+            <!-- Шрифты: Geist (UI) + Geist Mono (данные) -->
+            <FontFamily x:Key="FontUi">/Assets/Fonts#Geist, Inter</FontFamily>
+            <FontFamily x:Key="FontMono">/Assets/Fonts#Geist Mono, Inter</FontFamily>
+
+            <!-- Палитра: холодный сланец + один янтарный акцент -->
+            <SolidColorBrush x:Key="BgBaseBrush" Color="#14161B"/>
+            <SolidColorBrush x:Key="BgPanelBrush" Color="#1A1D24"/>
+            <SolidColorBrush x:Key="BgElevatedBrush" Color="#22262E"/>
+            <SolidColorBrush x:Key="BgInputBrush" Color="#10131A"/>
+            <SolidColorBrush x:Key="BorderSubtleBrush" Color="#262B34"/>
+            <SolidColorBrush x:Key="BorderStrongBrush" Color="#333A46"/>
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E7EAF0"/>
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#9AA3B2"/>
+            <SolidColorBrush x:Key="TextMutedBrush" Color="#667083"/>
+            <SolidColorBrush x:Key="AccentBrush" Color="#E8A33D"/>
+            <SolidColorBrush x:Key="AccentHoverBrush" Color="#F0B55E"/>
+            <SolidColorBrush x:Key="AccentPressBrush" Color="#CE9038"/>
+            <SolidColorBrush x:Key="AccentInkBrush" Color="#1B1407"/>
+            <SolidColorBrush x:Key="SuccessBrush" Color="#5FB57C"/>
+            <SolidColorBrush x:Key="DangerBrush" Color="#E0564F"/>
+            <SolidColorBrush x:Key="RowHoverBrush" Color="#20242C"/>
+            <SolidColorBrush x:Key="RowSelectedBrush" Color="#2A2F3A"/>
+
+            <!-- Иконки: единая толщина, сетка 16 -->
+            <StreamGeometry x:Key="IconFolder">M3.25 3h3.02c.48 0 .936.218 1.234.592l.708.888h4.528c1.036 0 1.875.84 1.875 1.875v5.65c0 1.036-.84 1.875-1.875 1.875H3.25A1.875 1.875 0 0 1 1.375 12V4.875C1.375 3.84 2.215 3 3.25 3z</StreamGeometry>
+            <StreamGeometry x:Key="IconDoc">M4.5 2h3.75L12 5.75V12.5A1.5 1.5 0 0 1 10.5 14h-6A1.5 1.5 0 0 1 3 12.5v-9A1.5 1.5 0 0 1 4.5 2zm3.9 1.35v2.4h2.4l-2.4-2.4z</StreamGeometry>
+            <StreamGeometry x:Key="IconUp">M8 2.25 12.25 7h-2.6v6.25H6.35V7H3.75z</StreamGeometry>
+            <StreamGeometry x:Key="IconUpload">M8 1.75 11.75 5.9H9.6V10H6.4V5.9H4.25zM3 11.5h10V13H3z</StreamGeometry>
+            <StreamGeometry x:Key="IconDownload">M8 14.25 4.25 10.1H6.4V6h3.2v4.1h2.15zM3 12.5h10V14H3z</StreamGeometry>
+            <StreamGeometry x:Key="IconPlus">M7.25 2h1.5v5.25H14v1.5H8.75V14h-1.5V8.75H2v-1.5h5.25z</StreamGeometry>
+            <StreamGeometry x:Key="IconSync">M8 1.25 4.5 5.5H7v3h2v-3h2.5zM8 14.75 11.5 10.5H9v-3H7v3H4.5z</StreamGeometry>
+            <StreamGeometry x:Key="IconPencil">M11.3 1.7l3 3L6.6 12.4l-4 .9.9-4z</StreamGeometry>
+            <StreamGeometry x:Key="IconTrash">M6 1.5h4l.4 1H14v1.5H2V2.5h3.6zM3.8 5.75h8.4l-.63 7.5a1.6 1.6 0 0 1-1.59 1.5H6.02a1.6 1.6 0 0 1-1.59-1.5z</StreamGeometry>
+            <StreamGeometry x:Key="IconFolderBig">M4 5h3.6l1.7 2.1h5.2c1.1 0 2 .9 2 2v6.4c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V7c0-1.1.9-2 2-2z</StreamGeometry>
+            <StreamGeometry x:Key="IconSettings">M2 3.25h5.25v1.5H2z M9.25 3.25H14v1.5H9.25z M7.5 2.5h1.5v3H7.5z M2 7.25h3.25v1.5H2z M7.25 7.25H14v1.5H7.25z M5.5 6.5H7v3H5.5z M2 11.25h6.25v1.5H2z M10.25 11.25H14v1.5h-3.75z M8.5 10.5H10v3H8.5z</StreamGeometry>
+            <StreamGeometry x:Key="IconDisconnect">M7.25 1.5h1.5v6h-1.5z M12.3 4.2 11.24 5.26a4.25 4.25 0 1 1-6.48 0L3.7 4.2a5.75 5.75 0 1 0 8.6 0z</StreamGeometry>
+
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+
+        <!-- Базовые стили -->
+            <Style Selector="Window">
+                <Setter Property="FontFamily" Value="{StaticResource FontUi}"/>
+                <Setter Property="Background" Value="{StaticResource BgBaseBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            </Style>
+
+            <Style Selector="TextBlock.h1">
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.secondary">
+                <Setter Property="FontSize" Value="12.5"/>
+                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.muted">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.mono">
+                <Setter Property="FontFamily" Value="{StaticResource FontMono}"/>
+            </Style>
+
+            <Style Selector="Button">
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="Padding" Value="12,7"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="MinHeight" Value="32"/>
+                <Setter Property="Transitions">
+                    <Transitions>
+                        <DoubleTransition Property="Opacity" Duration="0:0:0.12"/>
+                    </Transitions>
+                </Setter>
+            </Style>
+
+            <Style Selector="Button.primary">
+                <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource AccentInkBrush}"/>
+                <Setter Property="FontWeight" Value="Medium"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+            <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{StaticResource AccentHoverBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource AccentInkBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource AccentHoverBrush}"/>
+            </Style>
+            <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{StaticResource AccentPressBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource AccentPressBrush}"/>
+            </Style>
+
+            <Style Selector="Button.tool">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+            </Style>
+            <Style Selector="Button.tool:pointerover">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
+                <Setter Property="Background" Value="{StaticResource BgElevatedBrush}"/>
+            </Style>
+            <Style Selector="Button.tool:pressed">
+                <Setter Property="Background" Value="{StaticResource RowSelectedBrush}"/>
+            </Style>
+
+            <Style Selector="Button.icon">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="7"/>
+                <Setter Property="MinHeight" Value="30"/>
+            </Style>
+            <Style Selector="Button.icon:pointerover">
+                <Setter Property="Background" Value="{StaticResource BgElevatedBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            </Style>
+            <Style Selector="Button.icon:pressed">
+                <Setter Property="Background" Value="{StaticResource RowSelectedBrush}"/>
+            </Style>
+
+            <Style Selector="Button.danger:hover">
+                <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+            </Style>
+
+            <Style Selector="TextBox">
+                <Setter Property="Background" Value="{StaticResource BgInputBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="Padding" Value="10,6"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="MinHeight" Value="32"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            </Style>
+            <Style Selector="TextBox:focus">
+                <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+            </Style>
+
+            <Style Selector="ListBox">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+            <Style Selector="ListBoxItem">
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Padding" Value="10,7"/>
+                <Setter Property="Margin" Value="0,1"/>
+                <Setter Property="Transitions">
+                    <Transitions>
+                        <BrushTransition Property="Background" Duration="0:0:0.1"/>
+                    </Transitions>
+                </Setter>
+            </Style>
+            <Style Selector="ListBoxItem:pointerover">
+                <Setter Property="Background" Value="{StaticResource RowHoverBrush}"/>
+            </Style>
+            <Style Selector="ListBoxItem:selected">
+                <Setter Property="Background" Value="{StaticResource RowSelectedBrush}"/>
+            </Style>
+            <Style Selector="ListBoxItem:selected:focus">
+                <Setter Property="Background" Value="{StaticResource RowSelectedBrush}"/>
+            </Style>
+
+            <Style Selector="ComboBox">
+                <Setter Property="Background" Value="{StaticResource BgInputBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="MinHeight" Value="32"/>
+                <Setter Property="FontSize" Value="13"/>
+            </Style>
+
+            <Style Selector="DataGrid">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="RowBackground" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="FontSize" Value="13"/>
+            </Style>
+            <Style Selector="DataGridColumnHeader">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="FontWeight" Value="Medium"/>
+                <Setter Property="Height" Value="34"/>
+                <Setter Property="SeparatorBrush" Value="Transparent"/>
+            </Style>
+            <Style Selector="DataGridRow">
+                <Setter Property="Height" Value="34"/>
+                <Setter Property="Background" Value="Transparent"/>
+            </Style>
+            <Style Selector="DataGridRow:pointerover">
+                <Setter Property="Background" Value="{StaticResource RowHoverBrush}"/>
+            </Style>
+            <Style Selector="DataGridRow:selected">
+                <Setter Property="Background" Value="{StaticResource RowSelectedBrush}"/>
+            </Style>
+            <Style Selector="DataGridCell">
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="10,0"/>
+            </Style>
+
+            <Style Selector="Separator">
+                <Setter Property="Background" Value="{StaticResource BorderSubtleBrush}"/>
+            </Style>
+
+            <Style Selector="ProgressBar">
+                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                <Setter Property="MinHeight" Value="3"/>
+                <Setter Property="CornerRadius" Value="1.5"/>
+            </Style>
+
+            <Style Selector="ContextMenu">
+                <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
+                <Setter Property="CornerRadius" Value="8"/>
+            </Style>
+            <Style Selector="MenuItem">
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="Padding" Value="10,6"/>
+            </Style>
+            <Style Selector="MenuItem:pointerover">
+                <Setter Property="Background" Value="{StaticResource RowHoverBrush}"/>
+            </Style>
+    </Application.Styles>
+</Application>
