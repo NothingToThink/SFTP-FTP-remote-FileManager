@@ -212,6 +212,42 @@ public class SftpConnection(ISshSession session) : Connection, ISshSessionProvid
         await client.DeleteDirectoryAsync(path, ct);
     }
 
+    public override async Task MoveDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {
+        if (await _client.ExistsAsync(targetPath, ct))
+        {
+            var attrs = await _client.GetAttributesAsync(targetPath, ct);
+            if (!canOverride && attrs.IsDirectory)
+                throw new InvalidOperationException("Cannot move directory: target directory already exists.");
+
+            throw new InvalidOperationException("Cannot move directory: target directory is a file.");
+        }
+        await _client.RenameFileAsync(sourcePath, targetPath, cancellationToken: ct);
+    }
+    
+    public override async Task CopyDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
+    {
+        if (await _client.ExistsAsync(targetPath, ct))
+        {
+            var attrs = await _client.GetAttributesAsync(targetPath, ct);
+            if (!canOverride && attrs.IsDirectory)
+                throw new InvalidOperationException("Cannot copy directory: target directory already exists.");
+            throw new InvalidOperationException("Cannot copy directory: target directory is a file.");
+        }
+        else await _client.CreateDirectoryAsync(targetPath, ct);
+        
+        foreach (var item in await GetFilesAsync(sourcePath, ct))
+        {
+            var sourceItemPath = Path.Combine(sourcePath, item.Name);
+            var targetItemPath = Path.Combine(targetPath, item.Name);
+
+            if (item.IsDirectory)
+                await CopyDirAsync(sourceItemPath, targetItemPath, canOverride, ct);
+            else
+                await CopyFileAsync(sourceItemPath, targetItemPath, canOverride, ct);
+        }
+    }
+
     private static string GetPermissionsString(SftpFileAttributes attrs)
     {
         return ""
