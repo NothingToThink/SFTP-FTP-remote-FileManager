@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ServerBackend.Migrations
 {
     [DbContext(typeof(ServerDbContext))]
-    [Migration("20260928194320_Init")]
+    [Migration("20260929111646_Init")]
     partial class Init
     {
         /// <inheritdoc />
@@ -21,18 +21,13 @@ namespace ServerBackend.Migrations
 
             modelBuilder.Entity("UserProfile", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ProfileJson")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<Guid>("UserId")
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                    b.Property<string>("ProfileJson")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "ProfileJson");
 
                     b.ToTable("Profiles");
                 });

@@ -1,14 +1,10 @@
-using Core.Models.Credentials;
 using Microsoft.EntityFrameworkCore;
 using ProfileServer.Models;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json;
 
+[PrimaryKey(nameof(UserId), nameof(ProfileJson))]
 public class UserProfile
 {
-  [Key]
-  public Guid Id { get; set; } = new Guid();
   public Guid UserId { get; set; }
   public string ProfileJson { get; set; } = "";
 }

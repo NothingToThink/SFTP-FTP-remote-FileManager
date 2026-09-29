@@ -64,16 +64,21 @@ app.MapGet("/profiles", async (Guid userId, ServerDbContext db) =>
 
 app.MapPost("/profiles", async (Guid userId, SavedProfile profile, ServerDbContext db) =>
 {
-    if (await IsAuthorized(db, userId) is null) 
+    if (await IsAuthorized(db, userId) is null) // TODO
         return Results.Unauthorized();
 
-    await db.Profiles.AddAsync(
-    new UserProfile
+    var encrypted = Crypto.Encrypt(JsonSerializer.Serialize(profile));
+    if (!await db.Profiles.AnyAsync(p => p.UserId == userId && p.ProfileJson == encrypted))
     {
-        UserId = userId,
-        ProfileJson = Crypto.Encrypt(JsonSerializer.Serialize(profile))
-    });
-    await db.SaveChangesAsync();
+        await db.Profiles.AddAsync(
+        new UserProfile
+        {
+            UserId = userId,
+            ProfileJson = encrypted
+        });
+        await db.SaveChangesAsync();
+    }
+
     return Results.Ok(profile);
 });
 

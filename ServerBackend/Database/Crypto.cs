@@ -21,10 +21,12 @@ public static class Crypto
 
   public static string Encrypt(string text)
   {
+    var data = Encoding.UTF8.GetBytes(text);
+    var iv = HMACSHA256.HashData(Key, data)[..16];
     using var aes = Aes.Create();
     aes.Key = Key;
-    var cipher = aes.EncryptCbc(Encoding.UTF8.GetBytes(text), aes.IV);
-    return Convert.ToBase64String(aes.IV.Concat(cipher).ToArray());
+    var cipher = aes.EncryptCbc(data, iv);
+    return Convert.ToBase64String(iv.Concat(cipher).ToArray());
   }
 
   public static string Decrypt(string b64)

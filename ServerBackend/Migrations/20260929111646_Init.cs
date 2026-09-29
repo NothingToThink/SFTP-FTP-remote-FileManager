@@ -28,13 +28,12 @@ namespace ServerBackend.Migrations
                 name: "Profiles",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
                     UserId = table.Column<Guid>(type: "TEXT", nullable: false),
                     ProfileJson = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Profiles", x => x.Id);
+                    table.PrimaryKey("PK_Profiles", x => new { x.UserId, x.ProfileJson });
                 });
 
             migrationBuilder.CreateIndex(

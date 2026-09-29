@@ -18,18 +18,13 @@ namespace ServerBackend.Migrations
 
             modelBuilder.Entity("UserProfile", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ProfileJson")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<Guid>("UserId")
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                    b.Property<string>("ProfileJson")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "ProfileJson");
 
                     b.ToTable("Profiles");
                 });
