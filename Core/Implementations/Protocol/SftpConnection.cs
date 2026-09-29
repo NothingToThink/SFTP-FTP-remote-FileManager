@@ -214,27 +214,29 @@ public class SftpConnection(ISshSession session) : Connection, ISshSessionProvid
 
     public override async Task MoveDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
-        if (await _client.ExistsAsync(targetPath, ct))
+        var client = await Session.GetSftpAsync(ct);
+        if (await client.ExistsAsync(targetPath, ct))
         {
-            var attrs = await _client.GetAttributesAsync(targetPath, ct);
+            var attrs = await client.GetAttributesAsync(targetPath, ct);
             if (!canOverride && attrs.IsDirectory)
                 throw new InvalidOperationException("Cannot move directory: target directory already exists.");
 
             throw new InvalidOperationException("Cannot move directory: target directory is a file.");
         }
-        await _client.RenameFileAsync(sourcePath, targetPath, cancellationToken: ct);
+        await client.RenameFileAsync(sourcePath, targetPath, cancellationToken: ct);
     }
     
     public override async Task CopyDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
-        if (await _client.ExistsAsync(targetPath, ct))
+        var client = await Session.GetSftpAsync(ct);
+        if (await client.ExistsAsync(targetPath, ct))
         {
-            var attrs = await _client.GetAttributesAsync(targetPath, ct);
+            var attrs = await client.GetAttributesAsync(targetPath, ct);
             if (!canOverride && attrs.IsDirectory)
                 throw new InvalidOperationException("Cannot copy directory: target directory already exists.");
             throw new InvalidOperationException("Cannot copy directory: target directory is a file.");
         }
-        else await _client.CreateDirectoryAsync(targetPath, ct);
+        else await client.CreateDirectoryAsync(targetPath, ct);
         
         foreach (var item in await GetFilesAsync(sourcePath, ct))
         {
