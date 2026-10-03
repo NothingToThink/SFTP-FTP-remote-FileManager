@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Core.Models.Credentials;
 using Core.Interfaces.ServerClient;
@@ -19,26 +20,47 @@ public class ProfileServerClient : IProfileServerClient
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<Guid?> LoginAsync(string username, string password, CancellationToken ct = default)
+    public async Task<string?> LoginAsync(string username, string password, CancellationToken ct = default)
     {
         var response = await _httpClient.PostAsJsonAsync("/auth/login", new ServerAuthRequest(username, password), ct);
         if (!response.IsSuccessStatusCode) return null;
 
         var result = await response.Content.ReadFromJsonAsync<ServerLoginResponse>(cancellationToken: ct);
-        return result?.UserId;
+        return result?.AccessToken;
     }
 
-    public async Task<List<SavedProfile>> GetProfilesAsync(Guid userId, CancellationToken ct = default)
+    public async Task<List<SavedProfile>> GetProfilesAsync(string token, CancellationToken ct = default)
     {
-        var profiles = await _httpClient.GetFromJsonAsync<List<SavedProfile>>($"/profiles?userId={userId}", ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/profiles");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await _httpClient.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return new List<SavedProfile>();
+
+        var profiles = await response.Content.ReadFromJsonAsync<List<SavedProfile>>(cancellationToken: ct);
         return profiles ?? new List<SavedProfile>();
     }
 
-    public async Task<SavedProfile?> UploadProfileAsync(Guid userId, SavedProfile profile, CancellationToken ct = default)
+    public async Task<SavedProfile?> UploadProfileAsync(string token, SavedProfile profile, CancellationToken ct = default)
     {
-        var response = await _httpClient.PostAsJsonAsync($"/profiles?userId={userId}", profile, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/profiles")
+        {
+            Content = JsonContent.Create(profile)
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await _httpClient.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode) return null;
 
         return await response.Content.ReadFromJsonAsync<SavedProfile>(cancellationToken: ct);
+    }
+
+    public async Task<bool> DeleteProfileAsync(string token, Guid profileId, CancellationToken ct = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"/profiles?profileId={profileId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await _httpClient.SendAsync(request, ct);
+        return response.IsSuccessStatusCode;
     }
 }

@@ -6,7 +6,7 @@ namespace Backend.Controllers;
 
 /// <summary>
 /// API controller handling cloud synchronization operations, including authentication,
-/// downloading, and uploading user profiles.
+/// downloading, uploading, and deleting user profiles.
 /// </summary>
 [ApiController]
 [Route("cloud")]
@@ -47,16 +47,16 @@ public class CloudProfilesController : ControllerBase
     {
         _logger.LogInformation("Logging in to the cloud.");
 
-        var userId = await _client.LoginAsync(request.Username, request.Password, ct);
-        if (userId == null)
+        var token = await _client.LoginAsync(request.Username, request.Password, ct);
+        if (string.IsNullOrEmpty(token))
         {
             _logger.LogWarning("Cloud login failed for username {Username}.", request.Username);
             return Unauthorized("Invalid cloud username or password.");
         }
 
-        _sessionService.CurrentUserId = userId;
-        _logger.LogInformation("Cloud login successful for user {UserId}.", userId);
-        return Ok(new { Message = "Cloud login successful", UserId = userId });
+        _sessionService.AccessToken = token;
+        _logger.LogInformation("Cloud login successful for user {Username}.", request.Username);
+        return Ok(new { Message = "Cloud login successful" });
     }
 
     /// <summary>
@@ -97,7 +97,7 @@ public class CloudProfilesController : ControllerBase
             return Unauthorized("Please sign in to the cloud first.");
         }
 
-        var remoteProfiles = await _client.GetProfilesAsync(_sessionService.CurrentUserId!.Value, ct);
+        var remoteProfiles = await _client.GetProfilesAsync(_sessionService.AccessToken!, ct);
         var savedIds = new List<Guid>();
 
         foreach (var profile in remoteProfiles)
@@ -132,7 +132,7 @@ public class CloudProfilesController : ControllerBase
         var localProfile = _profileManager.GetProfile(id);
         if (localProfile != null)
         {
-            var uploaded = await _client.UploadProfileAsync(_sessionService.CurrentUserId!.Value, localProfile, ct);
+            var uploaded = await _client.UploadProfileAsync(_sessionService.AccessToken!, localProfile, ct);
             if (uploaded != null) isUploaded = true;
         }
 
@@ -144,5 +144,33 @@ public class CloudProfilesController : ControllerBase
 
         _logger.LogInformation("Profile with id = {id} uploaded to the cloud.", id);
         return Ok(new { Message = $"Profile with id = {id} uploaded to the cloud." });
+    }
+
+    /// <summary>
+    /// Deletes a specified profile from the cloud server under the current user session.
+    /// </summary>
+    /// <param name="id">The unique identifier of the remote profile to delete.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>An <see cref="IActionResult"/> indicating the deletion outcome.</returns>
+    [HttpDelete("delete/{id}")]
+    public async Task<IActionResult> DeleteProfile([FromRoute] Guid id, CancellationToken ct)
+    {
+        _logger.LogInformation("Deleting profile from the cloud.");
+
+        if (!_sessionService.IsLoggedIn)
+        {
+            _logger.LogWarning("Attempted to delete profile without logging in to the cloud.");
+            return Unauthorized("Please sign in to the cloud first.");
+        }
+
+        var success = await _client.DeleteProfileAsync(_sessionService.AccessToken!, id, ct);
+        if (!success)
+        {
+            _logger.LogWarning("Failed to delete profile with id = {id} from the cloud.", id);
+            return BadRequest(new { Message = $"Failed to delete profile with id = {id} from the cloud." });
+        }
+
+        _logger.LogInformation("Profile with id = {id} deleted from the cloud.", id);
+        return Ok(new { Message = $"Profile with id = {id} deleted from the cloud." });
     }
 }
