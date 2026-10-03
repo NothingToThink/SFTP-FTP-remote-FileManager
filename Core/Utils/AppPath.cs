@@ -7,8 +7,13 @@ public static class AppPaths
 {
     private const string AppFolderName = "RemoteFileManager";
     private const string ProfilesFileName = "profiles.json";
+    private const string KnownHostsFileName = "known_hosts.json";
 
-    public static string GetProfilesFilePath()
+    public static string GetProfilesFilePath() => Path.Combine(GetAppFolder(), ProfilesFileName);
+
+    public static string GetKnownHostsFilePath() => Path.Combine(GetAppFolder(), KnownHostsFileName);
+
+    public static string GetAppFolder()
     {
         string basePath = Environment.GetFolderPath(
             Environment.SpecialFolder.ApplicationData);
@@ -22,10 +27,10 @@ public static class AppPaths
         {
             basePath = AppContext.BaseDirectory;
         }
-        
+
         string appFolder = Path.Combine(basePath, AppFolderName);
         Directory.CreateDirectory(appFolder);
 
-        return Path.Combine(appFolder, ProfilesFileName);
+        return appFolder;
     }
 }
