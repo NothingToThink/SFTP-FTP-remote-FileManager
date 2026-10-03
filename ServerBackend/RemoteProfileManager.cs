@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.IO.Pipelines;
+using Microsoft.Data.Sqlite;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ServerDbContext>(opt =>
@@ -95,11 +96,15 @@ app.MapPost("/auth/register", async (RegisterRequest request, ServerDbContext db
     if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
         return Results.BadRequest("Username and password are required.");
 
-    if (await db.Accounts.AnyAsync(u => u.Username == request.Username))
+    try
+    {
+        await db.Accounts.AddAsync(new UsernameAccount(request.Username, Crypto.Hash(request.Password)));
+        await db.SaveChangesAsync();
+    }
+    catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: 19 })
+    {
         return Results.Conflict("Username already exists.");
-
-    await db.Accounts.AddAsync(new UsernameAccount(request.Username, Crypto.Hash(request.Password)));
-    await db.SaveChangesAsync();
+    }
 
     return Results.StatusCode(201);
 });
@@ -114,7 +119,6 @@ app.MapPost("/auth/login", async (LoginRequest request, ServerDbContext db) =>
         return Results.Unauthorized();
     var now = DateTime.UtcNow;
     var expiresAt = now.AddMinutes(jwtLifetimeMinutes);
-
 
     var claims = new[]
     {
@@ -157,8 +161,14 @@ app.MapDelete("/account", async (ClaimsPrincipal user, ServerDbContext db) =>
     if (account is null)
         return Results.NotFound();
 
-    db.Accounts.Remove(account);
-    await db.SaveChangesAsync();
+    try
+    {
+        db.Accounts.Remove(account);
+        await db.SaveChangesAsync();
+    } catch (DbUpdateConcurrencyException)
+    {
+        return Results.NoContent();
+    }
 
     return Results.Ok();
 }).RequireAuthorization();
@@ -180,7 +190,14 @@ app.MapPatch("/account/password", async (ChangePasswordRequest request, ClaimsPr
         return Results.BadRequest("Old password is incorrect");
 
     account.HashedPassword = Crypto.Hash(request.NewPassword);
-    await db.SaveChangesAsync();
+
+    try {
+        await db.SaveChangesAsync();
+    }
+    catch (DbUpdateConcurrencyException)
+    {
+        return Results.NotFound();
+    }
 
     return Results.Ok();
 }).RequireAuthorization();
@@ -218,10 +235,14 @@ app.MapPost("/profiles", async (ClaimsPrincipal user, SavedProfile profile, Serv
         return Results.BadRequest("Profile id is required.");
     }
 
-    if (!await db.Profiles.AnyAsync(p => p.Id == profile.Id))
+    try
     {
         await db.Profiles.AddAsync(new UserProfile(userId, profile));
         await db.SaveChangesAsync();
+    }
+    catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: 19 })
+    {
+        return Results.Ok(profile);
     }
     return Results.Ok(profile);
 }).RequireAuthorization();
@@ -243,9 +264,15 @@ app.MapDelete("/profiles", async (ClaimsPrincipal user, Guid profileId, ServerDb
     if (profile is null)
         return Results.NotFound();
 
-    db.Profiles.Remove(profile);
-    await db.SaveChangesAsync();
-
+    try
+    {
+        db.Profiles.Remove(profile);
+        await db.SaveChangesAsync();
+    }
+    catch (DbUpdateConcurrencyException)
+    {
+        return Results.NoContent();
+    }
     return Results.Ok(profile);
 }).RequireAuthorization();
 
