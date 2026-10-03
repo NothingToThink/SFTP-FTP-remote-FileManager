@@ -483,5 +483,6 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
+*.db
 # Песочница Local-протокола Backend
 Backend/tmp/
