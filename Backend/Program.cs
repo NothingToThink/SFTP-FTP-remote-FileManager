@@ -55,7 +55,7 @@ try
     builder.Services.AddHttpClient<IProfileServerClient, ProfileServerClient>(client =>
     {
         client.BaseAddress = new Uri("http://176.53.160.4");
-    }
+    });
                                                                               
     builder.Services.AddHostedService<IdleConnectionJanitor>();
 
