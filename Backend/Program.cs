@@ -70,3 +70,8 @@ catch (Exception e)
     Console.WriteLine($"Fatal error: {e.Message}");
     Console.WriteLine(e.StackTrace);
 }
+
+
+
+
+public partial class Program { } 
