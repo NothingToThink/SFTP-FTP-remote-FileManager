@@ -16,8 +16,8 @@ namespace ServerBackend.Migrations
                 columns: table => new
                 {
                     Username = table.Column<string>(type: "TEXT", nullable: false),
-                    Account_Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Account_Password = table.Column<string>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    HashedPassword = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -28,18 +28,15 @@ namespace ServerBackend.Migrations
                 name: "Profiles",
                 columns: table => new
                 {
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
                     UserId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProfileJson = table.Column<string>(type: "TEXT", nullable: false)
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    JsonHostProfile = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Profiles", x => new { x.UserId, x.ProfileJson });
+                    table.PrimaryKey("PK_Profiles", x => x.Id);
                 });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Accounts_Account_Id",
-                table: "Accounts",
-                column: "Account_Id");
         }
 
         /// <inheritdoc />

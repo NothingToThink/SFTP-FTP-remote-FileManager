@@ -1,7 +1,6 @@
 using Core.Models.Credentials;
 using Microsoft.AspNetCore.Mvc;
 using ProfileServer.DTO;
-using ProfileServer.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -91,12 +90,6 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-static async Task<UsernameAccount?> IsAuthorized(ServerDbContext db, Guid userId)
-{
-    var account = await db.Accounts.FirstOrDefaultAsync(u => u.Account.Id == userId);
-    return account;
-}
-
 app.MapPost("/auth/register", async (RegisterRequest request, ServerDbContext db) =>
 {
     if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
@@ -105,10 +98,7 @@ app.MapPost("/auth/register", async (RegisterRequest request, ServerDbContext db
     if (await db.Accounts.AnyAsync(u => u.Username == request.Username))
         return Results.Conflict("Username already exists.");
 
-    await db.Accounts.AddAsync(new UsernameAccount {
-        Username = request.Username,
-        Account = new UserAccount(Guid.NewGuid(), Crypto.Hash(request.Password))
-    });
+    await db.Accounts.AddAsync(new UsernameAccount(request.Username, Crypto.Hash(request.Password)));
     await db.SaveChangesAsync();
 
     return Results.StatusCode(201);
@@ -119,8 +109,8 @@ app.MapPost("/auth/login", async (LoginRequest request, ServerDbContext db) =>
     if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
         return Results.BadRequest("Username and password are required.");
 
-    var user = (await db.Accounts.FindAsync(request.Username))?.Account;
-    if (user is null || !Crypto.Verify(request.Password, user.Password))
+    var account = await db.Accounts.FindAsync(request.Username);
+    if (account is null || !Crypto.Verify(request.Password, account.HashedPassword))
         return Results.Unauthorized();
     var now = DateTime.UtcNow;
     var expiresAt = now.AddMinutes(jwtLifetimeMinutes);
@@ -128,7 +118,7 @@ app.MapPost("/auth/login", async (LoginRequest request, ServerDbContext db) =>
 
     var claims = new[]
     {
-        new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+        new Claim(JwtRegisteredClaimNames.Sub, account.Id.ToString()),
     };
 
     var signingCredentials = new SigningCredentials(
@@ -147,59 +137,115 @@ app.MapPost("/auth/login", async (LoginRequest request, ServerDbContext db) =>
 
     var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
-    
-    return Results.Ok( new
+
+    return Results.Ok(new
     {
         accessToken = tokenString
     });
 }).AllowAnonymous();
 
+app.MapDelete("/account", async (ClaimsPrincipal user, ServerDbContext db) =>
+{
+    var sub = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var account = await db.Accounts.FirstOrDefaultAsync(p => p.Id == userId);
+    if (account is null)
+        return Results.NotFound();
+
+    db.Accounts.Remove(account);
+    await db.SaveChangesAsync();
+
+    return Results.Ok();
+}).RequireAuthorization();
+
+app.MapPatch("/account/password", async (ChangePasswordRequest request, ClaimsPrincipal user, ServerDbContext db) =>
+{
+    var sub = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+
+    if(!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var account = await db.Accounts.FirstOrDefaultAsync(p => p.Id == userId);
+    if (account is null)
+        return Results.NotFound();
+
+    if (!Crypto.Verify(request.OldPassword, account.HashedPassword))
+        return Results.BadRequest("Old password is incorrect");
+
+    account.HashedPassword = Crypto.Hash(request.NewPassword);
+    await db.SaveChangesAsync();
+
+    return Results.Ok();
+}).RequireAuthorization();
+
 app.MapGet("/profiles", async (ClaimsPrincipal user, ServerDbContext db) =>
 {
     var sub = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
-    if(!Guid.TryParse(sub, out var userId))
+    if (!Guid.TryParse(sub, out var userId))
     {
         return Results.Unauthorized();
     }
-
-    if (await IsAuthorized(db, userId) is null) 
-        return Results.Unauthorized();
-
+    
     var list = await db.Profiles.Where(p => p.UserId == userId).ToListAsync();
-    return Results.Ok(list.Select(p =>
-        JsonSerializer.Deserialize<SavedProfile>(Crypto.Decrypt(p.ProfileJson))).ToList());
+
+    return Results.Ok(list.Select(p => new SavedProfile
+    (
+        p.Id,
+        p.Name,
+        JsonSerializer.Deserialize<HostProfile>(Crypto.Decrypt(p.JsonHostProfile))!
+    )).ToList());
 }).RequireAuthorization();
 
 app.MapPost("/profiles", async (ClaimsPrincipal user, SavedProfile profile, ServerDbContext db) =>
 {
-
     var sub = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
-    if(!Guid.TryParse(sub, out var userId))
+    if (!Guid.TryParse(sub, out var userId))
     {
         return Results.Unauthorized();
     }
 
-    if (await IsAuthorized(db, userId) is null)
-        return Results.Unauthorized();
-    
     if (profile.Id == Guid.Empty)
     {
         return Results.BadRequest("Profile id is required.");
     }
 
-    var encrypted = Crypto.Encrypt(JsonSerializer.Serialize(profile));
-    if (!await db.Profiles.AnyAsync(p => p.UserId == userId && p.ProfileJson == encrypted))
+    if (!await db.Profiles.AnyAsync(p => p.Id == profile.Id))
     {
-        await db.Profiles.AddAsync(
-        new UserProfile
-        {
-            UserId = userId,
-            ProfileJson = encrypted
-        });
+        await db.Profiles.AddAsync(new UserProfile(userId, profile));
         await db.SaveChangesAsync();
     }
+    return Results.Ok(profile);
+}).RequireAuthorization();
+
+app.MapDelete("/profiles", async (ClaimsPrincipal user, Guid profileId, ServerDbContext db) =>
+{
+    var sub = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+
+    if(!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (profileId == Guid.Empty)
+    {
+        return Results.BadRequest("Profile id is required.");
+    }
+    var profile = await db.Profiles.FirstOrDefaultAsync(p => p.UserId == userId && p.Id == profileId);
+    if (profile is null)
+        return Results.NotFound();
+
+    db.Profiles.Remove(profile);
+    await db.SaveChangesAsync();
+
     return Results.Ok(profile);
 }).RequireAuthorization();
 
