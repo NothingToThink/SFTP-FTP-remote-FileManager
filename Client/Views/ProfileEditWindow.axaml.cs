@@ -32,4 +32,8 @@ public partial class ProfileEditWindow : Window
         if (ViewModel is { } vm && vm.Validate())
             Close(true);
     }
+
+    // IsCancel в Avalonia только пробрасывает Esc в Click — само окно не закрывает:
+    // без явного обработчика «Отмена» ничего не делала.
+    private void CancelClick(object? sender, RoutedEventArgs e) => Close(false);
 }

@@ -20,10 +20,12 @@ public class App : Application
         {
             var settings = ClientSettings.Load();
             var launcher = new ExternalServerLauncher(() => settings.ServerUrl);
+            var dialogs = new DialogService();
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(settings, launcher),
+                DataContext = new MainWindowViewModel(settings, launcher, dialogs),
             };
+            desktop.MainWindow.Opened += (_, _) => dialogs.Owner = desktop.MainWindow;
         }
 
         base.OnFrameworkInitializationCompleted();
