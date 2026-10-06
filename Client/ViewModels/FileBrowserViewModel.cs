@@ -22,6 +22,7 @@ public partial class FileBrowserViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isBound;
     [ObservableProperty] private string _connectionName = string.Empty;
+    [ObservableProperty] private Protocol _boundProtocol;
     [ObservableProperty] private string _currentPath = string.Empty;
     [ObservableProperty] private FileItem? _selectedItem;
     [ObservableProperty] private int _itemCount;
@@ -40,10 +41,12 @@ public partial class FileBrowserViewModel : ViewModelBase
         _dialogs = dialogs;
     }
 
-    public async Task BindAsync(Guid connectionId, string name)
+    public async Task BindAsync(Guid connectionId, string name, Protocol protocol)
     {
         _connectionId = connectionId;
         ConnectionName = name;
+        BoundProtocol = protocol;
+        OnPropertyChanged(nameof(BoundProtocol));
         IsBound = true;
         SelectedItem = null;
         await RunAsync(async () =>
