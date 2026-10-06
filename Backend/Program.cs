@@ -15,6 +15,7 @@ using Core.Interfaces.Manager;
 using Core.Interfaces.Storage;
 using Core.Security;
 using Core.Utils;
+using System.Reflection;
 
 try
 {
@@ -36,6 +37,13 @@ try
         var protection = sp.GetRequiredService<ICredentialProtectionService>();
         return new JsonProfileStorage(AppPaths
             .GetProfilesFilePath(), protection);
+    });
+
+    builder.Services.AddSwaggerGen(options =>
+    {
+        var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+        options.IncludeXmlComments(xmlPath);
     });
 
     builder.Services.Configure<SshSessionOptions>(builder.Configuration.GetSection("Ssh"));
