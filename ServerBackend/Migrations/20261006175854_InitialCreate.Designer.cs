@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ServerBackend.Migrations
 {
     [DbContext(typeof(ServerDbContext))]
-    [Migration("20261003100427_Init")]
-    partial class Init
+    [Migration("20261006175854_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -22,8 +22,10 @@ namespace ServerBackend.Migrations
 
             modelBuilder.Entity("Core.Models.Credentials.UserProfile", b =>
                 {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("JsonHostProfile")
@@ -34,10 +36,9 @@ namespace ServerBackend.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
+                    b.HasKey("UserId", "Id");
 
-                    b.HasKey("Id");
+                    b.HasIndex("UserId");
 
                     b.ToTable("Profiles");
                 });
@@ -56,7 +57,20 @@ namespace ServerBackend.Migrations
 
                     b.HasKey("Username");
 
+                    b.HasIndex("Id")
+                        .IsUnique();
+
                     b.ToTable("Accounts");
+                });
+
+            modelBuilder.Entity("Core.Models.Credentials.UserProfile", b =>
+                {
+                    b.HasOne("Core.Models.Credentials.UsernameAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .HasPrincipalKey("Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

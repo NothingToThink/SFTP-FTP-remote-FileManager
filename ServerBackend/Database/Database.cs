@@ -3,11 +3,10 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 namespace Core.Models.Credentials;
 
-
+[PrimaryKey(nameof(UserId), nameof(Id))]
 public class UserProfile
 {
   public Guid UserId { get; set; }
-  [Key]
   public Guid Id { get; set; }
   public string Name { get; set; } = string.Empty;
   public string JsonHostProfile { get; set; } = string.Empty;
