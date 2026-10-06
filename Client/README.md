@@ -83,6 +83,9 @@ dotnet publish Client -c Release -r linux-x64 --self-contained
   переименование, удаление, копирование и перемещение по пути, свойства, сортировка колонок.
 - Передачи: upload (multipart) и download (стриминг) файлов; загрузка перетаскиванием
   (drag&drop файлов на файловую панель, мультизагрузка в текущую папку).
+- Порт-форвардинг (SFTP/SSH): панель «Туннели» — список правил (Local/Remote/Dynamic SOCKS)
+  с живым состоянием, создание с автосканом слушающих портов на сервере (suggestions),
+  start/stop/delete; известные хосты (hostkeys) управляются серверным API.
 - Единая обработка ошибок API (тело `{"error": ...}` из ExceptionMiddleware → диалог + статус-бар).
 - Доступность: ключевые элементы размечены `AutomationProperties.AutomationId`
   (кнопки, списки, поля) — для UI-тестов и скринридеров; иконки-кнопки имеют `AutomationProperties.Name`.

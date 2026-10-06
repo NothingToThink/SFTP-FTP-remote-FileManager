@@ -32,6 +32,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private FileManagerApiClient Api { get; set; }
 
+    /// <summary>Доступ к текущему клиенту API (для окон, открываемых поверх соединения).</summary>
+    public FileManagerApiClient ApiClient => Api;
+
     public ObservableCollection<ProfileViewModel> Profiles { get; } = new();
 
     public FileBrowserViewModel Browser { get; }
@@ -48,6 +51,13 @@ public partial class MainWindowViewModel : ViewModelBase
             busy => IsBusy = busy,
             text => StatusText = text,
             dialogs);
+        Browser.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(FileBrowserViewModel.IsBound)
+                or nameof(FileBrowserViewModel.ConnectionName)
+                or nameof(FileBrowserViewModel.BoundProtocol))
+                OnPropertyChanged(nameof(IsTunnelsAvailable));
+        };
 
         _ = InitializeAsync();
     }
@@ -91,6 +101,18 @@ public partial class MainWindowViewModel : ViewModelBase
             if (ServerStatus == ServerStatus.Reachable)
                 await RefreshProfilesCommand.ExecuteAsync(null);
         });
+    }
+
+    /// <summary>Туннели доступны только для SFTP/SSH-подключений.</summary>
+    public bool IsTunnelsAvailable => Browser.IsBound && Browser.BoundProtocol == Models.Protocol.Sftp;
+
+    [RelayCommand]
+    private void OpenTunnels()
+    {
+        if (!IsTunnelsAvailable)
+            return;
+        _dialogs.ShowTunnelsWindow(
+            new TunnelsViewModel(Api, Browser.ConnectionId, Browser.ConnectionName, _dialogs));
     }
 
     /// <summary>
@@ -199,7 +221,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (_activeConnections.TryGetValue(profile.Id, out var existing))
         {
-            await Browser.BindAsync(existing, profile.Name);
+            await Browser.BindAsync(existing, profile.Name, profile.Protocol);
             return;
         }
 
@@ -209,7 +231,7 @@ public partial class MainWindowViewModel : ViewModelBase
             await Api.ConnectAsync(connectionId);
             _activeConnections[profile.Id] = connectionId;
             profile.IsConnected = true;
-            await Browser.BindAsync(connectionId, profile.Name);
+            await Browser.BindAsync(connectionId, profile.Name, profile.Protocol);
             StatusText = $"Подключено: {profile.Name}";
         });
     }
