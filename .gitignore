@@ -484,3 +484,5 @@ $RECYCLE.BIN/
 *.swp
 
 *.db
+# Песочница Local-протокола Backend
+Backend/tmp/

@@ -1,14 +1,23 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Backend.Middleware;
+using Backend.Services;
 using Core.Implementations.Factory;
+using Core.PortForwarding;
+using Core.PortForwarding.Discovery;
+using Core.Ssh;
+using Core.Ssh.HostKey;
+using Microsoft.Extensions.Options;
 using Core.Implementations.Manager;
 using Core.Implementations.Storage;
+using Core.Implementations.ServerClient;
 using Core.Interfaces.Factory;
 using Core.Interfaces.Manager;
 using Core.Interfaces.Storage;
+using Core.Interfaces.ServerClient;
 using Core.Security;
 using Core.Utils;
+using System.Reflection;
 
 try
 {
@@ -32,10 +41,31 @@ try
             .GetProfilesFilePath(), protection);
     });
 
+    builder.Services.Configure<SshSessionOptions>(builder.Configuration.GetSection("Ssh"));
+    builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<SshSessionOptions>>().Value);
+
+    builder.Services.AddSingleton<IHostKeyStore>(_ => new KnownHostsStore(AppPaths.GetKnownHostsFilePath()));
+    builder.Services.AddSingleton<IRemotePortScanner, SshRemotePortScanner>();
+    builder.Services.AddSingleton<IPortForwardingManager, PortForwardingManager>();
+
     builder.Services.AddSingleton<IConnectionFactory, ConnectionFactory>();
     builder.Services.AddSingleton<IConnectionManager, ConnectionManager>();
     builder.Services.AddSingleton<IProfileManager, ProfileManager>();
+    builder.Services.AddSingleton<IServerSessionService, ServerSessionService>();
+    builder.Services.AddHttpClient<IProfileServerClient, ProfileServerClient>(client =>
+    {
+        client.BaseAddress = new Uri("http://176.53.160.4");
+    });
+                                                                              
+    builder.Services.AddHostedService<IdleConnectionJanitor>();
 
+
+    builder.Services.AddSwaggerGen(options =>
+    {
+        var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+        options.IncludeXmlComments(xmlPath);
+    });
 
     using var app = builder.Build();
 
