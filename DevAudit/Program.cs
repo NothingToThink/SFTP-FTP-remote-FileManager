@@ -97,6 +97,7 @@ public static class Program
         if (serverUp && localProfileId is not null)
             await ScenarioFullFunctional(api!, url, localProfileId.Value);
         await ScenarioProfileValidation();
+        await ScenarioTunnels();
         await ScenarioServerDown();
 
         // Уборка тестовых профилей
@@ -441,6 +442,139 @@ public static class Program
         }
 
         window.Close();
+        Report.AppendLine($"  Итог сценария: {t} кейсов");
+    }
+
+    /// <summary>
+    /// Порт-форвардинг: полный жизненный цикл через TunnelsViewModel с эмулированным API
+    /// (реальный SSH-сервер для аудита недоступен) + кейс недоступности на Local-соединении.
+    /// </summary>
+    private static async Task ScenarioTunnels()
+    {
+        Report.AppendLine();
+        Report.AppendLine("--- S7: порт-форвардинг ---");
+        var t = 0;
+        void Case(string name, bool ok, string detail = "")
+        {
+            t++;
+            Report.AppendLine(ok ? $"  [PASS] TC{t:D2} {name}" : $"  [FAIL] TC{t:D2} {name}: {detail}");
+            if (!ok)
+            {
+                _issuesTotal++;
+                Console.Error.WriteLine($"[audit] FAIL {name}: {detail}");
+            }
+        }
+        void Skip(string name, string why)
+        {
+            t++;
+            Report.AppendLine($"  [SKIP] TC{t:D2} {name}: {why}");
+        }
+
+        // --- Часть 1: полный цикл через FakeForwardingApi ---
+        var fake = new FakeForwardingApi();
+        var dialogs = new HeadlessDialogService();
+        var vm = new TunnelsViewModel(fake, Guid.NewGuid(), "audit-sftp", dialogs);
+
+        // TC01: пустой список до создания
+        await vm.RefreshCommand.ExecuteAsync(null);
+        Case("стартовое состояние: список пуст, ошибки нет",
+            vm.Items.Count == 0 && vm.ErrorText is null, vm.ErrorText ?? "");
+
+        // TC02: создание Local-правила через форму (Prompt-очередь: подтверждение формы)
+        dialogs.ConfirmResults.Enqueue(true);
+        await vm.CreateCommand.ExecuteAsync(null);
+        Case("создание Local-правила через форму",
+            vm.Items.Count == 1 && fake.CreateCalls == 1 && vm.Items[0].Status.State == ForwardState.Active,
+            $"items={vm.Items.Count}");
+
+        // TC03: BindPort=0 — сервер вернул фактически назначенный порт
+        if (vm.Items.Count == 0)
+        {
+            Case("фактический порт возвращён в статусе", false, "список пуст после создания");
+            Report.AppendLine($"  Итог сценария: {t} кейсов");
+            return;
+        }
+        Case("фактический порт возвращён в статусе",
+            vm.Items[0].Status.ActualBindPort is > 0,
+            $"actual={vm.Items[0].Status.ActualBindPort}");
+
+        // TC04: stop
+        await vm.StopCommand.ExecuteAsync(null);
+        Case("остановка туннеля",
+            vm.Items[0].Status.State == ForwardState.Stopped && vm.Items[0].CanStart);
+
+        // TC05: start
+        await vm.StartCommand.ExecuteAsync(null);
+        Case("запуск остановленного туннеля",
+            vm.Items[0].Status.State == ForwardState.Active && vm.Items[0].CanStop);
+
+        // TC06: создание Remote-правила напрямую через API (второе правило)
+        await fake.CreateForwardAsync(vm.ConnectionId, ForwardType.Remote, 8080,
+            name: "web", targetHost: "localhost", targetPort: 80);
+        await vm.RefreshCommand.ExecuteAsync(null);
+        Case("второе правило (Remote) видно в списке",
+            vm.Items.Count == 2 && vm.Items.Any(i => i.Type == ForwardType.Remote));
+
+        // TC07: удаление с подтверждением
+        dialogs.ConfirmResults.Enqueue(true);
+        vm.SelectedItem = vm.Items.First(i => i.Type == ForwardType.Remote);
+        await vm.DeleteCommand.ExecuteAsync(null);
+        Case("удаление туннеля (Confirm)",
+            vm.Items.Count == 1 && fake.DeleteCalls == 1);
+
+        // TC08: suggestions через форму
+        var editor = new CreateForwardViewModel();
+        await editor.LoadSuggestionsAsync(fake, vm.ConnectionId);
+        Case("подсказки сервера загружаются и помечают loopback",
+            editor.Suggestions.Count == 2
+            && editor.Suggestions[0].Service == "postgres"
+            && editor.Suggestions[0].Label.Contains("(loopback)"));
+
+        // TC09: выбор подсказки заполняет целевые поля
+        editor.SelectedSuggestion = editor.Suggestions[0];
+        Case("выбор подсказки заполняет порт/хост/имя",
+            editor.TargetPort == "5432" && editor.TargetHost == "127.0.0.1"
+            && editor.Name.Contains("postgres"));
+
+        // TC10: валидация формы
+        var badPort = new CreateForwardViewModel { BindPort = "70000" };
+        Case("форма: порт 70000 отклоняется", !badPort.Validate() && badPort.ErrorMessage != null);
+        var noTarget = new CreateForwardViewModel { BindPort = "5432", Type = ForwardType.Local, TargetPort = "" };
+        Case("форма: Local без целевого порта отклоняется", !noTarget.Validate());
+        var dynamicOk = new CreateForwardViewModel { BindPort = "1080", Type = ForwardType.Dynamic, TargetPort = "" };
+        Case("форма: Dynamic не требует цели", dynamicOk.Validate());
+        t -= 0; // счётчик уже увеличен в Case
+
+        // --- Часть 2: реальный сервер, Local-соединение → туннели недоступны ---
+        var settings = new ClientSettings { ServerUrl = "http://127.0.0.1:5116" };
+        var mainVm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl),
+            new HeadlessDialogService());
+        var window = new MainWindow { DataContext = mainVm, Width = 1180, Height = 700 };
+        window.Show();
+        Pump();
+        await mainVm.CheckServerCommand.ExecuteAsync(null);
+        await mainVm.RefreshProfilesCommand.ExecuteAsync(null);
+        var localProfile = mainVm.Profiles.FirstOrDefault(p => p.Protocol == Protocol.Local);
+        if (localProfile is not null)
+        {
+            await mainVm.ConnectProfileCommand.ExecuteAsync(localProfile);
+            Case("кнопка туннелей скрыта для Local-соединения",
+                !mainVm.IsTunnelsAvailable,
+                $"IsTunnelsAvailable={mainVm.IsTunnelsAvailable}");
+
+            var realVm = new TunnelsViewModel(mainVm.ApiClient, mainVm.Browser.ConnectionId, "local", dialogs);
+            await realVm.RefreshCommand.ExecuteAsync(null);
+            Case("реальный API: туннели на Local-соединении дают понятную ошибку",
+                realVm.ErrorText is not null && realVm.ErrorText.Contains("SFTP"),
+                realVm.ErrorText ?? "ошибки не было");
+        }
+        else
+        {
+            Skip("кнопка туннелей скрыта для Local", "Local-профиль не найден");
+            Skip("реальный API: Local-ошибка", "Local-профиль не найден");
+        }
+        window.Close();
+
         Report.AppendLine($"  Итог сценария: {t} кейсов");
     }
 
@@ -939,6 +1073,8 @@ public sealed class HeadlessDialogService : IDialogService
         string connectionName, IForwardingApi api, Guid connectionId)
     {
         Calls.Add($"createForward:{viewModel.Type}:{viewModel.BindPort}");
+        // управляемый ответ: очередь ConfirmResults переиспользуется как подтверждение формы;
+        // «пользователь» заполняет обязательные поля перед OK
         var confirmed = ConfirmResults.Count > 0 && ConfirmResults.Dequeue();
         if (confirmed)
         {
@@ -948,4 +1084,79 @@ public sealed class HeadlessDialogService : IDialogService
         }
         return Task.FromResult(confirmed);
     }
+}
+
+/// <summary>
+/// In-memory эмуляция порт-форвардинга: полный жизненный цикл правил без реального SSH.
+/// Правила живут в словаре; create стартует правило, stop/start/delete меняют состояние.
+/// </summary>
+public sealed class FakeForwardingApi : IForwardingApi
+{
+    private readonly Dictionary<Guid, ForwardStatus> _rules = new();
+    private int _autoPort = 15_000;
+
+    public int CreateCalls { get; private set; }
+    public int DeleteCalls { get; private set; }
+
+    public Task<List<ForwardStatus>> GetForwardsAsync(Guid id, CancellationToken ct = default)
+        => Task.FromResult(_rules.Values.ToList());
+
+    public Task<ForwardStatus> CreateForwardAsync(Guid id, ForwardType type, int bindPort,
+        string? name = null, string? bindHost = null, string? targetHost = null,
+        int? targetPort = null, CancellationToken ct = default)
+    {
+        CreateCalls++;
+        var actual = bindPort == 0 ? ++_autoPort : bindPort;
+        var status = new ForwardStatus
+        {
+            Rule = new ForwardRule
+            {
+                Id = Guid.NewGuid(),
+                Name = name ?? $"{type}:{actual}",
+                Type = type,
+                BindHost = bindHost ?? "127.0.0.1",
+                BindPort = actual,
+                TargetHost = targetHost,
+                TargetPort = targetPort,
+            },
+            State = ForwardState.Active,
+            ActualBindPort = actual,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _rules[status.Rule.Id] = status;
+        return Task.FromResult(status);
+    }
+
+    public Task<ForwardStatus?> GetForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+        => Task.FromResult(_rules.GetValueOrDefault(ruleId));
+
+    public Task<ForwardStatus> StopForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+    {
+        var status = _rules[ruleId];
+        status.State = ForwardState.Stopped;
+        return Task.FromResult(status);
+    }
+
+    public Task<ForwardStatus> RestartForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+    {
+        var status = _rules[ruleId];
+        status.State = ForwardState.Active;
+        return Task.FromResult(status);
+    }
+
+    public async Task DeleteForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+    {
+        DeleteCalls++;
+        await Task.Yield();
+        _rules.Remove(ruleId);
+    }
+
+    public Task<List<PortSuggestion>> GetForwardSuggestionsAsync(Guid id, string? text = null,
+        int? portMin = null, int? portMax = null, bool loopbackOnly = false, int limit = 50,
+        CancellationToken ct = default)
+        => Task.FromResult(new List<PortSuggestion>
+        {
+            new() { Port = 5432, Address = "127.0.0.1", Service = "postgres", Source = "Catalog" },
+            new() { Port = 6379, Address = "127.0.0.1", Service = "redis", Source = "RemoteScan" },
+        });
 }
