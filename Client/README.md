@@ -1,6 +1,6 @@
 # FileManagerClient — новый UI для SFTP/FTP-менеджера
 
-Кроссплатформенный (Windows/Linux) десктопный клиент на **Avalonia + C# (.NET 10)**, заменяющий
+Кроссплатформенный (Windows/Linux) десктопный клиент на **Avalonia 12 + C# (.NET 10)**, заменяющий
 питоновский PyQt5 GUI из ветки `GUI`. Общается с Backend только по HTTP API, ничего не знает
 о внутренностях Core. Стек выбран осознанно: Backend уже на .NET — одна toolchain, общие
 DTO-контракты, `dotnet publish` на обе ОС, а запуск дочерних процессов — штатный `System.Diagnostics.Process`.
@@ -21,6 +21,20 @@ dotnet run --project Client
 
 Адрес сервера настраивается шестерёнкой в статус-баре и сохраняется
 в `%APPDATA%/FileManagerClient/settings.json` (на Linux — `~/.config`/`~/.local/share`).
+
+## Изоляция данных для тестов
+
+По умолчанию клиент хранит настройки в `%APPDATA%/FileManagerClient/`, а сервер — профили
+и `known_hosts` в `%APPDATA%/RemoteFileManager/`. Для тестов и параллельных запусков обе
+папки переопределяются переменными окружения — реальные данные не затираются:
+
+```bash
+# сервер: отдельное хранилище профилей/known_hosts
+REMOTE_FILE_MANAGER_DATA_DIR=./testdata dotnet run --project Backend --urls http://127.0.0.1:5116
+
+# клиент: отдельные настройки
+FILEMANAGERCLIENT_DATA_DIR=./testdata dotnet run --project Client
+```
 
 ## Проверки
 
@@ -70,6 +84,8 @@ dotnet publish Client -c Release -r linux-x64 --self-contained
 - Передачи: upload (multipart) и download (стриминг) файлов; загрузка перетаскиванием
   (drag&drop файлов на файловую панель, мультизагрузка в текущую папку).
 - Единая обработка ошибок API (тело `{"error": ...}` из ExceptionMiddleware → диалог + статус-бар).
+- Доступность: ключевые элементы размечены `AutomationProperties.AutomationId`
+  (кнопки, списки, поля) — для UI-тестов и скринридеров; иконки-кнопки имеют `AutomationProperties.Name`.
 
 ## Архитектура
 

@@ -16,6 +16,7 @@ public partial class FileBrowserViewModel : ViewModelBase
     private readonly Func<FileManagerApiClient> _api;
     private readonly Action<bool> _setBusy;
     private readonly Action<string> _setStatus;
+    private readonly IDialogService _dialogs;
 
     private Guid _connectionId;
 
@@ -25,13 +26,18 @@ public partial class FileBrowserViewModel : ViewModelBase
     [ObservableProperty] private FileItem? _selectedItem;
     [ObservableProperty] private int _itemCount;
 
+    /// <summary>Id активного соединения (для тестов и ручных операций).</summary>
+    public Guid ConnectionId => _connectionId;
+
     public ObservableCollection<FileItem> Items { get; } = new();
 
-    public FileBrowserViewModel(Func<FileManagerApiClient> api, Action<bool> setBusy, Action<string> setStatus)
+    public FileBrowserViewModel(Func<FileManagerApiClient> api, Action<bool> setBusy, Action<string> setStatus,
+        IDialogService dialogs)
     {
         _api = api;
         _setBusy = setBusy;
         _setStatus = setStatus;
+        _dialogs = dialogs;
     }
 
     public async Task BindAsync(Guid connectionId, string name)
@@ -94,7 +100,7 @@ public partial class FileBrowserViewModel : ViewModelBase
                 CurrentPath = revertPath;
             _setStatus("Ошибка: " + ex.ServerMessage);
             if (!quiet)
-                await DialogService.ShowMessageAsync("Ошибка операции", ex.ServerMessage);
+                await _dialogs.ShowMessageAsync("Ошибка операции", ex.ServerMessage);
         }
         catch (Exception ex)
         {
@@ -102,7 +108,7 @@ public partial class FileBrowserViewModel : ViewModelBase
                 CurrentPath = revertPath;
             _setStatus("Ошибка: " + ex.Message);
             if (!quiet)
-                await DialogService.ShowMessageAsync("Ошибка операции", ex.Message);
+                await _dialogs.ShowMessageAsync("Ошибка операции", ex.Message);
         }
         finally
         {
@@ -160,7 +166,7 @@ public partial class FileBrowserViewModel : ViewModelBase
     {
         if (!IsBound)
             return;
-        var name = await DialogService.PromptAsync("Новый файл", "Имя файла:", "newfile.txt");
+        var name = await _dialogs.PromptAsync("Новый файл", "Имя файла:", "newfile.txt");
         if (string.IsNullOrWhiteSpace(name))
             return;
         await RunAsync(async () =>
@@ -175,7 +181,7 @@ public partial class FileBrowserViewModel : ViewModelBase
     {
         if (!IsBound)
             return;
-        var name = await DialogService.PromptAsync("Новая папка", "Имя папки:", "Новая папка");
+        var name = await _dialogs.PromptAsync("Новая папка", "Имя папки:", "Новая папка");
         if (string.IsNullOrWhiteSpace(name))
             return;
         await RunAsync(async () =>
@@ -190,7 +196,7 @@ public partial class FileBrowserViewModel : ViewModelBase
     {
         if (SelectedItem is not { } item)
             return;
-        var newName = await DialogService.PromptAsync("Переименовать", "Новое имя:", item.Name);
+        var newName = await _dialogs.PromptAsync("Переименовать", "Новое имя:", item.Name);
         if (string.IsNullOrWhiteSpace(newName) || newName == item.Name)
             return;
 
@@ -212,7 +218,7 @@ public partial class FileBrowserViewModel : ViewModelBase
         if (SelectedItem is not { } item)
             return;
         var kind = item.IsDirectory ? "папку" : "файл";
-        if (!await DialogService.ConfirmAsync("Удаление", $"Удалить {kind} «{item.Name}»?"))
+        if (!await _dialogs.ConfirmAsync("Удаление", $"Удалить {kind} «{item.Name}»?"))
             return;
         await RunAsync(async () =>
         {
@@ -230,7 +236,7 @@ public partial class FileBrowserViewModel : ViewModelBase
         if (SelectedItem is not { } item)
             return;
         var what = item.IsDirectory ? "папку" : "файл";
-        var target = await DialogService.PromptAsync($"Копировать {what}", "Путь назначения:", item.FullPath);
+        var target = await _dialogs.PromptAsync($"Копировать {what}", "Путь назначения:", item.FullPath);
         if (string.IsNullOrWhiteSpace(target) || target == item.FullPath)
             return;
         await RunAsync(async () =>
@@ -249,7 +255,7 @@ public partial class FileBrowserViewModel : ViewModelBase
         if (SelectedItem is not { } item)
             return;
         var what = item.IsDirectory ? "папку" : "файл";
-        var target = await DialogService.PromptAsync($"Переместить {what}", "Путь назначения:", item.FullPath);
+        var target = await _dialogs.PromptAsync($"Переместить {what}", "Путь назначения:", item.FullPath);
         if (string.IsNullOrWhiteSpace(target) || target == item.FullPath)
             return;
         await RunAsync(async () =>
@@ -267,7 +273,7 @@ public partial class FileBrowserViewModel : ViewModelBase
     {
         if (!IsBound)
             return;
-        var localPath = await DialogService.PickOpenFileAsync("Файл для загрузки на сервер");
+        var localPath = await _dialogs.PickOpenFileAsync("Файл для загрузки на сервер");
         if (localPath is null)
             return;
 
@@ -300,7 +306,7 @@ public partial class FileBrowserViewModel : ViewModelBase
     {
         if (SelectedItem is not { IsDirectory: false } item)
             return;
-        var localPath = await DialogService.PickSaveFileAsync(item.Name);
+        var localPath = await _dialogs.PickSaveFileAsync(item.Name);
         if (localPath is null)
             return;
         await RunAsync(async () =>
@@ -317,9 +323,23 @@ public partial class FileBrowserViewModel : ViewModelBase
         try
         {
             var info = await _api().GetFileInfoAsync(_connectionId, selected.FullPath);
-            var sizeText = info.IsDirectory
-                ? $"{await _api().GetDirSizeAsync(_connectionId, selected.FullPath)} байт (с содержимым)"
-                : $"{info.Size} байт";
+            string sizeText;
+            if (!info.IsDirectory)
+            {
+                sizeText = $"{info.Size} байт";
+            }
+            else
+            {
+                try
+                {
+                    sizeText = $"{await _api().GetDirSizeAsync(_connectionId, selected.FullPath)} байт (с содержимым)";
+                }
+                catch (ApiException ex) when (ex.StatusCode == 404)
+                {
+                    // сервер временно без dir/size (регрессия, см. BACKEND-BUGS.md #3)
+                    sizeText = "неизвестен (сервер не поддерживает размер папки)";
+                }
+            }
             var text =
                 $"Имя: {info.Name}\n" +
                 $"Тип: {(info.IsDirectory ? "папка" : "файл")}\n" +
@@ -327,11 +347,11 @@ public partial class FileBrowserViewModel : ViewModelBase
                 $"Изменён: {info.LastModified:yyyy-MM-dd HH:mm:ss}\n" +
                 $"Права: {info.Permissions}\n" +
                 $"Путь: {info.FullPath}";
-            await DialogService.ShowMessageAsync("Свойства", text);
+            await _dialogs.ShowMessageAsync("Свойства", text);
         }
         catch (ApiException ex)
         {
-            await DialogService.ShowMessageAsync("Ошибка", ex.ServerMessage);
+            await _dialogs.ShowMessageAsync("Ошибка", ex.ServerMessage);
         }
     }
 

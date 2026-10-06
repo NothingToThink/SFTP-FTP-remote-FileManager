@@ -1,7 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FileManagerClient.ViewModels;assembly=FileManagerClient"
         xmlns:conv="clr-namespace:FileManagerClient.Converters"
         x:Class="FileManagerClient.Views.ProfileEditWindow"
+        x:DataType="vm:ProfileEditViewModel"
         Title="Профиль подключения"
         Width="520" SizeToContent="Height"
         CanResize="False"
@@ -17,33 +19,40 @@
         <TextBlock Classes="h1" Text="Профиль подключения"/>
 
         <TextBlock Classes="secondary" Text="Название" Margin="0,6,0,-4"/>
-        <TextBox Text="{Binding Name}" Watermark="Мой сервер"/>
+        <TextBox Name="NameBox" AutomationProperties.AutomationId="ProfileNameBox"
+                 Text="{Binding Name}" PlaceholderText="Мой сервер"/>
 
         <TextBlock Classes="secondary" Text="Протокол" Margin="0,8,0,-4"/>
-        <ComboBox ItemsSource="{Binding Protocols}" SelectedItem="{Binding Protocol}"
+        <ComboBox Name="ProtocolCombo" AutomationProperties.AutomationId="ProfileProtocolCombo"
+                  ItemsSource="{Binding Protocols}" SelectedItem="{Binding Protocol}"
                   HorizontalAlignment="Left" MinWidth="220"/>
 
         <Panel IsVisible="{Binding !IsLocal}">
             <StackPanel Spacing="10">
                 <TextBlock Classes="secondary" Text="Хост" Margin="0,8,0,-4"/>
-                <TextBox Text="{Binding Host}" Watermark="host или IP" FontFamily="{StaticResource FontMono}"/>
+                <TextBox Name="HostBox" AutomationProperties.AutomationId="ProfileHostBox"
+                         Text="{Binding Host}" PlaceholderText="host или IP" FontFamily="{StaticResource FontMono}"/>
                 <TextBlock Classes="secondary" Text="Порт (пусто — стандартный для протокола)" Margin="0,4,0,-4"/>
-                <TextBox Text="{Binding Port}" Watermark="22 / 21" FontFamily="{StaticResource FontMono}"/>
+                <TextBox Name="PortBox" AutomationProperties.AutomationId="ProfilePortBox"
+                         Text="{Binding Port}" PlaceholderText="22 / 21" FontFamily="{StaticResource FontMono}"/>
             </StackPanel>
         </Panel>
 
         <Panel IsVisible="{Binding NeedsAuth}">
             <StackPanel Spacing="10">
                 <TextBlock Classes="secondary" Text="Авторизация" Margin="0,10,0,-4"/>
-                <ComboBox ItemsSource="{Binding AuthKinds}" SelectedItem="{Binding AuthKind}"
+                <ComboBox Name="AuthKindCombo" AutomationProperties.AutomationId="ProfileAuthKindCombo"
+                          ItemsSource="{Binding AuthKinds}" SelectedItem="{Binding AuthKind}"
                           HorizontalAlignment="Left" MinWidth="220"/>
                 <TextBlock Classes="secondary" Text="Логин" Margin="0,4,0,-4"/>
-                <TextBox Text="{Binding Username}" FontFamily="{StaticResource FontMono}"/>
+                <TextBox Name="UsernameBox" AutomationProperties.AutomationId="ProfileUsernameBox"
+                         Text="{Binding Username}" FontFamily="{StaticResource FontMono}"/>
 
                 <Panel IsVisible="{Binding AuthKind, Converter={StaticResource AuthIs}, ConverterParameter=Password}">
                     <StackPanel Spacing="10">
                         <TextBlock Classes="secondary" Text="Пароль" Margin="0,4,0,-4"/>
-                        <TextBox Text="{Binding Password}" PasswordChar="•"/>
+                        <TextBox Name="PasswordBox" AutomationProperties.AutomationId="ProfilePasswordBox"
+                                 Text="{Binding Password}" PasswordChar="•"/>
                     </StackPanel>
                 </Panel>
 
@@ -51,12 +60,16 @@
                     <StackPanel Spacing="10">
                         <TextBlock Classes="secondary" Text="Путь к приватному ключу" Margin="0,4,0,-4"/>
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBox Text="{Binding KeyPath}" Width="350" FontFamily="{StaticResource FontMono}"
-                                     Watermark="~/.ssh/id_rsa"/>
-                            <Button Classes="tool" Content="…" ToolTip.Tip="Выбрать файл ключа" Click="BrowseKeyClick"/>
+                            <TextBox Name="KeyPathBox" AutomationProperties.AutomationId="ProfileKeyPathBox"
+                                     Text="{Binding KeyPath}" Width="350" FontFamily="{StaticResource FontMono}"
+                                     PlaceholderText="~/.ssh/id_rsa"/>
+                            <Button Name="BrowseKeyButton" Classes="tool" Content="…"
+                                    AutomationProperties.AutomationId="ProfileKeyBrowseButton"
+                                    ToolTip.Tip="Выбрать файл ключа" Click="BrowseKeyClick"/>
                         </StackPanel>
                         <TextBlock Classes="secondary" Text="Пароль ключа (если установлен)" Margin="0,4,0,-4"/>
-                        <TextBox Text="{Binding Passphrase}" PasswordChar="•"/>
+                        <TextBox Name="PassphraseBox" AutomationProperties.AutomationId="ProfilePassphraseBox"
+                                 Text="{Binding Passphrase}" PasswordChar="•"/>
                     </StackPanel>
                 </Panel>
             </StackPanel>
@@ -64,12 +77,17 @@
 
         <Border Background="#2A1715" CornerRadius="6" Padding="10,7" Margin="0,6,0,0"
                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-            <TextBlock Text="{Binding ErrorMessage}" Foreground="#F09089" FontSize="12.5" TextWrapping="Wrap"/>
+            <TextBlock Name="ErrorText" AutomationProperties.AutomationId="ProfileErrorText"
+                       Text="{Binding ErrorMessage}" Foreground="#F09089" FontSize="12.5" TextWrapping="Wrap"/>
         </Border>
 
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,10,0,0">
-            <Button Classes="tool" Content="Отмена" Width="104" IsCancel="True"/>
-            <Button Classes="primary" Content="Сохранить" Width="104" Click="OkClick" IsDefault="True"/>
+            <Button Name="CancelButton" Classes="tool" Content="Отмена" Width="104"
+                    AutomationProperties.AutomationId="ProfileCancelButton"
+                    IsCancel="True" Click="CancelClick"/>
+            <Button Name="OkButton" Classes="primary" Content="Сохранить" Width="104"
+                    AutomationProperties.AutomationId="ProfileOkButton"
+                    Click="OkClick" IsDefault="True"/>
         </StackPanel>
     </StackPanel>
 </Window>
