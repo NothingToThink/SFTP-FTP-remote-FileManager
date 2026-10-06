@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
+using FileManagerClient.Models;
 using FileManagerClient.ViewModels;
 
 namespace FileManagerClient.Converters;
@@ -10,6 +11,24 @@ public class EnumEqualsConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         => value?.ToString() == parameter?.ToString();
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+public class ForwardStateToBrushConverter : IValueConverter
+{
+    private static readonly IBrush Active = new SolidColorBrush(Color.Parse("#5FB57C"));
+    private static readonly IBrush Failed = new SolidColorBrush(Color.Parse("#E0564F"));
+    private static readonly IBrush Stopped = new SolidColorBrush(Color.Parse("#667083"));
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value switch
+        {
+            ForwardState.Active => Active,
+            ForwardState.Failed => Failed,
+            _ => Stopped,
+        };
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();

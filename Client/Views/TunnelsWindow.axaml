@@ -1,0 +1,76 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FileManagerClient.ViewModels;assembly=FileManagerClient"
+        xmlns:conv="clr-namespace:FileManagerClient.Converters"
+        x:Class="FileManagerClient.Views.TunnelsWindow"
+        x:DataType="vm:TunnelsViewModel"
+        Title="Туннели"
+        Width="820" Height="480"
+        MinWidth="640" MinHeight="360"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.Resources>
+        <conv:ForwardStateToBrushConverter x:Key="StateBrush"/>
+    </Window.Resources>
+
+    <DockPanel Margin="12">
+        <!-- Ошибка / предупреждение -->
+        <Border DockPanel.Dock="Bottom" Background="#2A1715" CornerRadius="6" Padding="10,7" Margin="0,10,0,0"
+                IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Name="TunnelErrorText" AutomationProperties.AutomationId="TunnelErrorText"
+                       Text="{Binding ErrorText}" Foreground="#F09089" FontSize="12.5" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Кнопки -->
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
+            <Button Name="TunnelCreateButton" Classes="primary" Content="Создать туннель"
+                    AutomationProperties.AutomationId="TunnelCreateButton"
+                    Command="{Binding CreateCommand}"/>
+            <Button Name="TunnelStartButton" Classes="tool" Content="Запустить"
+                    AutomationProperties.AutomationId="TunnelStartButton"
+                    Command="{Binding StartCommand}" IsEnabled="{Binding SelectedItem.CanStart}"/>
+            <Button Name="TunnelStopButton" Classes="tool" Content="Остановить"
+                    AutomationProperties.AutomationId="TunnelStopButton"
+                    Command="{Binding StopCommand}" IsEnabled="{Binding SelectedItem.CanStop}"/>
+            <Button Name="TunnelDeleteButton" Classes="tool danger" Content="Удалить"
+                    AutomationProperties.AutomationId="TunnelDeleteButton"
+                    Command="{Binding DeleteCommand}"/>
+            <Button Name="TunnelRefreshButton" Classes="icon" ToolTip.Tip="Обновить"
+                    AutomationProperties.AutomationId="TunnelRefreshButton"
+                    Command="{Binding RefreshCommand}">
+                <PathIcon Data="{StaticResource IconSync}" Width="14" Height="14"/>
+            </Button>
+        </StackPanel>
+
+        <!-- Заголовок -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="2,0,2,10">
+            <TextBlock Classes="h1" Text="Туннели"/>
+            <TextBlock Classes="mono secondary" VerticalAlignment="Center"
+                       Text="{Binding ConnectionName}"/>
+        </StackPanel>
+
+        <!-- Список правил -->
+        <DataGrid Name="TunnelsList" AutomationProperties.AutomationId="TunnelsList"
+                  ItemsSource="{Binding Items}"
+                  SelectedItem="{Binding SelectedItem}"
+                  IsReadOnly="True" AutoGenerateColumns="False" CanUserSortColumns="False"
+                  GridLinesVisibility="Horizontal">
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="Правило" Width="240">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="vm:TunnelItemViewModel">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                         Fill="{Binding Status.State, Converter={StaticResource StateBrush}}"/>
+                                <TextBlock Text="{Binding Name}" FontWeight="Medium"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="Маршрут" Binding="{Binding Details}" Width="*"
+                                    FontFamily="{StaticResource FontMono}" FontSize="12"/>
+                <DataGridTextColumn Header="Состояние" Binding="{Binding StateText}" Width="170"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</Window>

@@ -929,4 +929,23 @@ public sealed class HeadlessDialogService : IDialogService
         Calls.Add("profileEditor");
         return Task.FromResult(false);
     }
+
+    public void ShowTunnelsWindow(TunnelsViewModel viewModel)
+    {
+        Calls.Add("tunnelsWindow");
+    }
+
+    public Task<bool> ShowCreateForwardDialogAsync(CreateForwardViewModel viewModel,
+        string connectionName, IForwardingApi api, Guid connectionId)
+    {
+        Calls.Add($"createForward:{viewModel.Type}:{viewModel.BindPort}");
+        var confirmed = ConfirmResults.Count > 0 && ConfirmResults.Dequeue();
+        if (confirmed)
+        {
+            viewModel.TargetHost ??= "127.0.0.1";
+            if (string.IsNullOrWhiteSpace(viewModel.TargetPort) && viewModel.Type != ForwardType.Dynamic)
+                viewModel.TargetPort = "8443";
+        }
+        return Task.FromResult(confirmed);
+    }
 }

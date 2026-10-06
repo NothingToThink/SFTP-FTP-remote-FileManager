@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using FileManagerClient.Api;
 using FileManagerClient.ViewModels;
 
 namespace FileManagerClient.Services;
@@ -20,6 +21,13 @@ public interface IDialogService
     Task<string?> PickOpenFileAsync(string title);
     Task<string?> PickSaveFileAsync(string suggestedName);
     Task<bool> ShowProfileEditorAsync(ProfileEditViewModel viewModel);
+
+    /// <summary>Немодальное окно туннелей (живёт рядом с главным окном).</summary>
+    void ShowTunnelsWindow(TunnelsViewModel viewModel);
+
+    /// <summary>Модальный диалог создания туннеля: true — подтверждено.</summary>
+    Task<bool> ShowCreateForwardDialogAsync(CreateForwardViewModel viewModel, string connectionName,
+        IForwardingApi api, Guid connectionId);
 }
 
 /// <summary>Реализация на настоящих окнах; владелец задаётся при открытии главного окна.</summary>
@@ -128,6 +136,28 @@ public class DialogService : IDialogService
         var window = new Views.ProfileEditWindow
         {
             DataContext = viewModel,
+        };
+        return await window.ShowDialog<bool>(Owner);
+    }
+
+    public void ShowTunnelsWindow(TunnelsViewModel viewModel)
+    {
+        if (Owner is null)
+            return;
+
+        new Views.TunnelsWindow { DataContext = viewModel }.Show(Owner);
+    }
+
+    public async Task<bool> ShowCreateForwardDialogAsync(CreateForwardViewModel viewModel,
+        string connectionName, IForwardingApi api, Guid connectionId)
+    {
+        if (Owner is null)
+            return false;
+
+        var window = new Views.CreateForwardWindow(api, connectionId)
+        {
+            DataContext = viewModel,
+            Title = $"Новый туннель — {connectionName}",
         };
         return await window.ShowDialog<bool>(Owner);
     }
