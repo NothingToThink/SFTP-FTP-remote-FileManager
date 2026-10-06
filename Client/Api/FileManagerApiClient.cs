@@ -6,6 +6,25 @@ using FileManagerClient.Models;
 namespace FileManagerClient.Api;
 
 /// <summary>
+/// Операции порт-форвардинга соединения (только SFTP/SSH). Выделен интерфейсом,
+/// чтобы тесты подменяли транспорт (по духу IDialogService).
+/// </summary>
+public interface IForwardingApi
+{
+    Task<List<ForwardStatus>> GetForwardsAsync(Guid id, CancellationToken ct = default);
+    Task<ForwardStatus> CreateForwardAsync(Guid id, ForwardType type, int bindPort,
+        string? name = null, string? bindHost = null, string? targetHost = null,
+        int? targetPort = null, CancellationToken ct = default);
+    Task<ForwardStatus?> GetForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default);
+    Task<ForwardStatus> StopForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default);
+    Task<ForwardStatus> RestartForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default);
+    Task DeleteForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default);
+    Task<List<PortSuggestion>> GetForwardSuggestionsAsync(Guid id, string? text = null,
+        int? portMin = null, int? portMax = null, bool loopbackOnly = false, int limit = 50,
+        CancellationToken ct = default);
+}
+
+/// <summary>
 /// Типизированный клиент Backend API (контракт ветки dev @ bdd4928).
 ///
 /// Нюансы контракта:
@@ -13,7 +32,7 @@ namespace FileManagerClient.Api;
 ///  - ответы — camelCase, кроме HostProfile внутри профиля (PascalCase + "$type");
 ///  - ошибки приходят как {"error": "..."} с кодами 400/404/500.
 /// </summary>
-public class FileManagerApiClient : IDisposable
+public class FileManagerApiClient : IForwardingApi, IDisposable
 {
     private readonly HttpClient _http;
 
@@ -111,6 +130,56 @@ public class FileManagerApiClient : IDisposable
 
     public Task<bool> DirExistsAsync(Guid id, string path, CancellationToken ct = default)
         => GetWithBodyAsync<bool>($"connections/{id}/filesystem/dir/exists", path, ct);
+
+    // --- Порт-форвардинг (только SFTP/SSH соединения) ---
+
+    public Task<List<ForwardStatus>> GetForwardsAsync(Guid id, CancellationToken ct = default)
+        => GetAsync<List<ForwardStatus>>($"connections/{id}/forwards", ct);
+
+    public Task<ForwardStatus> CreateForwardAsync(Guid id, ForwardType type, int bindPort,
+        string? name = null, string? bindHost = null, string? targetHost = null,
+        int? targetPort = null, CancellationToken ct = default)
+        => PostAsync<ForwardStatus>($"connections/{id}/forwards",
+            new { type, bindPort, name, bindHost, targetHost, targetPort }, ct);
+
+    public async Task<ForwardStatus?> GetForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+    {
+        try
+        {
+            return await GetAsync<ForwardStatus>($"connections/{id}/forwards/{ruleId}", ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            return null;
+        }
+    }
+
+    public Task<ForwardStatus> StopForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+        => PostAsync<ForwardStatus>($"connections/{id}/forwards/{ruleId}/stop", new { }, ct);
+
+    public Task<ForwardStatus> RestartForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+        => PostAsync<ForwardStatus>($"connections/{id}/forwards/{ruleId}/start", new { }, ct);
+
+    public async Task DeleteForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+    {
+        // сервер отвечает 204 NoContent
+        using var resp = await _http.DeleteAsync($"connections/{id}/forwards/{ruleId}", ct);
+        await EnsureSuccessAsync(resp, ct);
+    }
+
+    public Task<List<PortSuggestion>> GetForwardSuggestionsAsync(Guid id, string? text = null,
+        int? portMin = null, int? portMax = null, bool loopbackOnly = false, int limit = 50,
+        CancellationToken ct = default)
+    {
+        var query = $"connections/{id}/forwards/suggestions?loopbackOnly={loopbackOnly.ToString().ToLower()}&limit={limit}";
+        if (!string.IsNullOrEmpty(text))
+            query += $"&text={Uri.EscapeDataString(text)}";
+        if (portMin is not null)
+            query += $"&portMin={portMin}";
+        if (portMax is not null)
+            query += $"&portMax={portMax}";
+        return GetAsync<List<PortSuggestion>>(query, ct);
+    }
 
     /// <summary>
     /// MVC отдаёт string-результаты без JSON-обёртки (StringOutputFormatter: text/plain,
