@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Backend.Controllers;
 
+/// <summary>
+/// Provides remote file system operations for active connection instances.
+/// </summary>
 [ApiController]
 [Route("connections/{connectionId}/filesystem")]
 public class ConnectionsFilesystemController(
@@ -11,6 +14,13 @@ public class ConnectionsFilesystemController(
   IConnectionManager connectionManager
 ) : ControllerBase
 {
+  /// <summary>
+  /// Gets all files and directories in the current working directory.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> containing the collection of files and directories in the working directory.</returns>
+  /// <response code="200">Returns the collection of files and directories.</response>
   [HttpGet]
   public async Task<IActionResult> GetAllFiles([FromRoute] Guid connectionId, CancellationToken ct)
   {
@@ -20,6 +30,14 @@ public class ConnectionsFilesystemController(
     return Ok(await connection.GetFilesAsync(workingDir, ct));
   }
 
+  /// <summary>
+  /// Gets information for a file or directory at the specified path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="path">Target file system path.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> containing the file or directory information.</returns>
+  /// <response code="200">Returns information about the specified file or directory.</response>
   [HttpGet("info")]
   public async Task<IActionResult> GetInfo([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
   {
@@ -28,6 +46,14 @@ public class ConnectionsFilesystemController(
     return Ok(await connection.GetInfoAsync(path, ct));
   }
   
+  /// <summary>
+  /// Gets the size of a directory at the specified path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="path">Target directory path.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> containing the size of the specified directory.</returns>
+  /// <response code="200">Returns the size of the directory.</response>
   [HttpGet("dir/size")]
   public async Task<IActionResult> GetDirSize([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
   {
@@ -36,6 +62,14 @@ public class ConnectionsFilesystemController(
     return Ok(await connection.GetDirSizeAsync(path, ct));
   }
 
+    /// <summary>
+    /// Creates a file at the specified path.
+    /// </summary>
+    /// <param name="connectionId">Unique connection identifier.</param>
+    /// <param name="path">Target path for the new file.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+    /// <response code="200">The file was successfully created.</response>
   [HttpPost("file")]
   public async Task<IActionResult> CreateFile([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
   {
@@ -45,6 +79,14 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Creates a directory at the specified path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="path">Target path for the new directory.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The directory was successfully created.</response>
   [HttpPost("dir")]
   public async Task<IActionResult> CreateDir([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
   {
@@ -54,6 +96,14 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Deletes a file at the specified path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="path">Path of the file to delete.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The file was successfully deleted.</response>
   [HttpDelete("file")]
   public async Task<IActionResult> DeleteFile([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
   {
@@ -63,6 +113,14 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Deletes a directory at the specified path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="path">Path of the directory to delete.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The directory was successfully deleted.</response>
   [HttpDelete("dir")]
   public async Task<IActionResult> DeleteDir([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
   {
@@ -72,6 +130,14 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Renames a file.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="request">Request containing the old and new file paths.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The file was successfully renamed.</response>
   [HttpPatch("file")]
   public async Task<IActionResult> RenameFile([FromRoute] Guid connectionId, [FromBody] RenameRequest request, CancellationToken ct)
   {
@@ -81,6 +147,14 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Renames a directory.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="request">Request containing the old and new directory paths.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The directory was successfully renamed.</response>
   [HttpPatch("dir")]
   public async Task<IActionResult> RenameDir([FromRoute] Guid connectionId, [FromBody] RenameRequest request, CancellationToken ct)
   {
@@ -90,6 +164,14 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Checks if a file exists at the specified path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="path">Target file path.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> containing a boolean indicating whether the file exists.</returns>
+  /// <response code="200">Returns true if the file exists; otherwise, false.</response>
   [HttpGet("file/exists")]
   public async Task<IActionResult> FileExists([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
   {
@@ -98,6 +180,14 @@ public class ConnectionsFilesystemController(
     return Ok(await connection.FileExistsAsync(path, ct));
   }
 
+  /// <summary>
+  /// Checks if a directory exists at the specified path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="path">Target directory path.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> containing a boolean indicating whether the directory exists.</returns>
+  /// <response code="200">Returns true if the directory exists; otherwise, false.</response>
   [HttpGet("dir/exists")]
   public async Task<IActionResult> DirExists([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
   {
@@ -107,6 +197,14 @@ public class ConnectionsFilesystemController(
 
   }
 
+  /// <summary>
+  /// Copies a file to a new target path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="request">Request parameters for copying the file.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The file was successfully copied.</response>
   [HttpPost("file/copy")]
   public async Task<IActionResult> CopyFile([FromRoute] Guid connectionId, [FromBody] CopyRequest request, CancellationToken ct)
   {
@@ -116,6 +214,14 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Moves a file to a new target path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="request">Request parameters for moving the file.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The file was successfully moved.</response>
   [HttpPatch("file/move")]
   public async Task<IActionResult> MoveFile([FromRoute] Guid connectionId, [FromBody] MoveRequest request, CancellationToken ct)
   {
@@ -125,6 +231,14 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Copies a directory to a new target path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="request">Request parameters for copying the directory.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The directory was successfully copied.</response>
   [HttpPost("dir/copy")]
   public async Task<IActionResult> CopyDir([FromRoute] Guid connectionId, [FromBody] CopyRequest request, CancellationToken ct)
   {
@@ -134,6 +248,14 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Moves a directory to a new target path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="request">Request parameters for moving the directory.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The directory was successfully moved.</response>
   [HttpPatch("dir/move")]
   public async Task<IActionResult> MoveDir([FromRoute] Guid connectionId, [FromBody] MoveRequest request, CancellationToken ct)
   {
@@ -143,6 +265,15 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Uploads a file to the remote path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="remotePath">Target destination path on the remote host.</param>
+  /// <param name="file">File payload provided via form data.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The file was successfully uploaded.</response>
   [HttpPost("file/upload")]
   public async Task<IActionResult> UploadFile(
     [FromRoute] Guid connectionId,
@@ -156,6 +287,14 @@ public class ConnectionsFilesystemController(
     return Ok();
   }
 
+  /// <summary>
+  /// Downloads a file from the remote path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="path">Remote path of the file to download.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>A file stream result containing the requested file content.</returns>
+  /// <response code="200">Returns the requested file stream for download.</response>
   [HttpGet("file/download")]
   public async Task<IActionResult> Download(
     [FromRoute] Guid connectionId,
@@ -167,6 +306,13 @@ public class ConnectionsFilesystemController(
     return File(stream, "application/octet-stream", Path.GetFileName(path));
   }
 
+  /// <summary>
+  /// Retrieves the current working directory path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> containing the current working directory path.</returns>
+  /// <response code="200">Returns the current working directory path.</response>
   [HttpGet("dir/current")]
   public async Task<IActionResult> GetCurrentDirectory([FromRoute] Guid connectionId, CancellationToken ct)
   {
@@ -175,6 +321,14 @@ public class ConnectionsFilesystemController(
     return Ok(await connection.GetWorkingDirectoryAsync(ct));
   }
 
+  /// <summary>
+  /// Changes the current working directory path.
+  /// </summary>
+  /// <param name="connectionId">Unique connection identifier.</param>
+  /// <param name="path">New working directory path.</param>
+  /// <param name="ct">Cancellation token.</param>
+  /// <returns>An <see cref="IActionResult"/> indicating the operation result.</returns>
+  /// <response code="200">The working directory was successfully changed.</response>
   [HttpPatch("dir/current")]
   public async Task<IActionResult> ChangeCurrentDirectory([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
   {
