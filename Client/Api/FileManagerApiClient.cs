@@ -90,7 +90,7 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
         => GetAsync<List<FileItem>>($"connections/{id}/filesystem", ct);
 
     public Task<FileItem> GetFileInfoAsync(Guid id, string path, CancellationToken ct = default)
-        => GetWithBodyAsync<FileItem>($"connections/{id}/filesystem/info", path, ct);
+        => GetAsync<FileItem>(WithPath($"connections/{id}/filesystem/info", path), ct);
 
     public Task CreateFileAsync(Guid id, string path, CancellationToken ct = default)
         => PostStringAsync($"connections/{id}/filesystem/file", path, ct);
@@ -99,10 +99,10 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
         => PostStringAsync($"connections/{id}/filesystem/dir", path, ct);
 
     public Task DeleteFileAsync(Guid id, string path, CancellationToken ct = default)
-        => DeleteWithBodyAsync($"connections/{id}/filesystem/file", path, ct);
+        => DeleteAsync(WithPath($"connections/{id}/filesystem/file", path), ct);
 
     public Task DeleteDirAsync(Guid id, string path, CancellationToken ct = default)
-        => DeleteWithBodyAsync($"connections/{id}/filesystem/dir", path, ct);
+        => DeleteAsync(WithPath($"connections/{id}/filesystem/dir", path), ct);
 
     public Task RenameFileAsync(Guid id, string oldPath, string newPath, CancellationToken ct = default)
         => PatchAsync($"connections/{id}/filesystem/file", new { oldPath, newPath }, ct);
@@ -123,13 +123,13 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
         => PatchAsync($"connections/{id}/filesystem/dir/move", new { sourcePath, targetPath, canOverride }, ct);
 
     public Task<long> GetDirSizeAsync(Guid id, string path, CancellationToken ct = default)
-        => GetWithBodyAsync<long>($"connections/{id}/filesystem/dir/size", path, ct);
+        => GetAsync<long>(WithPath($"connections/{id}/filesystem/dir/size", path), ct);
 
     public Task<bool> FileExistsAsync(Guid id, string path, CancellationToken ct = default)
-        => GetWithBodyAsync<bool>($"connections/{id}/filesystem/file/exists", path, ct);
+        => GetAsync<bool>(WithPath($"connections/{id}/filesystem/file/exists", path), ct);
 
     public Task<bool> DirExistsAsync(Guid id, string path, CancellationToken ct = default)
-        => GetWithBodyAsync<bool>($"connections/{id}/filesystem/dir/exists", path, ct);
+        => GetAsync<bool>(WithPath($"connections/{id}/filesystem/dir/exists", path), ct);
 
     // --- Порт-форвардинг (только SFTP/SSH соединения) ---
 
@@ -233,19 +233,17 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
     private static StringContent JsonBody(object value)
         => new(JsonSerializer.Serialize(value, ClientJson.Options), Encoding.UTF8, "application/json");
 
+    // Путь в query кодируется только здесь: Uri.EscapeDataString превращает '+' в %2B,
+    // иначе ASP.NET Core прочитает его как пробел.
+    private static string WithPath(string url, string path)
+        => $"{url}?path={Uri.EscapeDataString(path)}";
+
     private static StringContent JsonString(string value)
         => new(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
 
     private async Task<T> GetAsync<T>(string url, CancellationToken ct)
     {
         using var resp = await _http.GetAsync(url, ct);
-        return await ReadAsync<T>(resp, ct);
-    }
-
-    private async Task<T> GetWithBodyAsync<T>(string url, string path, CancellationToken ct)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Get, url) { Content = JsonString(path) };
-        using var resp = await _http.SendAsync(req, ct);
         return await ReadAsync<T>(resp, ct);
     }
 
@@ -291,13 +289,6 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
     private async Task DeleteAsync(string url, CancellationToken ct)
     {
         using var resp = await _http.DeleteAsync(url, ct);
-        await EnsureSuccessAsync(resp, ct);
-    }
-
-    private async Task DeleteWithBodyAsync(string url, string path, CancellationToken ct)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Delete, url) { Content = JsonString(path) };
-        using var resp = await _http.SendAsync(req, ct);
         await EnsureSuccessAsync(resp, ct);
     }
 

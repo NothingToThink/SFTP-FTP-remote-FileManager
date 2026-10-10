@@ -333,15 +333,7 @@ public partial class FileBrowserViewModel : ViewModelBase
             }
             else
             {
-                try
-                {
-                    sizeText = $"{await _api().GetDirSizeAsync(_connectionId, selected.FullPath)} байт (с содержимым)";
-                }
-                catch (ApiException ex) when (ex.StatusCode == 404)
-                {
-                    // сервер временно без dir/size (регрессия, см. BACKEND-BUGS.md #3)
-                    sizeText = "неизвестен (сервер не поддерживает размер папки)";
-                }
+                sizeText = $"{await _api().GetDirSizeAsync(_connectionId, selected.FullPath)} байт (с содержимым)";
             }
             var text =
                 $"Имя: {info.Name}\n" +
