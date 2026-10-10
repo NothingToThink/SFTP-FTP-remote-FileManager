@@ -210,7 +210,7 @@
                     <DataGrid.ContextMenu>
                         <!-- ContextMenu не в визуальном дереве: DataContext в него не наследуется,
                              задаем явно из грида; иначе пункты меню остаются без команд -->
-                        <ContextMenu x:DataType="vm:MainWindowViewModel" Opening="FilesContextMenuOpening"
+                        <ContextMenu x:DataType="vm:MainWindowViewModel"
                                      DataContext="{Binding #FilesGrid.DataContext}">
                             <MenuItem Header="Открыть" Command="{Binding Browser.OpenItemCommand}"/>
                             <MenuItem Header="Переименовать…" Command="{Binding Browser.RenameCommand}"/>
@@ -220,9 +220,9 @@
                             <MenuItem Header="Свойства" Command="{Binding Browser.ShowInfoCommand}"/>
                             <Separator/>
                             <MenuItem Header="Удалить" Command="{Binding Browser.DeleteCommand}"/>
-                            <!-- Подменю плагинов: пункты строятся в коде (MainWindow.RebuildPluginsMenu) -->
+                            <!-- Подменю плагинов: пункты строятся в коде (MainWindow.RebuildPluginsMenu) из кеша команд -->
                             <Separator Name="PluginsSeparator" IsVisible="{Binding HasPluginCommands}"/>
-                            <MenuItem Name="PluginsMenuItem" Header="Плагины"
+                            <MenuItem Name="PluginsMenuItem" Header="Плагины" Command="{Binding LoadPluginCommandsCommand}"
                                       AutomationProperties.AutomationId="PluginsMenuItem"
                                       IsVisible="{Binding HasPluginCommands}"/>
                         </ContextMenu>

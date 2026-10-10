@@ -13,6 +13,14 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+            vm.PluginCommands.CollectionChanged += (_, _) => RebuildPluginsMenu();
+            RebuildPluginsMenu();
+        };
+
         // Drag&drop: окно целиком регистрируется как drop-цель (DragDropDevice в Avalonia
         // выбирает целью сам хит-тест элемент — AllowDrop наследуется от корня на всё дерево),
         // а зону файловой панели определяем по границам DropArea. Обработчики с handledEventsToo,
@@ -26,11 +34,8 @@ public partial class MainWindow : Window
             Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
-    private void FilesContextMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
-        => RebuildPluginsMenu();
-
-    /// <summary>Пункты подменю «Плагины» из кеша команд; вызывается при каждом открытии меню.</summary>
-    internal void RebuildPluginsMenu()
+    /// <summary>Пункты подменю «Плагины» из кеша команд; перестраивается при каждом изменении кеша.</summary>
+    private void RebuildPluginsMenu()
     {
         if (DataContext is not MainWindowViewModel vm)
             return;

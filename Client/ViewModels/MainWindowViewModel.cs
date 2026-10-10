@@ -70,7 +70,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (hub is not null)
         {
             hub.StateChanged += state => Dispatcher.UIThread.Post(() => ChannelState = state);
-            hub.Connected += () => Dispatcher.UIThread.Post(() => _ = LoadPluginCommandsAsync());
+            hub.Connected += () => Dispatcher.UIThread.Post(() => _ = LoadPluginCommandsCommand.ExecuteAsync(null));
         }
         ServerUrl = settings.ServerUrl;
         Api = new FileManagerApiClient(ServerUrl);
@@ -163,11 +163,19 @@ public partial class MainWindowViewModel : ViewModelBase
         await ApplyServerUrlCommand.ExecuteAsync(null);
     }
 
-    private async Task LoadPluginCommandsAsync()
+    /// <summary>
+    /// Обновляет кеш команд из GET /commands. Список заменяется, только если он изменился: пункты
+    /// открытого подменю не должны пересоздаваться зря. Привязан к пункту «Плагины» (родитель подменю).
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadPluginCommands()
     {
         try
         {
             var commands = await Api.GetCommandsAsync();
+            if (commands.Select(c => (c.Id, c.Title)).SequenceEqual(PluginCommands.Select(c => (c.Id, c.Title))))
+                return;
+
             PluginCommands.Clear();
             foreach (var command in commands)
                 PluginCommands.Add(command);
