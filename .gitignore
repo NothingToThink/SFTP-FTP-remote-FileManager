@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 
 # Песочница Local-протокола Backend
 Backend/tmp/
+
+# Claude Code: личные настройки не коммитим
+.claude/settings.local.json
