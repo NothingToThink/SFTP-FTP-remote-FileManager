@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Backend.Ui;
+using FileManager.Plugins;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc.Testing;

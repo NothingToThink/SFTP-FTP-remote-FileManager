@@ -1,3 +1,4 @@
+using FileManager.Plugins;
 using Backend.Hubs;
 using Microsoft.AspNetCore.SignalR;
 

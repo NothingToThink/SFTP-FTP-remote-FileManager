@@ -25,4 +25,16 @@
     <ProjectReference Include="..\Backend\Backend.csproj" />
   </ItemGroup>
 
+  <!-- Plugins for the host tests: built before the tests and published next to them (testplugins/<name>). -->
+  <ItemGroup>
+    <TestPlugin Include="..\plugins\Sample.Echo\Sample.Echo.csproj" PublishName="Sample.Echo" />
+    <TestPlugin Include="..\Tests.Plugins\DepPlugin\DepPlugin.csproj" PublishName="DepPlugin" />
+    <ProjectReference Include="@(TestPlugin)" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="PublishTestPlugins" AfterTargets="Build">
+    <MSBuild Projects="%(TestPlugin.FullPath)" Targets="Publish"
+             Properties="NoBuild=true;PublishDir=$(MSBuildProjectDirectory)/$(OutDir)testplugins\%(TestPlugin.PublishName)\" />
+  </Target>
+
 </Project>
