@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -8,6 +9,14 @@ using FileManagerClient.Api;
 using FileManagerClient.ViewModels;
 
 namespace FileManagerClient.Services;
+
+/// <summary>Значок диалога сообщения (severity из канала плагинов: info / warning / error).</summary>
+public enum DialogSeverity
+{
+    Info,
+    Warning,
+    Error,
+}
 
 /// <summary>
 /// Модальные диалоги и файловые пикеры. Интерфейс — для подмены в тестах
@@ -21,6 +30,21 @@ public interface IDialogService
     Task<string?> PickOpenFileAsync(string title);
     Task<string?> PickSaveFileAsync(string suggestedName);
     Task<bool> ShowProfileEditorAsync(ProfileEditViewModel viewModel);
+
+    /// <summary>
+    /// Сообщение с произвольными кнопками и значком по <paramref name="severity"/>.
+    /// Возвращает текст нажатой кнопки или null, если окно закрыли. Реализация по умолчанию —
+    /// «окна нет» (null): так подмены IDialogService в тестах не обязаны её реализовывать.
+    /// </summary>
+    Task<string?> ShowMessageBoxAsync(DialogSeverity severity, string message, IReadOnlyList<string> buttons)
+        => Task.FromResult<string?>(null);
+
+    /// <summary>
+    /// Поле ввода: подсказка, начальное значение, плейсхолдер, режим пароля.
+    /// Возвращает введённую строку или null при отмене. Реализация по умолчанию — null.
+    /// </summary>
+    Task<string?> ShowInputBoxAsync(string prompt, string? value, string? placeholder, bool password)
+        => Task.FromResult<string?>(null);
 
     /// <summary>Немодальное окно туннелей (живёт рядом с главным окном).</summary>
     void ShowTunnelsWindow(TunnelsViewModel viewModel);
@@ -103,6 +127,115 @@ public class DialogService : IDialogService
         return result;
     }
 
+    public async Task<string?> ShowMessageBoxAsync(DialogSeverity severity, string message,
+        IReadOnlyList<string> buttons)
+    {
+        if (Owner is null)
+            return null;
+
+        var (title, glyph, brush) = severity switch
+        {
+            DialogSeverity.Warning => ("Предупреждение", "!", Brushes.Orange),
+            DialogSeverity.Error => ("Ошибка", "×", Brushes.IndianRed),
+            _ => ("Информация", "i", Brushes.SteelBlue),
+        };
+
+        var icon = new Border
+        {
+            Width = 32,
+            Height = 32,
+            CornerRadius = new CornerRadius(16),
+            Background = brush,
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = new TextBlock
+            {
+                Text = glyph,
+                FontSize = 20,
+                FontWeight = FontWeight.Bold,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        AutomationProperties.SetAutomationId(icon, "UiMessageIcon");
+
+        var text = new TextBlock
+        {
+            Text = message,
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 480,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        AutomationProperties.SetAutomationId(text, "UiMessageText");
+
+        var body = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14 };
+        body.Children.Add(icon);
+        body.Children.Add(text);
+
+        var (dialog, buttonPanel) = BuildDialog(title, message: null, content: body);
+        AutomationProperties.SetAutomationId(dialog, "UiMessageDialog");
+
+        string? result = null;
+        var single = buttons.Count == 1;
+        for (var i = 0; i < buttons.Count; i++)
+        {
+            var label = buttons[i];
+            // Enter/Esc привязаны только к единственной кнопке: у «Разрешить / Отклонить»
+            // нет кнопки по умолчанию, чтобы случайный Enter не разрешил запись.
+            var button = new Button { Content = label, MinWidth = 90, IsDefault = single, IsCancel = single };
+            AutomationProperties.SetAutomationId(button, $"UiMessageButton{i}");
+            button.Click += (_, _) =>
+            {
+                result = label;
+                dialog.Close();
+            };
+            buttonPanel.Children.Add(button);
+        }
+
+        await dialog.ShowDialog<object?>(Owner);
+        return result;
+    }
+
+    public async Task<string?> ShowInputBoxAsync(string prompt, string? value, string? placeholder, bool password)
+    {
+        if (Owner is null)
+            return null;
+
+        var input = new TextBox
+        {
+            Text = value ?? string.Empty,
+            PlaceholderText = placeholder,
+            PasswordChar = password ? '•' : default,
+            MinWidth = 360,
+        };
+        AutomationProperties.SetAutomationId(input, "UiInputTextBox");
+
+        var promptBlock = new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap };
+        AutomationProperties.SetAutomationId(promptBlock, "UiInputPrompt");
+        var content = new StackPanel { Spacing = 12 };
+        content.Children.Add(promptBlock);
+        content.Children.Add(input);
+
+        var (dialog, buttons) = BuildDialog("Ввод", message: null, content);
+        AutomationProperties.SetAutomationId(dialog, "UiInputDialog");
+
+        string? result = null;
+        var ok = new Button { Content = "OK", Width = 90, IsDefault = true };
+        var cancel = new Button { Content = "Отмена", Width = 90, IsCancel = true };
+        AutomationProperties.SetAutomationId(ok, "UiInputOkButton");
+        AutomationProperties.SetAutomationId(cancel, "UiInputCancelButton");
+        ok.Click += (_, _) =>
+        {
+            result = input.Text ?? string.Empty;
+            dialog.Close();
+        };
+        cancel.Click += (_, _) => dialog.Close();
+
+        AddButtons((dialog, buttons), ok, cancel);
+        await dialog.ShowDialog<object?>(Owner);
+        return result;
+    }
+
     public async Task<string?> PickOpenFileAsync(string title)
     {
         if (Owner is null)
@@ -162,7 +295,7 @@ public class DialogService : IDialogService
         return await window.ShowDialog<bool>(Owner);
     }
 
-    private static (Window Dialog, StackPanel Buttons) BuildDialog(string title, string message, Control? content)
+    private static (Window Dialog, StackPanel Buttons) BuildDialog(string title, string? message, Control? content)
     {
         var panel = new StackPanel
         {
@@ -171,11 +304,14 @@ public class DialogService : IDialogService
             MaxWidth = 560,
         };
 
-        panel.Children.Add(new TextBlock
+        if (message is not null)
         {
-            Text = message,
-            TextWrapping = TextWrapping.Wrap,
-        });
+            panel.Children.Add(new TextBlock
+            {
+                Text = message,
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
 
         if (content is not null)
             panel.Children.Add(content);
