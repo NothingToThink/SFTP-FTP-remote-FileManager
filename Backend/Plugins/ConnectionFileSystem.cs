@@ -117,7 +117,7 @@ public sealed class ConnectionFileSystem(IConnectionManager connections, IWriteC
     }
 
     // The one path of every change: check, ask the user, check again (the answer can take a while and the
-    // check is also what makes "overwrite: false" hold), then act.
+    // check is also what makes "overwrite: false" hold; if it now describes another action, nothing is done), then act.
     // "check" throws if the change is impossible and returns the action text for the dialog.
     private Task ChangeAsync(Guid connectionId, string path, string? destination,
         Func<Connection, CancellationToken, Task<string>> check, Func<Connection, CancellationToken, Task> act,
@@ -129,8 +129,12 @@ public sealed class ConnectionFileSystem(IConnectionManager connections, IWriteC
 
             await confirmation.ConfirmAsync(pluginDisplayName, connectionId, action, path, destination, ct);
 
+            // The state the user agreed to must still be the state we act on: a file that became a folder
+            // (or a new file that appeared) while the dialog was open would change what "yes" means.
             connection = GetConnection(connectionId, path);
-            await check(connection, ct);
+            if (await check(connection, ct) != action)
+                throw new IOException($"'{path}' изменился, пока ждали подтверждения. Действие не выполнено.");
+
             await act(connection, ct);
             return 0;
         });

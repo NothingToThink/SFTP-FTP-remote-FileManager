@@ -20,6 +20,17 @@ public sealed class AllowingConfirmation : IWriteConfirmation
     }
 }
 
+/// <summary>Confirmation that says yes, but first does something while the user "is thinking".</summary>
+public sealed class ConfirmationThatChangesThings(Action whileAsking) : IWriteConfirmation
+{
+    public Task ConfirmAsync(string pluginName, Guid connectionId, string action, string path, string? destination,
+        CancellationToken ct)
+    {
+        whileAsking();
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>A LocalConnection that fails the way SFTP or the OS would.</summary>
 public sealed class FaultyConnection(string root, Exception error) : LocalConnection(root)
 {
@@ -381,5 +392,34 @@ public sealed class PluginFileSystemTests : IDisposable
     {
         await Assert.ThrowsAsync<ArgumentException>(() => _fs.StatAsync(_id, path));
         await Assert.ThrowsAsync<ArgumentException>(() => _fs.WriteAsync(_id, path, Text("x"), overwrite: true));
+    }
+
+    [Fact]
+    public async Task Delete_Is_Not_Run_If_A_File_Became_A_Folder_While_The_User_Was_Asked()
+    {
+        File.WriteAllText(Disk("target"), "file");
+        var fs = new ConnectionFileSystem(_manager, new ConfirmationThatChangesThings(() =>
+        {
+            File.Delete(Disk("target"));
+            Directory.CreateDirectory(Disk("target/inner"));
+            File.WriteAllText(Disk("target/inner/precious.txt"), "keep");
+        }), "Test Plugin");
+
+        var error = await Assert.ThrowsAsync<IOException>(() => fs.DeleteAsync(_id, "/target", recursive: true));
+
+        Assert.Contains("изменился", error.Message);
+        Assert.Equal("keep", File.ReadAllText(Disk("target/inner/precious.txt")));
+    }
+
+    [Fact]
+    public async Task Write_Is_Not_Run_If_The_File_Appeared_While_The_User_Was_Asked()
+    {
+        var fs = new ConnectionFileSystem(_manager,
+            new ConfirmationThatChangesThings(() => File.WriteAllText(Disk("new.txt"), "someone else's")), "Test Plugin");
+
+        var error = await Assert.ThrowsAsync<IOException>(() => fs.WriteAsync(_id, "/new.txt", Text("mine"), overwrite: true));
+
+        Assert.Contains("изменился", error.Message);
+        Assert.Equal("someone else's", File.ReadAllText(Disk("new.txt")));
     }
 }
