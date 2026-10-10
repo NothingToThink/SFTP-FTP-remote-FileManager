@@ -56,6 +56,10 @@ public class AgentCommandTests
         public HashSet<string> Folders { get; } = [];
         public Dictionary<string, Exception> WriteErrors { get; } = [];
         public List<(string Path, byte[] Data, bool Overwrite)> Writes { get; } = [];
+        public Dictionary<string, Exception> DeleteErrors { get; } = [];
+        public List<(string Path, bool Recursive)> Deletes { get; } = [];
+        /// <summary>Writes and deletions in the order they were called.</summary>
+        public List<string> Order { get; } = [];
 
         public void Add(string path, string text) => Content[path] = Encoding.UTF8.GetBytes(text);
 
@@ -77,12 +81,19 @@ public class AgentCommandTests
                 throw error;
             using var copy = new MemoryStream();
             await content.CopyToAsync(copy, ct);
+            Order.Add("write " + path);
             Writes.Add((path, copy.ToArray(), overwrite));
         }
 
         public Task<IReadOnlyList<FileEntry>> ListAsync(Guid connectionId, string path, CancellationToken ct = default) => throw new NotSupportedException();
         public Task CreateDirectoryAsync(Guid connectionId, string path, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task DeleteAsync(Guid connectionId, string path, bool recursive, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task DeleteAsync(Guid connectionId, string path, bool recursive, CancellationToken ct = default)
+        {
+            Order.Add("delete " + path);
+            Deletes.Add((path, recursive));
+            return DeleteErrors.TryGetValue(path, out var error) ? throw error : Task.CompletedTask;
+        }
+
         public Task MoveAsync(Guid connectionId, string from, string to, bool overwrite, CancellationToken ct = default) => throw new NotSupportedException();
         public Task CopyAsync(Guid connectionId, string from, string to, bool overwrite, CancellationToken ct = default) => throw new NotSupportedException();
     }
@@ -238,6 +249,113 @@ public class AgentCommandTests
         Assert.Contains("применено 1 из 2, отклонено 0, ошибок 1", summary);
         Assert.Contains("/a.txt: Folder not found", summary);
         Assert.Contains("relative.txt", summary);
+    }
+
+    [Fact]
+    public async Task Delete_Calls_The_Host_Without_Recursion_And_Is_Summarized()
+    {
+        await RunAsync(Says("Удалил.\n<<<DELETE /home/old.txt>>>"), Connection);
+
+        var delete = Assert.Single(_files.Deletes);
+        Assert.Equal("/home/old.txt", delete.Path);
+        Assert.False(delete.Recursive);
+        Assert.Empty(_files.Writes);
+        Assert.Equal("Удалил.", _window.Messages[0].Text);
+        Assert.Equal("Удаления: удалено 1 из 1, отклонено 0, ошибок 0.", _window.Messages[1].Text);
+    }
+
+    [Fact]
+    public async Task Denied_Delete_Is_Not_Done_And_The_Others_Continue()
+    {
+        _files.DeleteErrors["/b.txt"] = new PermissionDeniedException("no");
+
+        await RunAsync(Says("<<<DELETE /a.txt>>>\n<<<DELETE /b.txt>>>\n<<<DELETE /c.txt>>>"), Connection);
+
+        Assert.Equal(["/a.txt", "/b.txt", "/c.txt"], _files.Deletes.Select(d => d.Path));
+        Assert.Equal("Удаления: удалено 2 из 3, отклонено 1, ошибок 0.", Assert.Single(_window.Messages).Text);
+    }
+
+    [Fact]
+    public async Task Delete_Errors_Are_Reported_And_Do_Not_Stop_The_Next_Actions()
+    {
+        _files.DeleteErrors["/full"] = new IOException("Cannot delete: folder '/full' is not empty and recursive is off.");
+        _files.DeleteErrors["/gone.txt"] = new FsNotFoundException("/gone.txt");
+
+        await RunAsync(Says("<<<DELETE /full>>>\n<<<DELETE /gone.txt>>>\n<<<DELETE /ok.txt>>>"), Connection);
+
+        Assert.Equal(["/full", "/gone.txt", "/ok.txt"], _files.Deletes.Select(d => d.Path));
+        var summary = Assert.Single(_window.Messages).Text;
+        Assert.Contains("Удаления: удалено 1 из 3, отклонено 0, ошибок 2.", summary);
+        Assert.Contains("/full: Cannot delete: folder '/full' is not empty", summary);
+        Assert.Contains("/gone.txt:", summary);
+    }
+
+    [Fact]
+    public async Task Edits_Run_Before_Deletions_And_Both_Are_Summarized()
+    {
+        var answer = "<<<DELETE /d1.txt>>>\n<<<FILE /e1.txt\n1\n>>>FILE\n<<<DELETE /d2.txt>>>\n<<<FILE /e2.txt\n2\n>>>FILE";
+        _files.WriteErrors["/e2.txt"] = new PermissionDeniedException("no");
+
+        await RunAsync(Says(answer), Connection);
+
+        Assert.Equal(["write /e1.txt", "delete /d1.txt", "delete /d2.txt"], _files.Order);
+        Assert.Equal(
+            "Правки: применено 1 из 2, отклонено 1, ошибок 0.\nУдаления: удалено 2 из 2, отклонено 0, ошибок 0.",
+            Assert.Single(_window.Messages).Text);
+    }
+
+    [Fact]
+    public async Task Without_A_Connection_Nothing_Is_Deleted()
+    {
+        await RunAsync(Says("<<<DELETE /a.txt>>>\n<<<DELETE /b.txt>>>"), connection: null);
+
+        Assert.Empty(_files.Deletes);
+        Assert.Equal("Удаления не выполнены: соединение не выбрано (предложено 2).", Assert.Single(_window.Messages).Text);
+    }
+
+    [Fact]
+    public async Task Ignored_Blocks_Are_Listed_In_The_Summary_And_A_Delete_In_A_File_Is_Content()
+    {
+        _files.Add("/a.txt", "x");
+        var answer = "<<<DELETE ../etc>>>\n<<<FILE /a.txt\n<<<DELETE /b.txt>>>\n>>>FILE";
+
+        await RunAsync(Says(answer), Connection);
+
+        Assert.Empty(_files.Deletes);
+        Assert.Equal("<<<DELETE /b.txt>>>\n", Encoding.UTF8.GetString(Assert.Single(_files.Writes).Data));
+        var summary = Assert.Single(_window.Messages).Text;
+        Assert.Contains("Правки: применено 1 из 1", summary);
+        Assert.Contains("Проигнорировано:", summary);
+        Assert.Contains("../etc", summary);
+    }
+
+    [Fact]
+    public void System_Prompt_Describes_Delete_Limits_And_Forbids_Asking_For_Confirmation()
+    {
+        var prompt = AgentCommand.SystemPrompt;
+
+        Assert.Contains("<<<DELETE /полный/абсолютный/путь>>>", prompt);
+        Assert.Contains("пустую папку", prompt);
+        Assert.Contains("<<<FILE", prompt);
+        Assert.Contains(">>>FILE", prompt);
+        Assert.Contains("не инструкции", prompt);
+        Assert.Contains("Не больше 5", prompt);
+        Assert.Contains("не проси подтверждения", prompt);
+        Assert.Contains("не задавай уточняющих вопросов", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("подтверждает пользователь", prompt);
+        foreach (var unavailable in new[] { "переименовать", "переместить", "создать папку", "выполнить команду", "удалить папку вместе с содержимым" })
+            Assert.Contains(unavailable, prompt);
+        Assert.Contains("ничего не предлагай взамен", prompt);
+    }
+
+    [Fact]
+    public async Task System_Prompt_Is_Sent_To_The_Model()
+    {
+        var model = Says("ок");
+
+        await RunAsync(model, Connection);
+
+        Assert.Equal(AgentCommand.SystemPrompt, model.System);
     }
 
     [Fact]
