@@ -1,0 +1,33 @@
+name: No agent attribution
+
+# Отклоняет PR, если в коммитах или описании есть строки соавторства
+# или подписи агентов (правило из AGENTS.md).
+on:
+  pull_request:
+    branches: [main, dev]
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Commits and PR description have no co-authors or agent signatures
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='co-authored-by:|claude-session:|generated with \[?claude'
+          if git log --format=%B "$BASE_SHA..$HEAD_SHA" | grep -inE "$pattern"; then
+            echo "::error::В коммитах есть строки соавторства или подписи агента — см. AGENTS.md"
+            exit 1
+          fi
+          if printf '%s' "$PR_BODY" | grep -inE "$pattern"; then
+            echo "::error::В описании PR есть подпись агента — см. AGENTS.md"
+            exit 1
+          fi
