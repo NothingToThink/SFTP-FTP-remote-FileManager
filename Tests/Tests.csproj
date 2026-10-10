@@ -32,9 +32,16 @@
     <ProjectReference Include="@(TestPlugin)" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <!-- The agent plugin is also referenced for real: the scenario tests use its classes with fake dependencies. -->
+  <ItemGroup>
+    <ProjectReference Include="..\plugins\VolcanoBoys.Agent\VolcanoBoys.Agent.csproj" />
+  </ItemGroup>
+
   <Target Name="PublishTestPlugins" AfterTargets="Build">
     <MSBuild Projects="%(TestPlugin.FullPath)" Targets="Publish"
              Properties="NoBuild=true;PublishDir=$(MSBuildProjectDirectory)/$(OutDir)testplugins\%(TestPlugin.PublishName)\" />
+    <MSBuild Projects="..\plugins\VolcanoBoys.Agent\VolcanoBoys.Agent.csproj" Targets="Publish"
+             Properties="NoBuild=true;PublishDir=$(MSBuildProjectDirectory)/$(OutDir)testplugins\VolcanoBoys.Agent\" />
   </Target>
 
 </Project>
