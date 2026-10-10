@@ -190,9 +190,9 @@ public static class SmokeTest
         var payload = $"ui-smoke {DateTime.Now:O} — проверка upload/download";
         await File.WriteAllTextAsync(localUpload, payload);
 
-        Step("POST filesystem/file/upload (multipart)", () =>
+        Step("POST filesystem/file/upload (localPath в query)", () =>
             api.UploadFileAsync(connectionId, "ui-smoke-uploaded.txt", localUpload).Wait());
-        Step("GET filesystem/file/download + сравнение содержимого", () =>
+        Step("GET filesystem/file/download (localPath) + сравнение содержимого", () =>
         {
             api.DownloadFileAsync(connectionId, "ui-smoke-uploaded.txt", localDownload).Wait();
             var downloaded = File.ReadAllText(localDownload);
