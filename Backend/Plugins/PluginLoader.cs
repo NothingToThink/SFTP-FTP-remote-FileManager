@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Core.Interfaces.Manager;
 using Core.Utils;
 using FileManager.Plugins;
 
@@ -11,7 +12,8 @@ namespace Backend.Plugins;
 public sealed class PluginLoader(
     CommandRegistry registry,
     IWindow window,
-    IFileSystem files,
+    IConnectionManager connections,
+    IWriteConfirmation confirmation,
     ILoggerFactory loggerFactory,
     ILogger<PluginLoader> logger) : IHostedService
 {
@@ -71,6 +73,8 @@ public sealed class PluginLoader(
             var instance = (IPlugin)(Activator.CreateInstance(type)
                                      ?? throw new InvalidOperationException($"Cannot create '{type.FullName}'."));
 
+            // One IFileSystem per plugin: the confirmation dialog names the plugin that asks.
+            var files = new ConnectionFileSystem(connections, confirmation, plugin.DisplayName);
             var pluginContext = new PluginContext(new PluginCommandService(plugin), window, files,
                 new PluginLogger(plugin.Logger));
             await instance.ActivateAsync(pluginContext, ct);
