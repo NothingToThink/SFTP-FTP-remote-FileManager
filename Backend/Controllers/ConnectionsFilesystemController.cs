@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Backend.DTO;
 using Core.Interfaces.Manager;
 using Microsoft.AspNetCore.Http;
@@ -40,14 +41,16 @@ public class ConnectionsFilesystemController(
     /// Retrieves detailed metadata for a specific file or folder.
     /// </summary>
     /// <param name="connectionId">Unique connection identifier.</param>
-    /// <param name="path">Target path on the remote file system.</param>
+    /// <param name="path">Target path on the remote file system, passed as the <c>path</c> query parameter.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <response code="200">File/folder metadata retrieved successfully.</response>
+    /// <response code="400">The <c>path</c> query parameter is missing or empty.</response>
     /// <response code="404">Path or connection instance not found.</response>
     [HttpGet("info")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetFileInfo([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
+    public async Task<IActionResult> GetFileInfo([FromRoute] Guid connectionId, [FromQuery, Required] string path, CancellationToken ct)
     {
         logger.LogInformation("Getting file info.");
         var connection = connectionManager.GetConnection(connectionId);
@@ -58,15 +61,17 @@ public class ConnectionsFilesystemController(
     /// Calculates the total size of a directory, including all nested files.
     /// </summary>
     /// <param name="connectionId">Unique connection identifier.</param>
-    /// <param name="path">Path of the directory on the remote file system.</param>
+    /// <param name="path">Path of the directory on the remote file system, passed as the <c>path</c> query parameter.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Total size of the directory contents in bytes.</returns>
     /// <response code="200">Directory size calculated successfully.</response>
+    /// <response code="400">The <c>path</c> query parameter is missing or empty.</response>
     /// <response code="404">Directory or connection instance not found.</response>
     [HttpGet("dir/size")]
     [ProducesResponseType(typeof(long), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetDirSize([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
+    public async Task<IActionResult> GetDirSize([FromRoute] Guid connectionId, [FromQuery, Required] string path, CancellationToken ct)
     {
         logger.LogInformation("Getting directory size.");
         var connection = connectionManager.GetConnection(connectionId);
@@ -115,14 +120,16 @@ public class ConnectionsFilesystemController(
     /// Deletes a file at the specified path.
     /// </summary>
     /// <param name="connectionId">Unique connection identifier.</param>
-    /// <param name="path">Path of the file to delete.</param>
+    /// <param name="path">Path of the file to delete, passed as the <c>path</c> query parameter.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <response code="200">File deleted successfully.</response>
+    /// <response code="400">The <c>path</c> query parameter is missing or empty.</response>
     /// <response code="404">File not found.</response>
     [HttpDelete("file")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteFile([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
+    public async Task<IActionResult> DeleteFile([FromRoute] Guid connectionId, [FromQuery, Required] string path, CancellationToken ct)
     {
         logger.LogInformation("Deleting file.");
         var connection = connectionManager.GetConnection(connectionId);
@@ -134,14 +141,16 @@ public class ConnectionsFilesystemController(
     /// Deletes a directory at the specified path.
     /// </summary>
     /// <param name="connectionId">Unique connection identifier.</param>
-    /// <param name="path">Path of the directory to delete.</param>
+    /// <param name="path">Path of the directory to delete, passed as the <c>path</c> query parameter.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <response code="200">Directory deleted successfully.</response>
+    /// <response code="400">The <c>path</c> query parameter is missing or empty.</response>
     /// <response code="404">Directory not found.</response>
     [HttpDelete("dir")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteDir([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
+    public async Task<IActionResult> DeleteDir([FromRoute] Guid connectionId, [FromQuery, Required] string path, CancellationToken ct)
     {
         logger.LogInformation("Deleting directory.");
         var connection = connectionManager.GetConnection(connectionId);
@@ -191,13 +200,15 @@ public class ConnectionsFilesystemController(
     /// Checks if a file exists at the specified path.
     /// </summary>
     /// <param name="connectionId">Unique connection identifier.</param>
-    /// <param name="path">Target file path.</param>
+    /// <param name="path">Target file path, passed as the <c>path</c> query parameter.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns><c>true</c> if the file exists; otherwise, <c>false</c>.</returns>
     /// <response code="200">Returns existence status.</response>
+    /// <response code="400">The <c>path</c> query parameter is missing or empty.</response>
     [HttpGet("file/exists")]
     [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
-    public async Task<IActionResult> FileExists([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> FileExists([FromRoute] Guid connectionId, [FromQuery, Required] string path, CancellationToken ct)
     {
         logger.LogInformation("Checking if the file exists.");
         var connection = connectionManager.GetConnection(connectionId);
@@ -208,13 +219,15 @@ public class ConnectionsFilesystemController(
     /// Checks if a directory exists at the specified path.
     /// </summary>
     /// <param name="connectionId">Unique connection identifier.</param>
-    /// <param name="path">Target directory path.</param>
+    /// <param name="path">Target directory path, passed as the <c>path</c> query parameter.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns><c>true</c> if the directory exists; otherwise, <c>false</c>.</returns>
     /// <response code="200">Returns existence status.</response>
+    /// <response code="400">The <c>path</c> query parameter is missing or empty.</response>
     [HttpGet("dir/exists")]
     [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
-    public async Task<IActionResult> DirExists([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> DirExists([FromRoute] Guid connectionId, [FromQuery, Required] string path, CancellationToken ct)
     {
         logger.LogInformation("Checking if the directory exists.");
         var connection = connectionManager.GetConnection(connectionId);
