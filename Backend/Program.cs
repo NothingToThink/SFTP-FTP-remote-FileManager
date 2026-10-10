@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Backend.Hubs;
 using Backend.Middleware;
+using Backend.Ui;
 using Backend.Services;
 using Core.Implementations.Factory;
 using Core.PortForwarding;
@@ -54,6 +56,19 @@ try
             };
         });
 
+    builder.Services.AddSignalR()
+        .AddJsonProtocol(options =>
+        {
+            // Same rules as the controllers (camelCase, string enums); severity goes out as "info"/"warning"/"error".
+            options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
+            options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        });
+    builder.Services.AddSingleton(TimeProvider.System);
+    builder.Services.AddSingleton<IUiSessionRegistry, UiSessionRegistry>();
+    builder.Services.AddSingleton<IUiBridge, UiBridge>();
+    builder.Services.AddSingleton<UiDemoRunner>();
+
     builder.Services.AddSingleton<ICredentialProtectionService, Base64CredentialProtectionService>();
     builder.Services.AddSingleton<IProfileStorage>(sp =>
     {
@@ -99,6 +114,9 @@ try
     app.UseCors(policy => policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
     app.UseMiddleware<ExceptionMiddleware>();
     app.MapControllers();
+    app.MapHub<UiHub>("/hubs/ui");
+    if (app.Environment.IsDevelopment())
+        app.MapUiDemo();
     app.Run();
 }
 catch (Exception e)
