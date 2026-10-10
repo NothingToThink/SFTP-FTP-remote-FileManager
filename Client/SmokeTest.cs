@@ -76,6 +76,30 @@ public static class SmokeTest
         // Профили
         Step("GET /profiles (список id)", () => api.GetProfileIdsAsync().Wait());
 
+        // Команды плагинов (список может быть пустым, если плагины не установлены)
+        var commands = new List<PluginCommand>();
+        Step("GET /commands (список команд плагинов)", () =>
+        {
+            commands = api.GetCommandsAsync().Result;
+            var broken = commands.FirstOrDefault(c => c.Id.Length == 0 || c.Title.Length == 0 || c.PluginId.Length == 0);
+            if (broken is not null)
+                throw new Exception($"команда разобрана неверно: id=«{broken.Id}» title=«{broken.Title}» plugin=«{broken.PluginId}»");
+        });
+        Step("POST /commands/{id}/execute без живой UI-сессии → 400", () =>
+        {
+            if (commands.Count == 0)
+                return;
+            try
+            {
+                api.ExecuteCommandAsync(commands[0].Id, "smoke-no-such-session", null, null, []).Wait();
+            }
+            catch (AggregateException ae) when (ae.InnerException is ApiException { StatusCode: 400 })
+            {
+                return;
+            }
+            throw new Exception("ожидали 400 для сессии, не подключённой к хабу");
+        });
+
         var tempProfile = SavedProfile.Create(
             $"ui-smoke-{Guid.NewGuid():N}"[..40],
             new HostProfile(string.Empty, Protocol.Local, new AnonymousAuth()));

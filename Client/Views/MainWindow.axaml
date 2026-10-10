@@ -12,20 +12,27 @@
 
     <Window.Resources>
         <conv:ServerStatusToBrushConverter x:Key="StatusBrush"/>
+        <conv:ChannelStateToBrushConverter x:Key="ChannelBrush"/>
     </Window.Resources>
 
     <DockPanel>
         <!-- Статус-бар: состояние сервера + настройки (шестерёнка) -->
         <Border DockPanel.Dock="Bottom" Padding="16,6" Background="{StaticResource BgPanelBrush}"
                 BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,0,1">
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
                 <Ellipse Grid.Column="0" Name="ServerStatusDot" Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,8,0"
                          Fill="{Binding ServerStatus, Converter={StaticResource StatusBrush}}"/>
-                <TextBlock Grid.Column="1" Name="StatusTextBlock" Classes="muted" Text="{Binding StatusText}"
+                <!-- Канал диалогов Backend → клиент (хаб /hubs/ui) -->
+                <Ellipse Grid.Column="1" Name="ChannelStatusDot" Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,8,0"
+                         AutomationProperties.AutomationId="ChannelStatusDot"
+                         AutomationProperties.Name="{Binding ChannelText}"
+                         ToolTip.Tip="{Binding ChannelText}"
+                         Fill="{Binding ChannelState, Converter={StaticResource ChannelBrush}}"/>
+                <TextBlock Grid.Column="2" Name="StatusTextBlock" Classes="muted" Text="{Binding StatusText}"
                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                <ProgressBar Grid.Column="2" IsIndeterminate="True" Width="120" HorizontalAlignment="Right"
+                <ProgressBar Grid.Column="3" IsIndeterminate="True" Width="120" HorizontalAlignment="Right"
                              IsVisible="{Binding IsBusy}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <Button Grid.Column="3" Name="ServerSettingsButton" Classes="icon" ToolTip.Tip="Настройки сервера"
+                <Button Grid.Column="4" Name="ServerSettingsButton" Classes="icon" ToolTip.Tip="Настройки сервера"
                         AutomationProperties.Name="Настройки сервера"
                         AutomationProperties.AutomationId="ServerSettingsButton"
                         Command="{Binding OpenServerSettingsCommand}">
@@ -213,6 +220,11 @@
                             <MenuItem Header="Свойства" Command="{Binding Browser.ShowInfoCommand}"/>
                             <Separator/>
                             <MenuItem Header="Удалить" Command="{Binding Browser.DeleteCommand}"/>
+                            <!-- Подменю плагинов: пункты строятся в коде (MainWindow.RebuildPluginsMenu) из кеша команд -->
+                            <Separator Name="PluginsSeparator" IsVisible="{Binding HasPluginCommands}"/>
+                            <MenuItem Name="PluginsMenuItem" Header="Плагины" Command="{Binding LoadPluginCommandsCommand}"
+                                      AutomationProperties.AutomationId="PluginsMenuItem"
+                                      IsVisible="{Binding HasPluginCommands}"/>
                         </ContextMenu>
                     </DataGrid.ContextMenu>
                     <DataGrid.Columns>

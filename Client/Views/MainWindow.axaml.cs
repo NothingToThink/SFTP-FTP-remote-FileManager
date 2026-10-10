@@ -1,3 +1,4 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
@@ -12,6 +13,14 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+            vm.PluginCommands.CollectionChanged += (_, _) => RebuildPluginsMenu();
+            RebuildPluginsMenu();
+        };
+
         // Drag&drop: окно целиком регистрируется как drop-цель (DragDropDevice в Avalonia
         // выбирает целью сам хит-тест элемент — AllowDrop наследуется от корня на всё дерево),
         // а зону файловой панели определяем по границам DropArea. Обработчики с handledEventsToo,
@@ -23,6 +32,26 @@ public partial class MainWindow : Window
             Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(DragDrop.DropEvent, OnRootDrop,
             Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+    }
+
+    /// <summary>Пункты подменю «Плагины» из кеша команд; перестраивается при каждом изменении кеша.</summary>
+    private void RebuildPluginsMenu()
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        PluginsMenuItem.Items.Clear();
+        foreach (var command in vm.PluginCommands)
+        {
+            var item = new MenuItem
+            {
+                Header = command.Title,
+                Command = vm.ExecutePluginCommandCommand,
+                CommandParameter = command,
+            };
+            AutomationProperties.SetAutomationId(item, $"PluginCommand:{command.Id}");
+            PluginsMenuItem.Items.Add(item);
+        }
     }
 
     private void FilesGridDoubleTapped(object? sender, TappedEventArgs e)

@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using FileManagerClient.Models;
+using FileManagerClient.Services;
 using FileManagerClient.ViewModels;
 
 namespace FileManagerClient.Converters;
@@ -48,6 +49,24 @@ public class ServerStatusToBrushConverter : IValueConverter
             ServerStatus.Unreachable => Unreachable,
             ServerStatus.Checking => Checking,
             _ => Unknown,
+        };
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+public class ChannelStateToBrushConverter : IValueConverter
+{
+    private static readonly IBrush Connected = new SolidColorBrush(Color.Parse("#5FB57C"));
+    private static readonly IBrush Pending = new SolidColorBrush(Color.Parse("#E8A33D"));
+    private static readonly IBrush Disconnected = new SolidColorBrush(Color.Parse("#667083"));
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value switch
+        {
+            UiChannelState.Connected => Connected,
+            UiChannelState.Connecting or UiChannelState.Reconnecting => Pending,
+            _ => Disconnected,
         };
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
