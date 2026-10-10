@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Backend.Hubs;
 using Backend.Middleware;
+using Backend.Plugins;
 using Backend.Ui;
 using Backend.Services;
 using Core.Implementations.Factory;
@@ -68,6 +69,7 @@ try
     builder.Services.AddSingleton<IUiSessionRegistry, UiSessionRegistry>();
     builder.Services.AddSingleton<IUiBridge, UiBridge>();
     builder.Services.AddSingleton<UiDemoRunner>();
+    builder.Services.AddPluginHost();
 
     builder.Services.AddSingleton<ICredentialProtectionService, Base64CredentialProtectionService>();
     builder.Services.AddSingleton<IProfileStorage>(sp =>
@@ -115,6 +117,7 @@ try
     app.UseMiddleware<ExceptionMiddleware>();
     app.MapControllers();
     app.MapHub<UiHub>("/hubs/ui");
+    app.MapPluginCommands();
     if (app.Environment.IsDevelopment())
         app.MapUiDemo();
     app.Run();
