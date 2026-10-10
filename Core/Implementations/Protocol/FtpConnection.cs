@@ -8,23 +8,57 @@ namespace Core.Implementations.Protocol;
 
 public class FtpConnection : Connection
 {
+    private readonly HostProfile _profile;
     private readonly IAsyncFtpClient _client;
 
     public FtpConnection(HostProfile profile)
     {
-        _client = profile.Auth switch
+        _profile = profile;
+        _client = CreateClient();
+    }
+
+    /// <summary>
+    /// Builds a new, not yet connected client. Used for the shared control client and for dedicated
+    /// clients that carry a single long transfer.
+    /// </summary>
+    private AsyncFtpClient CreateClient()
+    {
+        var client = _profile.Auth switch
         {
             PasswordAuth(var user, var pwd)
-                => new AsyncFtpClient(profile.Host, new NetworkCredential(user, pwd), profile.EffectivePort),
+                => new AsyncFtpClient(_profile.Host, new NetworkCredential(user, pwd), _profile.EffectivePort),
 
             AnonymousAuth
-                => new AsyncFtpClient(profile.Host, new NetworkCredential("anonymous", "anonymous@example.com"), profile.EffectivePort),
+                => new AsyncFtpClient(_profile.Host, new NetworkCredential("anonymous", "anonymous@example.com"), _profile.EffectivePort),
 
             KeyAuth
                 => throw new InvalidOperationException("Key authentication is not supported by FTP. Use SFTP instead."),
 
-            _ => throw new ArgumentOutOfRangeException(nameof(profile.Auth))
+            _ => throw new ArgumentOutOfRangeException(nameof(_profile.Auth))
         };
+
+        // Large files: keep sockets alive and do not drop slow transfers.
+        client.Config.SocketKeepAlive = true;
+        client.Config.DataConnectionReadTimeout = 5 * 60 * 1000;
+        client.Config.ReadTimeout = 60 * 1000;
+        client.Config.TransferChunkSize = 256 * 1024;
+        client.Config.LocalFileBufferSize = 256 * 1024;
+        return client;
+    }
+
+    private async Task<AsyncFtpClient> CreateConnectedClientAsync(CancellationToken ct)
+    {
+        var client = CreateClient();
+        try
+        {
+            await client.Connect(ct);
+            return client;
+        }
+        catch
+        {
+            client.Dispose();
+            throw;
+        }
     }
 
     public override bool IsConnected => _client.IsConnected;
@@ -61,14 +95,7 @@ public class FtpConnection : Connection
 
     public override async Task<Stream> GetFileAsync(string path, CancellationToken ct = default)
     {
-        var memoryStream = new MemoryStream();
-        await using (var ftpStream = await _client.OpenRead(path, token: ct))
-        {
-            await ftpStream.CopyToAsync(memoryStream, ct);
-        }
-
-        memoryStream.Position = 0;
-        return memoryStream;
+        return await _client.OpenRead(path, token: ct);
     }
 
     public override async Task<List<string>> GetDirectoriesAsync(string path, CancellationToken ct = default)
@@ -113,7 +140,8 @@ public class FtpConnection : Connection
     public override async Task SaveFileAsync(string remotePath, Stream content, CancellationToken ct = default)
     {
         if (content.CanSeek) content.Position = 0;
-        await _client.UploadStream(content, remotePath, token: ct);
+        using var client = await CreateConnectedClientAsync(ct);
+        await client.UploadStream(content, remotePath, token: ct);
     }
 
     public override async Task CreateFileAsync(string remotePath, CancellationToken ct = default)
@@ -147,8 +175,12 @@ public class FtpConnection : Connection
         if (await _client.DirectoryExists(targetPath, ct))
             throw new InvalidOperationException("Cannot copy file: target file is a directory.");
 
-        await using var ftpStream = await _client.OpenRead(sourcePath, token: ct);
-        await _client.UploadStream(ftpStream, targetPath, token: ct);
+        // One FTP control connection cannot read and write at the same time, so reading and
+        // writing use two separate clients.
+        using var reader = await CreateConnectedClientAsync(ct);
+        using var writer = await CreateConnectedClientAsync(ct);
+        await using var ftpStream = await reader.OpenRead(sourcePath, token: ct);
+        await writer.UploadStream(ftpStream, targetPath, token: ct);
     }
 
     public override async Task CreateDirAsync(string remotePath, CancellationToken ct = default)
@@ -174,7 +206,7 @@ public class FtpConnection : Connection
             throw new InvalidOperationException("Cannot move directory: target directory is a file.");
         await _client.MoveDirectory(sourcePath, targetPath, token: ct);
     }
-    
+
     public override async Task CopyDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
         if (!canOverride)
@@ -186,7 +218,7 @@ public class FtpConnection : Connection
         }
         if (await _client.FileExists(targetPath, ct))
             throw new InvalidOperationException("Cannot copy directory: target directory is a file.");
-        
+
 
         foreach (var item in await GetFilesAsync(sourcePath, ct))
         {
@@ -207,26 +239,26 @@ public class FtpConnection : Connection
 
     private static string GetPermissionsString(int chmod)
     {
-        bool ownerRead    = (chmod & 0x100) != 0;
-        bool ownerWrite   = (chmod & 0x080) != 0;
+        bool ownerRead = (chmod & 0x100) != 0;
+        bool ownerWrite = (chmod & 0x080) != 0;
         bool ownerExecute = (chmod & 0x040) != 0;
-        bool groupRead    = (chmod & 0x020) != 0;
-        bool groupWrite   = (chmod & 0x010) != 0;
+        bool groupRead = (chmod & 0x020) != 0;
+        bool groupWrite = (chmod & 0x010) != 0;
         bool groupExecute = (chmod & 0x008) != 0;
-        bool othersRead   = (chmod & 0x004) != 0;
-        bool othersWrite  = (chmod & 0x002) != 0;
-        bool othersExecute= (chmod & 0x001) != 0;
+        bool othersRead = (chmod & 0x004) != 0;
+        bool othersWrite = (chmod & 0x002) != 0;
+        bool othersExecute = (chmod & 0x001) != 0;
 
         return ""
-               + (ownerRead    ? "r" : "-")
-               + (ownerWrite   ? "w" : "-")
+               + (ownerRead ? "r" : "-")
+               + (ownerWrite ? "w" : "-")
                + (ownerExecute ? "x" : "-")
-               + (groupRead    ? "r" : "-")
-               + (groupWrite   ? "w" : "-")
+               + (groupRead ? "r" : "-")
+               + (groupWrite ? "w" : "-")
                + (groupExecute ? "x" : "-")
-               + (othersRead   ? "r" : "-")
-               + (othersWrite  ? "w" : "-")
-               + (othersExecute? "x" : "-");
+               + (othersRead ? "r" : "-")
+               + (othersWrite ? "w" : "-")
+               + (othersExecute ? "x" : "-");
     }
 
     protected override void DisposeCore()
