@@ -34,14 +34,17 @@ public class UiBridge(IHubContext<UiHub> hub, IUiSessionRegistry registry) : IUi
                 return await hub.Clients.Client(sessionId)
                     .InvokeAsync<string?>(method, argument, disconnected.Token);
             }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            catch (Exception e)
             {
-                throw new UiUnavailableException($"UI client '{sessionId}' disconnected.");
-            }
-            catch (Exception e) when (e is not OperationCanceledException && !registry.IsConnected(sessionId))
-            {
-                // SignalR fails pending client calls when the connection drops.
-                throw new UiUnavailableException($"UI client '{sessionId}' disconnected.", e);
+                // The caller gave up: SignalR reports that as HubException, normalise to cancellation.
+                ct.ThrowIfCancellationRequested();
+
+                // SignalR fails pending client calls with IOException when the connection drops,
+                // possibly before the hub's OnDisconnectedAsync has removed the session.
+                if (disconnected.IsCancellationRequested || e is IOException || !registry.IsConnected(sessionId))
+                    throw new UiUnavailableException($"UI client '{sessionId}' disconnected.", e);
+
+                throw;
             }
         }
         finally
