@@ -87,18 +87,3 @@ public sealed class PluginWindow(IUiBridge bridge) : IWindow
     private static string RequireSession() =>
         UiSessionScope.SessionId ?? throw new UiUnavailableException("No UI client: the dialog was not started by a command.");
 }
-
-/// <summary>File access is H3; until then every call fails.</summary>
-public sealed class NotImplementedFileSystem : IFileSystem
-{
-    private static NotImplementedException NotYet() => new("IFileSystem is not implemented yet.");
-
-    public Task<IReadOnlyList<FileEntry>> ListAsync(Guid connectionId, string path, CancellationToken ct = default) => throw NotYet();
-    public Task<FileEntry> StatAsync(Guid connectionId, string path, CancellationToken ct = default) => throw NotYet();
-    public Task<Stream> OpenReadAsync(Guid connectionId, string path, CancellationToken ct = default) => throw NotYet();
-    public Task WriteAsync(Guid connectionId, string path, Stream content, bool overwrite, CancellationToken ct = default) => throw NotYet();
-    public Task CreateDirectoryAsync(Guid connectionId, string path, CancellationToken ct = default) => throw NotYet();
-    public Task DeleteAsync(Guid connectionId, string path, bool recursive, CancellationToken ct = default) => throw NotYet();
-    public Task MoveAsync(Guid connectionId, string from, string to, bool overwrite, CancellationToken ct = default) => throw NotYet();
-    public Task CopyAsync(Guid connectionId, string from, string to, bool overwrite, CancellationToken ct = default) => throw NotYet();
-}

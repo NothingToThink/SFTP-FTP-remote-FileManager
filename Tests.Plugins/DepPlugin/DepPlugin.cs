@@ -29,6 +29,12 @@ public sealed class DepPlugin : IPlugin
             context.Log.Info($"nobuttons-answer:{answer ?? "null"}");
         });
 
+        context.Commands.Register("test.dep.write", async (command, token) =>
+        {
+            await using var content = new MemoryStream("hello"u8.ToArray());
+            await context.Files.WriteAsync(command.ConnectionId!.Value, "/agent.txt", content, overwrite: false, token);
+        });
+
         context.Commands.Register("test.dep.wait", async (_, token) =>
         {
             await context.Window.ShowMessageAsync(MessageSeverity.Info, "started", ["OK"], token);
