@@ -311,51 +311,64 @@ public class ConnectionsFilesystemController(
     }
 
     /// <summary>
-    /// Uploads a local file to the remote host file system.
+    /// Uploads a file from the local (server) file system to the remote host file system.
     /// </summary>
     /// <param name="connectionId">Unique connection identifier.</param>
+    /// <param name="localPath">Path of the local file to read, passed as the <c>localPath</c> query parameter.</param>
     /// <param name="remotePath">Target path on the remote host.</param>
-    /// <param name="file">Form file binary content (<c>multipart/form-data</c>).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <response code="200">File uploaded successfully.</response>
-    /// <response code="400">Invalid file or upload error.</response>
+    /// <response code="400">Invalid path or upload error.</response>
+    /// <response code="404">Local file not found.</response>
     [HttpPost("file/upload")]
-    [Consumes("multipart/form-data")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UploadFile(
         [FromRoute] Guid connectionId,
-        [FromQuery] string remotePath,
-        IFormFile file,
+        [FromQuery, Required] string localPath,
+        [FromQuery, Required] string remotePath,
         CancellationToken ct)
     {
+        if (!System.IO.File.Exists(localPath))
+            return NotFound();
+
         var connection = connectionManager.GetConnection(connectionId);
-        await using var stream = file.OpenReadStream();
+        await using var stream = new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
         await connection.SaveFileAsync(remotePath, stream, ct);
         return Ok();
     }
 
     /// <summary>
-    /// Downloads a file from the remote host file system.
+    /// Downloads a file from the remote host file system to the local (server) file system.
     /// </summary>
     /// <param name="connectionId">Unique connection identifier.</param>
     /// <param name="path">Remote path of the file to download.</param>
+    /// <param name="localPath">Local path where the file will be written, passed as the <c>localPath</c> query parameter.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>A binary file stream response.</returns>
-    /// <response code="200">File stream returned successfully.</response>
-    /// <response code="404">File not found.</response>
+    /// <response code="200">File downloaded and saved successfully.</response>
+    /// <response code="400">Invalid path or download error.</response>
+    /// <response code="404">Remote file not found.</response>
     [HttpGet("file/download")]
-    [Produces("application/octet-stream")]
-    [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Download(
         [FromRoute] Guid connectionId,
-        [FromQuery] string path,
+        [FromQuery, Required] string path,
+        [FromQuery, Required] string localPath,
         CancellationToken ct)
     {
         var connection = connectionManager.GetConnection(connectionId);
-        var stream = await connection.GetFileAsync(path, ct);
-        return File(stream, "application/octet-stream", Path.GetFileName(path));
+        await using var remoteStream = await connection.GetFileAsync(path, ct);
+
+        var localDir = Path.GetDirectoryName(Path.GetFullPath(localPath));
+        if (!string.IsNullOrEmpty(localDir))
+            Directory.CreateDirectory(localDir);
+
+        await using var localStream = new FileStream(localPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+        await remoteStream.CopyToAsync(localStream, 81920, ct);
+        return Ok();
     }
 
     /// <summary>

@@ -11,6 +11,8 @@ namespace Core.Implementations.Protocol;
 /// </summary>
 public class SftpConnection(ISshSession session) : Connection, ISshSessionProvider
 {
+    private const int CopyBufferSize = 256 * 1024;
+
     public ISshSession Session { get; } = session ?? throw new ArgumentNullException(nameof(session));
 
     public override bool IsConnected => Session.IsConnected;
@@ -101,10 +103,7 @@ public class SftpConnection(ISshSession session) : Connection, ISshSessionProvid
     public override async Task<Stream> GetFileAsync(string path, CancellationToken ct = default)
     {
         var client = await Session.GetSftpAsync(ct);
-        var memoryStream = new MemoryStream();
-        await client.DownloadFileAsync(path, memoryStream, ct);
-        memoryStream.Position = 0;
-        return memoryStream;
+        return client.OpenRead(path);
     }
 
     public override async Task SaveFileAsync(string remotePath, Stream content, CancellationToken ct = default)
@@ -146,10 +145,10 @@ public class SftpConnection(ISshSession session) : Connection, ISshSessionProvid
         var client = await Session.GetSftpAsync(ct);
         await EnsureTargetWritableAsync(client, targetPath, canOverride, "copy", ct);
 
-        using var memoryStream = new MemoryStream();
-        await client.DownloadFileAsync(sourcePath, memoryStream, ct);
-        memoryStream.Position = 0;
-        await client.UploadFileAsync(memoryStream, targetPath, ct);
+        // FileMode.Create truncates an existing target, so no tail of old data stays after overwrite.
+        await using var sourceStream = client.OpenRead(sourcePath);
+        await using var targetStream = client.Open(targetPath, FileMode.Create, FileAccess.Write);
+        await sourceStream.CopyToAsync(targetStream, CopyBufferSize, ct);
     }
 
     public override async Task CreateDirAsync(string remotePath, CancellationToken ct = default)
@@ -225,7 +224,7 @@ public class SftpConnection(ISshSession session) : Connection, ISshSessionProvid
         }
         await client.RenameFileAsync(sourcePath, targetPath, cancellationToken: ct);
     }
-    
+
     public override async Task CopyDirAsync(string sourcePath, string targetPath, bool canOverride = true, CancellationToken ct = default)
     {
         var client = await Session.GetSftpAsync(ct);
