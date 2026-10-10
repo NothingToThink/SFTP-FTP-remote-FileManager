@@ -39,13 +39,6 @@ try
             .GetProfilesFilePath(), protection);
     });
 
-    builder.Services.AddSwaggerGen(options =>
-    {
-        var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-        var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
-        options.IncludeXmlComments(xmlPath);
-    });
-
     builder.Services.Configure<SshSessionOptions>(builder.Configuration.GetSection("Ssh"));
     builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<SshSessionOptions>>().Value);
 
@@ -59,6 +52,13 @@ try
 
     builder.Services.AddHostedService<IdleConnectionJanitor>();
 
+
+    builder.Services.AddSwaggerGen(options =>
+    {
+        var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+        options.IncludeXmlComments(xmlPath);
+    });
 
     using var app = builder.Build();
 
