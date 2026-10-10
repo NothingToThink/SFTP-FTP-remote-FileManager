@@ -77,6 +77,7 @@ PATCH /connections/{id}/filesystem/dir/current  тело "no-such-dir"  -> 500 {
 (с атрибутами `[ProducesResponseType]` и XML-доками из #36), регрессию сторожат
 интеграционные тесты `Tests/FilesystemEndpointTests.cs`. После мержа можно убрать
 клиентский обход 404 для `dir/size` (`FileBrowserViewModel.ShowInfo`) и ветку `[SKIP]` в `SmokeTest`.
+Обход и `[SKIP]` убраны в `fix/path-in-query`.
 
 **Симптом.** После мержей #36/#39 в актуальном dev (`95bd42b`) запросы отдают 404:
 

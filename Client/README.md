@@ -111,8 +111,10 @@ MVVM без ссылок на Backend-сборки: замена UI-стека �
 - Ответы — camelCase (дефолт ASP.NET Core), НО `HostProfile` внутри профиля сериализуется
   кастомным конвертером в PascalCase (`Host`/`Protocol`/`Port`/`Auth`) — регистр при отправке важен.
 - `AuthData` — полиморфная: `{"$type": "password" | "key" | "anonymous", ...}`.
-- Часть GET/DELETE эндпоинтов принимает **путь в теле запроса** как JSON-строку —
-  `FileManagerApiClient` это инкапсулирует (`GetWithBodyAsync`/`DeleteWithBodyAsync`).
+- GET/DELETE никогда не читают тело: путь передаётся query-параметром `?path=`
+  (`info`, `dir/size`, `file/exists`, `dir/exists`, `DELETE file`, `DELETE dir`, `file/download`).
+  В `FileManagerApiClient` query строится только через `WithPath` (`Uri.EscapeDataString`,
+  иначе `+` в имени превратится в пробел). Без `path` сервер отвечает `400 {"error": ...}`.
 - Связь «профиль ↔ соединение» на сервере не хранится: трекается на клиенте
   (`MainWindowViewModel._activeConnections`).
 
