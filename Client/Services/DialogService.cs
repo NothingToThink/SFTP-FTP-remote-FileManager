@@ -1,22 +1,41 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
-using Avalonia.Interactivity;
+using FileManagerClient.Api;
 using FileManagerClient.ViewModels;
 
 namespace FileManagerClient.Services;
 
 /// <summary>
-/// Простые модальные диалоги: ввод строки, подтверждение, сообщение, выбор файлов.
-/// Владелец (главное окно) регистрируется в MainWindow при открытии.
+/// Модальные диалоги и файловые пикеры. Интерфейс — для подмены в тестах
+/// (headless-режим не умеет ShowDialog, автотесты не нажимают кнопки).
 /// </summary>
-public static class DialogService
+public interface IDialogService
 {
-    public static Window? Owner { get; set; }
+    Task<string?> PromptAsync(string title, string label, string defaultValue = "");
+    Task<bool> ConfirmAsync(string title, string message);
+    Task ShowMessageAsync(string title, string message);
+    Task<string?> PickOpenFileAsync(string title);
+    Task<string?> PickSaveFileAsync(string suggestedName);
+    Task<bool> ShowProfileEditorAsync(ProfileEditViewModel viewModel);
 
-    public static async Task<string?> PromptAsync(string title, string label, string defaultValue = "")
+    /// <summary>Немодальное окно туннелей (живёт рядом с главным окном).</summary>
+    void ShowTunnelsWindow(TunnelsViewModel viewModel);
+
+    /// <summary>Модальный диалог создания туннеля: true — подтверждено.</summary>
+    Task<bool> ShowCreateForwardDialogAsync(CreateForwardViewModel viewModel, string connectionName,
+        IForwardingApi api, Guid connectionId);
+}
+
+/// <summary>Реализация на настоящих окнах; владелец задаётся при открытии главного окна.</summary>
+public class DialogService : IDialogService
+{
+    public Window? Owner { get; set; }
+
+    public async Task<string?> PromptAsync(string title, string label, string defaultValue = "")
     {
         if (Owner is null)
             return null;
@@ -24,7 +43,7 @@ public static class DialogService
         var input = new TextBox
         {
             Text = defaultValue,
-            Watermark = label,
+            PlaceholderText = label,
             MinWidth = 360,
         };
 
@@ -45,10 +64,10 @@ public static class DialogService
         return result;
     }
 
-    public static Task<bool> ConfirmAsync(string title, string message)
+    public Task<bool> ConfirmAsync(string title, string message)
         => ShowYesNoAsync(title, message, "Да", "Нет");
 
-    public static async Task ShowMessageAsync(string title, string message)
+    public async Task ShowMessageAsync(string title, string message)
     {
         if (Owner is null)
             return;
@@ -62,7 +81,7 @@ public static class DialogService
         await dialog.ShowDialog<object?>(Owner);
     }
 
-    private static async Task<bool> ShowYesNoAsync(string title, string message, string yes, string no)
+    private async Task<bool> ShowYesNoAsync(string title, string message, string yes, string no)
     {
         if (Owner is null)
             return false;
@@ -84,7 +103,7 @@ public static class DialogService
         return result;
     }
 
-    public static async Task<string?> PickOpenFileAsync(string title)
+    public async Task<string?> PickOpenFileAsync(string title)
     {
         if (Owner is null)
             return null;
@@ -97,7 +116,7 @@ public static class DialogService
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
-    public static async Task<string?> PickSaveFileAsync(string suggestedName)
+    public async Task<string?> PickSaveFileAsync(string suggestedName)
     {
         if (Owner is null)
             return null;
@@ -109,7 +128,7 @@ public static class DialogService
         return file?.TryGetLocalPath();
     }
 
-    public static async Task<bool> ShowProfileEditorAsync(ProfileEditViewModel viewModel)
+    public async Task<bool> ShowProfileEditorAsync(ProfileEditViewModel viewModel)
     {
         if (Owner is null)
             return false;
@@ -117,6 +136,28 @@ public static class DialogService
         var window = new Views.ProfileEditWindow
         {
             DataContext = viewModel,
+        };
+        return await window.ShowDialog<bool>(Owner);
+    }
+
+    public void ShowTunnelsWindow(TunnelsViewModel viewModel)
+    {
+        if (Owner is null)
+            return;
+
+        new Views.TunnelsWindow { DataContext = viewModel }.Show(Owner);
+    }
+
+    public async Task<bool> ShowCreateForwardDialogAsync(CreateForwardViewModel viewModel,
+        string connectionName, IForwardingApi api, Guid connectionId)
+    {
+        if (Owner is null)
+            return false;
+
+        var window = new Views.CreateForwardWindow(api, connectionId)
+        {
+            DataContext = viewModel,
+            Title = $"Новый туннель — {connectionName}",
         };
         return await window.ShowDialog<bool>(Owner);
     }

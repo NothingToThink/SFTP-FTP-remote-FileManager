@@ -12,16 +12,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.3.11" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.3.11" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.11" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.11" />
-    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.3.11" />
-    <!--Диагностика (DevTools) только в Debug-->
-    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.11">
-      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
-      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
   </ItemGroup>
 

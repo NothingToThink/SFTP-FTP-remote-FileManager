@@ -1,5 +1,6 @@
 using System.Text;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
@@ -93,6 +94,10 @@ public static class Program
         await ScenarioDialogs();
         if (serverUp)
             await ScenarioManyProfiles(api!);
+        if (serverUp && localProfileId is not null)
+            await ScenarioFullFunctional(api!, url, localProfileId.Value);
+        await ScenarioProfileValidation();
+        await ScenarioTunnels();
         await ScenarioServerDown();
 
         // Уборка тестовых профилей
@@ -154,6 +159,473 @@ public static class Program
         }
     }
 
+    /// <summary>
+    /// Полный функциональный прогон через ViewModel: подключение, навигация, CRUD,
+    /// копирование/перемещение файлов и папок, upload/download (в т.ч. drag&drop),
+    /// свойства, удаление, отключение. Реальные результаты проверяются через API/файлы.
+    /// ВАЖНО: только await — .Result на UI-потоке headless дедлочится (continuation
+    /// возвращается в заблокированный Dispatcher).
+    /// </summary>
+    private static async Task ScenarioFullFunctional(FileManagerApiClient api, string url, Guid localProfileId)
+    {
+        Report.AppendLine();
+        Report.AppendLine("--- S5: полный функционал через UI-слой ---");
+        var dialogs = new HeadlessDialogService();
+        var settings = new ClientSettings { ServerUrl = url };
+        var vm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl), dialogs);
+        var window = new MainWindow { DataContext = vm, Width = 1180, Height = 700 };
+        window.Show();
+        Pump();
+        await vm.CheckServerCommand.ExecuteAsync(null);
+        await vm.RefreshProfilesCommand.ExecuteAsync(null);
+
+        var t = 0;
+        void Case(string name, bool ok, string detail = "")
+        {
+            t++;
+            Report.AppendLine(ok ? $"  [PASS] TC{t:D2} {name}" : $"  [FAIL] TC{t:D2} {name}: {detail}");
+            if (!ok)
+            {
+                _issuesTotal++;
+                Console.Error.WriteLine($"[audit] FAIL {name}: {detail}");
+            }
+        }
+
+        var local = vm.Profiles.FirstOrDefault(p => p.Id == localProfileId)
+                    ?? vm.Profiles.FirstOrDefault(p => p.Protocol == Protocol.Local);
+        if (local is null)
+        {
+            Report.AppendLine("  [FAIL] Local-профиль не найден");
+            _issuesTotal++;
+            window.Close();
+            return;
+        }
+
+        // TC01: подключение
+        await vm.ConnectProfileCommand.ExecuteAsync(local);
+        Case("подключение к профилю", vm.Browser.IsBound && local.IsConnected,
+            $"IsBound={vm.Browser.IsBound} connected={local.IsConnected}");
+
+        var browser = vm.Browser;
+
+        // Пречистка артефактов прошлых прогонов: иначе rename/copy натыкаются
+        // на существующие цели (IOException) и сценарий падает до своей уборки
+        // func-dir и func-file.txt — сид из SeedDataAsync, их НЕ трогаем
+        var leftovers = new[] { "created-via-ui.txt", "renamed-via-ui.txt", "copied-via-ui.txt",
+            "moved-via-ui.txt", "func-drop-1.txt", "func-drop-2.txt",
+            "created-dir", "copied-dir", "moved-dir" };
+        foreach (var name in leftovers)
+        {
+            try { await api.DeleteFileAsync(browser.ConnectionId, name); } catch { }
+            try { await api.DeleteDirAsync(browser.ConnectionId, name); } catch { }
+        }
+        await browser.RefreshCommand.ExecuteAsync(null);
+
+        // TC02: листинг корня (seed-объекты видны)
+        Case("листинг корня содержит seed-объекты",
+            browser.Items.Any(i => i.Name == "func-dir") && browser.Items.Any(i => i.Name == "func-file.txt"),
+            $"объектов: {browser.Items.Count}");
+
+        // TC03: создание файла через диалог (Prompt -> имя)
+        dialogs.PromptResults.Enqueue("created-via-ui.txt");
+        await browser.NewFileCommand.ExecuteAsync(null);
+        Case("создание файла (Prompt-диалог)",
+            await api.FileExistsAsync(browser.ConnectionId, "created-via-ui.txt"));
+
+        // TC04: создание папки
+        dialogs.PromptResults.Enqueue("created-dir");
+        await browser.NewFolderCommand.ExecuteAsync(null);
+        Case("создание папки (Prompt-диалог)",
+            await api.DirExistsAsync(browser.ConnectionId, "created-dir"));
+
+        // TC05: переименование
+        dialogs.PromptResults.Enqueue("renamed-via-ui.txt");
+        var renameSource = browser.Items.FirstOrDefault(i => i.Name == "created-via-ui.txt");
+        if (renameSource is null)
+        {
+            Case("переименование файла", false, "created-via-ui.txt отсутствует в Items");
+            window.Close();
+            return;
+        }
+        browser.SelectedItem = renameSource;
+        await browser.RenameCommand.ExecuteAsync(null);
+        Case("переименование файла",
+            await api.FileExistsAsync(browser.ConnectionId, "renamed-via-ui.txt")
+            && !await api.FileExistsAsync(browser.ConnectionId, "created-via-ui.txt"));
+
+        // TC06: копирование файла
+        dialogs.PromptResults.Enqueue("copied-via-ui.txt");
+        var renamedItem = browser.Items.FirstOrDefault(i => i.Name == "renamed-via-ui.txt");
+        if (renamedItem is null)
+        {
+            Case("копирование файла", false, "renamed-via-ui.txt отсутствует в Items");
+            window.Close();
+            return;
+        }
+        browser.SelectedItem = renamedItem;
+        await browser.CopyToCommand.ExecuteAsync(null);
+        Case("копирование файла",
+            await api.FileExistsAsync(browser.ConnectionId, "copied-via-ui.txt"));
+
+        // TC07: перемещение файла
+        dialogs.PromptResults.Enqueue("moved-via-ui.txt");
+        var copiedItem = browser.Items.FirstOrDefault(i => i.Name == "copied-via-ui.txt");
+        if (copiedItem is null)
+        {
+            Case("перемещение файла", false, "copied-via-ui.txt отсутствует в Items");
+            window.Close();
+            return;
+        }
+        browser.SelectedItem = copiedItem;
+        await browser.MoveToCommand.ExecuteAsync(null);
+        Case("перемещение файла",
+            await api.FileExistsAsync(browser.ConnectionId, "moved-via-ui.txt")
+            && !await api.FileExistsAsync(browser.ConnectionId, "copied-via-ui.txt"));
+
+        // TC08: копирование и перемещение папки (новое в PR #29;
+        // в актуальном dev эндпоинты откатились — BUG-3: сначала probe, при 404 SKIP)
+        var dirOpsBroken = false;
+        try { await api.GetDirSizeAsync(browser.ConnectionId, "func-dir"); }
+        catch (ApiException ex) when (ex.StatusCode == 404) { dirOpsBroken = true; }
+
+        if (dirOpsBroken)
+        {
+            Report.AppendLine("  [SKIP] TC08 копирование и перемещение папки: регрессия бэка BUG-3 (dir/copy|move 404)");
+        }
+        else
+        {
+            var dirSource = browser.Items.FirstOrDefault(i => i.Name == "created-dir");
+            if (dirSource is null)
+            {
+                Case("копирование и перемещение папки", false, "created-dir отсутствует в Items");
+                window.Close();
+                return;
+            }
+            dialogs.PromptResults.Enqueue("copied-dir");
+            browser.SelectedItem = dirSource;
+            await browser.CopyToCommand.ExecuteAsync(null);
+            var copyDirOk = await api.DirExistsAsync(browser.ConnectionId, "copied-dir");
+            dialogs.PromptResults.Enqueue("moved-dir");
+            var copiedDirItem = browser.Items.FirstOrDefault(i => i.Name == "copied-dir");
+            if (copiedDirItem is null)
+            {
+                Case("копирование и перемещение папки", false, "copied-dir отсутствует в Items");
+                window.Close();
+                return;
+            }
+            browser.SelectedItem = copiedDirItem;
+            await browser.MoveToCommand.ExecuteAsync(null);
+            Case("копирование и перемещение папки",
+                copyDirOk && await api.DirExistsAsync(browser.ConnectionId, "moved-dir")
+                && !await api.DirExistsAsync(browser.ConnectionId, "copied-dir"));
+        }
+
+        // TC09: upload через пикер (фейк отдаёт реальный файл) + download с проверкой содержимого
+        var payload = $"func-test {DateTime.Now:O}";
+        var uploadSource = Path.Combine(Path.GetTempPath(), $"func-upload-{Guid.NewGuid():N}.txt");
+        await File.WriteAllTextAsync(uploadSource, payload);
+        dialogs.PickOpenResults.Enqueue(uploadSource);
+        await browser.UploadCommand.ExecuteAsync(null);
+        var uploadedName = Path.GetFileName(uploadSource);
+        var uploaded = browser.Items.FirstOrDefault(i => i.Name == uploadedName);
+        var downloaded = Path.Combine(Path.GetTempPath(), $"func-download-{Guid.NewGuid():N}.txt");
+        dialogs.PickSaveResults.Enqueue(downloaded);
+        if (uploaded is not null)
+        {
+            browser.SelectedItem = uploaded;
+            await browser.DownloadCommand.ExecuteAsync(null);
+        }
+        var downloadedOk = false;
+        try
+        {
+            downloadedOk = File.Exists(downloaded) && (await File.ReadAllTextAsync(downloaded)) == payload;
+        }
+        catch
+        {
+            // скачивание не удалось — кейс ниже зафиксирует
+        }
+        Case("upload + download: содержимое совпало",
+            uploaded is not null && downloadedOk,
+            uploaded is null ? "upload не удался" : "файл не скачан");
+
+        // TC10: drag&drop мультизагрузка
+        var drop1 = Path.Combine(Path.GetTempPath(), "func-drop-1.txt");
+        var drop2 = Path.Combine(Path.GetTempPath(), "func-drop-2.txt");
+        await File.WriteAllTextAsync(drop1, "drop1");
+        await File.WriteAllTextAsync(drop2, "drop2");
+        await browser.UploadFilesAsync(new[] { drop1, drop2 });
+        Case("drag&drop мультизагрузка (2 файла)",
+            await api.FileExistsAsync(browser.ConnectionId, "func-drop-1.txt")
+            && await api.FileExistsAsync(browser.ConnectionId, "func-drop-2.txt"));
+
+        // TC11: свойства папки — при BUG-3 размер недоступен, но свойства показываются
+        var funcDir = browser.Items.FirstOrDefault(i => i.Name == "func-dir");
+        if (funcDir is null)
+        {
+            Case("свойства папки показываются (размер — если сервер умеет)", false,
+                "func-dir отсутствует в Items");
+            window.Close();
+            return;
+        }
+        browser.SelectedItem = funcDir;
+        await browser.ShowInfoCommand.ExecuteAsync(null);
+        Case("свойства папки показываются (размер — если сервер умеет)",
+            dialogs.Calls.Any(c => c.StartsWith("message:")
+                && (c.Contains("с содержимым") || c.Contains("не поддерживает размер"))));
+
+        // TC12: навигация в папку — известный баг бэка (BACKEND-BUGS.md #1):
+        // листинг подпапки Local валится, клиент обязан тихо откатить путь без модалки
+        dialogs.Calls.Clear();
+        await browser.NavigateCommand.ExecuteAsync("func-dir");
+        Case("навигация в папку: тихий откат пути (known bug #1)",
+            (browser.CurrentPath == "/" || browser.CurrentPath == "")
+            && !dialogs.Calls.Any(c => c.StartsWith("message:")),
+            $"path={browser.CurrentPath}");
+
+        // TC13: GoUp на корне безопасен
+        await browser.GoUpCommand.ExecuteAsync(null);
+        Case("GoUp на корне не меняет путь", browser.CurrentPath == "/" || browser.CurrentPath == "",
+            $"path={browser.CurrentPath}");
+
+        // TC14: удаление файла с подтверждением
+        dialogs.ConfirmResults.Enqueue(true);
+        var movedFile = browser.Items.FirstOrDefault(i => i.Name == "moved-via-ui.txt");
+        if (movedFile is null)
+        {
+            Case("удаление файла (Confirm)", false, "moved-via-ui.txt отсутствует в Items");
+            window.Close();
+            return;
+        }
+        browser.SelectedItem = movedFile;
+        await browser.DeleteCommand.ExecuteAsync(null);
+        Case("удаление файла (Confirm)",
+            !await api.FileExistsAsync(browser.ConnectionId, "moved-via-ui.txt"));
+
+        // TC15: удаление папки — created-dir гарантированно есть после TC04
+        dialogs.ConfirmResults.Enqueue(true);
+        var dirToDelete = browser.Items.FirstOrDefault(i => i.Name == "created-dir");
+        if (dirToDelete is null)
+        {
+            Case("удаление папки", false, "created-dir отсутствует в Items");
+            window.Close();
+            return;
+        }
+        browser.SelectedItem = dirToDelete;
+        await browser.DeleteCommand.ExecuteAsync(null);
+        Case("удаление папки", !await api.DirExistsAsync(browser.ConnectionId, "created-dir"));
+
+        // TC16: отключение
+        var boundConnectionId = browser.ConnectionId;
+        await vm.DisconnectProfileCommand.ExecuteAsync(local);
+        Case("отключение профиля сбрасывает браузер",
+            !vm.Browser.IsBound && !local.IsConnected
+            && !(await api.GetConnectionIdsAsync()).Contains(boundConnectionId));
+
+        // уборка артефактов разовым соединением
+        var cleanup = SavedProfile.Create("func-cleanup", new HostProfile("", Protocol.Local, new AnonymousAuth()));
+        await api.SaveProfileAsync(cleanup);
+        var cleanupConn = await api.CreateConnectionAsync(cleanup);
+        await api.ConnectAsync(cleanupConn);
+        foreach (var name in new[] { "created-via-ui.txt", "renamed-via-ui.txt", "moved-via-ui.txt",
+                     "copied-via-ui.txt", "func-drop-1.txt", "func-drop-2.txt",
+                     uploadedName, "created-dir", "copied-dir", "moved-dir" })
+        {
+            try { await api.DeleteFileAsync(cleanupConn, name); } catch { }
+            try { await api.DeleteDirAsync(cleanupConn, name); } catch { }
+        }
+        await api.DisconnectAsync(cleanupConn);
+        await api.DeleteConnectionAsync(cleanupConn);
+        await api.DeleteProfileAsync(cleanup.Id);
+        foreach (var f in new[] { uploadSource, downloaded, drop1, drop2 })
+        {
+            try { File.Delete(f); } catch { }
+        }
+
+        window.Close();
+        Report.AppendLine($"  Итог сценария: {t} кейсов");
+    }
+
+    /// <summary>
+    /// Порт-форвардинг: полный жизненный цикл через TunnelsViewModel с эмулированным API
+    /// (реальный SSH-сервер для аудита недоступен) + кейс недоступности на Local-соединении.
+    /// </summary>
+    private static async Task ScenarioTunnels()
+    {
+        Report.AppendLine();
+        Report.AppendLine("--- S7: порт-форвардинг ---");
+        var t = 0;
+        void Case(string name, bool ok, string detail = "")
+        {
+            t++;
+            Report.AppendLine(ok ? $"  [PASS] TC{t:D2} {name}" : $"  [FAIL] TC{t:D2} {name}: {detail}");
+            if (!ok)
+            {
+                _issuesTotal++;
+                Console.Error.WriteLine($"[audit] FAIL {name}: {detail}");
+            }
+        }
+        void Skip(string name, string why)
+        {
+            t++;
+            Report.AppendLine($"  [SKIP] TC{t:D2} {name}: {why}");
+        }
+
+        // --- Часть 1: полный цикл через FakeForwardingApi ---
+        var fake = new FakeForwardingApi();
+        var dialogs = new HeadlessDialogService();
+        var vm = new TunnelsViewModel(fake, Guid.NewGuid(), "audit-sftp", dialogs);
+
+        // TC01: пустой список до создания
+        await vm.RefreshCommand.ExecuteAsync(null);
+        Case("стартовое состояние: список пуст, ошибки нет",
+            vm.Items.Count == 0 && vm.ErrorText is null, vm.ErrorText ?? "");
+
+        // TC02: создание Local-правила через форму (Prompt-очередь: подтверждение формы)
+        dialogs.ConfirmResults.Enqueue(true);
+        await vm.CreateCommand.ExecuteAsync(null);
+        Case("создание Local-правила через форму",
+            vm.Items.Count == 1 && fake.CreateCalls == 1 && vm.Items[0].Status.State == ForwardState.Active,
+            $"items={vm.Items.Count}");
+
+        // TC03: BindPort=0 — сервер вернул фактически назначенный порт
+        if (vm.Items.Count == 0)
+        {
+            Case("фактический порт возвращён в статусе", false, "список пуст после создания");
+            Report.AppendLine($"  Итог сценария: {t} кейсов");
+            return;
+        }
+        Case("фактический порт возвращён в статусе",
+            vm.Items[0].Status.ActualBindPort is > 0,
+            $"actual={vm.Items[0].Status.ActualBindPort}");
+
+        // TC04: stop
+        await vm.StopCommand.ExecuteAsync(null);
+        Case("остановка туннеля",
+            vm.Items[0].Status.State == ForwardState.Stopped && vm.Items[0].CanStart);
+
+        // TC05: start
+        await vm.StartCommand.ExecuteAsync(null);
+        Case("запуск остановленного туннеля",
+            vm.Items[0].Status.State == ForwardState.Active && vm.Items[0].CanStop);
+
+        // TC06: создание Remote-правила напрямую через API (второе правило)
+        await fake.CreateForwardAsync(vm.ConnectionId, ForwardType.Remote, 8080,
+            name: "web", targetHost: "localhost", targetPort: 80);
+        await vm.RefreshCommand.ExecuteAsync(null);
+        Case("второе правило (Remote) видно в списке",
+            vm.Items.Count == 2 && vm.Items.Any(i => i.Type == ForwardType.Remote));
+
+        // TC07: удаление с подтверждением
+        dialogs.ConfirmResults.Enqueue(true);
+        vm.SelectedItem = vm.Items.First(i => i.Type == ForwardType.Remote);
+        await vm.DeleteCommand.ExecuteAsync(null);
+        Case("удаление туннеля (Confirm)",
+            vm.Items.Count == 1 && fake.DeleteCalls == 1);
+
+        // TC08: suggestions через форму
+        var editor = new CreateForwardViewModel();
+        await editor.LoadSuggestionsAsync(fake, vm.ConnectionId);
+        Case("подсказки сервера загружаются и помечают loopback",
+            editor.Suggestions.Count == 2
+            && editor.Suggestions[0].Service == "postgres"
+            && editor.Suggestions[0].Label.Contains("(loopback)"));
+
+        // TC09: выбор подсказки заполняет целевые поля
+        editor.SelectedSuggestion = editor.Suggestions[0];
+        Case("выбор подсказки заполняет порт/хост/имя",
+            editor.TargetPort == "5432" && editor.TargetHost == "127.0.0.1"
+            && editor.Name.Contains("postgres"));
+
+        // TC10: валидация формы
+        var badPort = new CreateForwardViewModel { BindPort = "70000" };
+        Case("форма: порт 70000 отклоняется", !badPort.Validate() && badPort.ErrorMessage != null);
+        var noTarget = new CreateForwardViewModel { BindPort = "5432", Type = ForwardType.Local, TargetPort = "" };
+        Case("форма: Local без целевого порта отклоняется", !noTarget.Validate());
+        var dynamicOk = new CreateForwardViewModel { BindPort = "1080", Type = ForwardType.Dynamic, TargetPort = "" };
+        Case("форма: Dynamic не требует цели", dynamicOk.Validate());
+        t -= 0; // счётчик уже увеличен в Case
+
+        // --- Часть 2: реальный сервер, Local-соединение → туннели недоступны ---
+        var settings = new ClientSettings { ServerUrl = "http://127.0.0.1:5116" };
+        var mainVm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl),
+            new HeadlessDialogService());
+        var window = new MainWindow { DataContext = mainVm, Width = 1180, Height = 700 };
+        window.Show();
+        Pump();
+        await mainVm.CheckServerCommand.ExecuteAsync(null);
+        await mainVm.RefreshProfilesCommand.ExecuteAsync(null);
+        var localProfile = mainVm.Profiles.FirstOrDefault(p => p.Protocol == Protocol.Local);
+        if (localProfile is not null)
+        {
+            await mainVm.ConnectProfileCommand.ExecuteAsync(localProfile);
+            Case("кнопка туннелей скрыта для Local-соединения",
+                !mainVm.IsTunnelsAvailable,
+                $"IsTunnelsAvailable={mainVm.IsTunnelsAvailable}");
+
+            var realVm = new TunnelsViewModel(mainVm.ApiClient, mainVm.Browser.ConnectionId, "local", dialogs);
+            await realVm.RefreshCommand.ExecuteAsync(null);
+            Case("реальный API: туннели на Local-соединении дают понятную ошибку",
+                realVm.ErrorText is not null && realVm.ErrorText.Contains("SFTP"),
+                realVm.ErrorText ?? "ошибки не было");
+        }
+        else
+        {
+            Skip("кнопка туннелей скрыта для Local", "Local-профиль не найден");
+            Skip("реальный API: Local-ошибка", "Local-профиль не найден");
+        }
+        window.Close();
+
+        Report.AppendLine($"  Итог сценария: {t} кейсов");
+    }
+
+    /// <summary>Валидация диалога профиля без бэка.</summary>
+    private static Task ScenarioProfileValidation()
+    {
+        Report.AppendLine();
+        Report.AppendLine("--- S6: валидация диалога профиля ---");
+        var t = 0;
+        void Case(string name, bool ok, string detail = "")
+        {
+            t++;
+            Report.AppendLine(ok ? $"  [PASS] TC{t:D2} {name}" : $"  [FAIL] TC{t:D2} {name}: {detail}");
+            if (!ok) _issuesTotal++;
+        }
+
+        var empty = new ProfileEditViewModel(null) { Protocol = Protocol.Sftp, AuthKind = AuthKind.Password };
+        Case("SFTP без хоста отклоняется", !empty.Validate() && empty.ErrorMessage != null,
+            empty.ErrorMessage ?? "валидация прошла?");
+
+        var anonSftp = new ProfileEditViewModel(null) { Protocol = Protocol.Sftp, AuthKind = AuthKind.Anonymous, Host = "x" };
+        Case("SFTP anonymous отклоняется", !anonSftp.Validate(), anonSftp.ErrorMessage ?? "ок");
+
+        var noPassword = new ProfileEditViewModel(null) { Protocol = Protocol.Ftp, Host = "x", AuthKind = AuthKind.Password };
+        Case("FTP без пароля отклоняется", !noPassword.Validate(), noPassword.ErrorMessage ?? "ок");
+
+        var badPort = new ProfileEditViewModel(null) { Protocol = Protocol.Ftp, Host = "x", Port = "99999" };
+        Case("порт 99999 отклоняется", !badPort.Validate(), badPort.ErrorMessage ?? "ок");
+
+        var valid = new ProfileEditViewModel(null)
+        {
+            Protocol = Protocol.Ftp, Host = "x", AuthKind = AuthKind.Password,
+            Username = "u", Password = "p",
+        };
+        var saved = valid.Validate() ? valid.ToSavedProfile() : null;
+        Case("валидный профиль проходит, порт по умолчанию 21",
+            saved is not null && saved.HostProfile.EffectivePort == 21 && saved.Name.Length > 0);
+
+        var key = new ProfileEditViewModel(null)
+        {
+            Protocol = Protocol.Sftp, Host = "x", AuthKind = AuthKind.Key,
+            Username = "u", KeyPath = "/tmp/k", Passphrase = "p",
+        };
+        var keySaved = key.Validate() ? key.ToSavedProfile() : null;
+        Case("SFTP key с passphrase сериализуется",
+            keySaved?.HostProfile.Auth is KeyAuth { Passphrase: "p" });
+
+        Report.AppendLine($"  Итог сценария: {t} кейсов");
+        return Task.CompletedTask;
+    }
+
     private static async Task ScenarioManyProfiles(FileManagerApiClient api)
     {
         // 14 профилей с длинными именами — проверка скролла и высот айтемов
@@ -187,11 +659,10 @@ public static class Program
         Report.AppendLine();
         Report.AppendLine($"--- {title} ---");
         var settings = new ClientSettings { ServerUrl = url };
-        var vm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl));
+        var vm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl),
+            new HeadlessDialogService());
         var window = new MainWindow { DataContext = vm, Width = ParseWidth(title), Height = Height };
         window.Show();
-        // headless: ShowDialog без работающего mainloop завис бы навсегда — гасим владельца диалогов
-        DialogService.Owner = null;
         Pump();
         Console.Error.WriteLine("[audit] check-server");
         await vm.CheckServerCommand.ExecuteAsync(null);
@@ -205,6 +676,8 @@ public static class Program
         Pump();
         Console.Error.WriteLine("[audit] analyze-run");
         AnalyzeWindow(window, title);
+        VerifyContextMenu(window, title);
+        ReportAutomationIds(window, title);
         if (printTree != default)
             DumpTree(window);
         Capture(window, title);
@@ -269,6 +742,8 @@ public static class Program
 
             // папка с большим числом файлов + длинные имена
             await api.CreateDirAsync(conn, "audit-dir-many");
+            await api.CreateDirAsync(conn, "func-dir");
+            await api.CreateFileAsync(conn, "func-file.txt");
             var longName = new string('д', 60) + "-очень-длинное-имя-файла.txt";
             await api.CreateFileAsync(conn, longName);
             await api.CreateFileAsync(conn, "audit-small.txt");
@@ -397,6 +872,48 @@ public static class Program
     private static Rect ToWindow(Control c, Visual root)
         => ToWindowBounds(c, root);
 
+    /// <summary>
+    /// ContextMenu не в визуальном дереве: если DataContext/команды не привязались,
+    /// пункты меню молча мертвы. Проверяем при каждом прогоне.
+    /// </summary>
+    private static void VerifyContextMenu(Window window, string title)
+    {
+        foreach (var grid in window.GetVisualDescendants().OfType<DataGrid>())
+        {
+            if (grid.ContextMenu is not { } menu)
+                continue;
+            var items = menu.Items.OfType<MenuItem>().ToList();
+            var withCommands = items.Count(i => i.Command is not null);
+            var hasDataContext = menu.DataContext is not null;
+            if (hasDataContext && withCommands == items.Count && items.Count > 0)
+            {
+                Report.AppendLine($"  [OK] ContextMenu: {items.Count} пунктов с командами");
+            }
+            else
+            {
+                Report.AppendLine($"  [ISSUE] ContextMenu мертв: DataContext={menu.DataContext?.GetType().Name ?? "null"}, " +
+                                  $"команд {withCommands}/{items.Count}");
+                _issuesTotal++;
+            }
+        }
+    }
+
+    /// <summary>Покрытие AutomationId: сколько интерактивных элементов без идентификатора.</summary>
+    private static void ReportAutomationIds(Window window, string title)
+    {
+        var interactive = window.GetVisualDescendants()
+            .OfType<Control>()
+            .Where(c => c.IsEffectivelyVisible
+                        && c is Button or TextBox or ComboBox or ListBox or DataGrid
+                        && c.Bounds.Width > 0)
+            .ToList();
+        var named = interactive.Count(c =>
+            AutomationProperties.GetAutomationId(c) is { Length: > 0 });
+        Report.AppendLine($"  AutomationId: {named}/{interactive.Count} интерактивных элементов");
+        foreach (var c in interactive.Where(c => AutomationProperties.GetAutomationId(c) is not { Length: > 0 }))
+            Report.AppendLine($"    без id: {Describe(c)}");
+    }
+
     private static bool IsInteractive(Control c)
         => c is Button or TextBox or ComboBox or ListBox or DataGrid or CheckBox or Slider;
 
@@ -431,7 +948,7 @@ public static class Program
         {
             Button b => ContentText(b.Content) is { Length: > 0 } t ? $"«{t}»" : "кнопка-icon",
             TextBlock tb => $"«{Truncate(tb.Text, 24)}»",
-            TextBox tb => $"input «{Truncate(tb.Text ?? tb.Watermark ?? "", 20)}»",
+            TextBox tb => $"input «{Truncate(tb.Text ?? tb.PlaceholderText ?? "", 20)}»",
             ComboBox => "combobox",
             ListBox => "listbox",
             DataGrid => "datagrid",
@@ -490,11 +1007,156 @@ public static class Program
             var file = Path.Combine(_outDir,
                 $"{title.Split('[')[0].Trim().Replace(' ', '_').Replace(':', '_')}.png");
             if (window.CaptureRenderedFrame() is { } bitmap)
-                bitmap.Save(file);
+                bitmap.Save(file, PngBitmapEncoderOptions.Default);
         }
         catch
         {
             // кадр не критичен: отчёт текстовый
         }
     }
+}
+
+/// <summary>
+/// Подмена диалогов для headless-режима: ShowDialog там блокируется навсегда.
+/// Ответы управляются тестом (очереди), все вызовы логируются.
+/// </summary>
+public sealed class HeadlessDialogService : IDialogService
+{
+    public List<string> Calls { get; } = new();
+    public Queue<string?> PromptResults { get; } = new();
+    public Queue<bool> ConfirmResults { get; } = new();
+    public Queue<string?> PickOpenResults { get; } = new();
+    public Queue<string?> PickSaveResults { get; } = new();
+
+    public Task<string?> PromptAsync(string title, string label, string defaultValue = "")
+    {
+        Calls.Add($"prompt:{title}:{label}");
+        return Task.FromResult(PromptResults.Count > 0 ? PromptResults.Dequeue() : null);
+    }
+
+    public Task<bool> ConfirmAsync(string title, string message)
+    {
+        Calls.Add($"confirm:{title}");
+        return Task.FromResult(ConfirmResults.Count > 0 ? ConfirmResults.Dequeue() : false);
+    }
+
+    public Task ShowMessageAsync(string title, string message)
+    {
+        Calls.Add($"message:{title}:{message}");
+        return Task.CompletedTask;
+    }
+
+    public Task<string?> PickOpenFileAsync(string title)
+    {
+        Calls.Add($"pickOpen:{title}");
+        return Task.FromResult(PickOpenResults.Count > 0 ? PickOpenResults.Dequeue() : null);
+    }
+
+    public Task<string?> PickSaveFileAsync(string suggestedName)
+    {
+        Calls.Add($"pickSave:{suggestedName}");
+        return Task.FromResult(PickSaveResults.Count > 0 ? PickSaveResults.Dequeue() : null);
+    }
+
+    public Task<bool> ShowProfileEditorAsync(ProfileEditViewModel viewModel)
+    {
+        Calls.Add("profileEditor");
+        return Task.FromResult(false);
+    }
+
+    public void ShowTunnelsWindow(TunnelsViewModel viewModel)
+    {
+        Calls.Add("tunnelsWindow");
+    }
+
+    public Task<bool> ShowCreateForwardDialogAsync(CreateForwardViewModel viewModel,
+        string connectionName, IForwardingApi api, Guid connectionId)
+    {
+        Calls.Add($"createForward:{viewModel.Type}:{viewModel.BindPort}");
+        // управляемый ответ: очередь ConfirmResults переиспользуется как подтверждение формы;
+        // «пользователь» заполняет обязательные поля перед OK
+        var confirmed = ConfirmResults.Count > 0 && ConfirmResults.Dequeue();
+        if (confirmed)
+        {
+            viewModel.TargetHost ??= "127.0.0.1";
+            if (string.IsNullOrWhiteSpace(viewModel.TargetPort) && viewModel.Type != ForwardType.Dynamic)
+                viewModel.TargetPort = "8443";
+        }
+        return Task.FromResult(confirmed);
+    }
+}
+
+/// <summary>
+/// In-memory эмуляция порт-форвардинга: полный жизненный цикл правил без реального SSH.
+/// Правила живут в словаре; create стартует правило, stop/start/delete меняют состояние.
+/// </summary>
+public sealed class FakeForwardingApi : IForwardingApi
+{
+    private readonly Dictionary<Guid, ForwardStatus> _rules = new();
+    private int _autoPort = 15_000;
+
+    public int CreateCalls { get; private set; }
+    public int DeleteCalls { get; private set; }
+
+    public Task<List<ForwardStatus>> GetForwardsAsync(Guid id, CancellationToken ct = default)
+        => Task.FromResult(_rules.Values.ToList());
+
+    public Task<ForwardStatus> CreateForwardAsync(Guid id, ForwardType type, int bindPort,
+        string? name = null, string? bindHost = null, string? targetHost = null,
+        int? targetPort = null, CancellationToken ct = default)
+    {
+        CreateCalls++;
+        var actual = bindPort == 0 ? ++_autoPort : bindPort;
+        var status = new ForwardStatus
+        {
+            Rule = new ForwardRule
+            {
+                Id = Guid.NewGuid(),
+                Name = name ?? $"{type}:{actual}",
+                Type = type,
+                BindHost = bindHost ?? "127.0.0.1",
+                BindPort = actual,
+                TargetHost = targetHost,
+                TargetPort = targetPort,
+            },
+            State = ForwardState.Active,
+            ActualBindPort = actual,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _rules[status.Rule.Id] = status;
+        return Task.FromResult(status);
+    }
+
+    public Task<ForwardStatus?> GetForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+        => Task.FromResult(_rules.GetValueOrDefault(ruleId));
+
+    public Task<ForwardStatus> StopForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+    {
+        var status = _rules[ruleId];
+        status.State = ForwardState.Stopped;
+        return Task.FromResult(status);
+    }
+
+    public Task<ForwardStatus> RestartForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+    {
+        var status = _rules[ruleId];
+        status.State = ForwardState.Active;
+        return Task.FromResult(status);
+    }
+
+    public async Task DeleteForwardAsync(Guid id, Guid ruleId, CancellationToken ct = default)
+    {
+        DeleteCalls++;
+        await Task.Yield();
+        _rules.Remove(ruleId);
+    }
+
+    public Task<List<PortSuggestion>> GetForwardSuggestionsAsync(Guid id, string? text = null,
+        int? portMin = null, int? portMax = null, bool loopbackOnly = false, int limit = 50,
+        CancellationToken ct = default)
+        => Task.FromResult(new List<PortSuggestion>
+        {
+            new() { Port = 5432, Address = "127.0.0.1", Service = "postgres", Source = "Catalog" },
+            new() { Port = 6379, Address = "127.0.0.1", Service = "redis", Source = "RemoteScan" },
+        });
 }

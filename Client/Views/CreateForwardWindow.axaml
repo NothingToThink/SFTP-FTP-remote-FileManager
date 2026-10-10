@@ -1,0 +1,81 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FileManagerClient.ViewModels;assembly=FileManagerClient"
+        xmlns:models="clr-namespace:FileManagerClient.Models;assembly=FileManagerClient"
+        x:Class="FileManagerClient.Views.CreateForwardWindow"
+        x:DataType="vm:CreateForwardViewModel"
+        Title="Новый туннель"
+        Width="520" SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{StaticResource BgBaseBrush}">
+
+    <StackPanel Margin="20" Spacing="10">
+        <TextBlock Classes="h1" Text="Новый туннель"/>
+
+        <TextBlock Classes="secondary" Text="Название (необязательно)" Margin="0,6,0,-4"/>
+        <TextBox Name="ForwardNameBox" AutomationProperties.AutomationId="ForwardNameBox"
+                 Text="{Binding Name}" PlaceholderText="Postgres с сервера"/>
+
+        <TextBlock Classes="secondary" Text="Тип" Margin="0,8,0,-4"/>
+        <ComboBox Name="ForwardTypeCombo" AutomationProperties.AutomationId="ForwardTypeCombo"
+                  ItemsSource="{Binding Types}" SelectedItem="{Binding Type}"
+                  HorizontalAlignment="Left" MinWidth="220"/>
+
+        <TextBlock Classes="secondary" Text="Порт на этой машине (0 — выбрать свободный)" Margin="0,8,0,-4"/>
+        <TextBox Name="ForwardBindPortBox" AutomationProperties.AutomationId="ForwardBindPortBox"
+                 Text="{Binding BindPort}" FontFamily="{StaticResource FontMono}"/>
+
+        <Panel IsVisible="{Binding NeedsTarget}">
+            <StackPanel Spacing="10">
+                <TextBlock Classes="secondary" Text="Целевой хост (как он виден с сервера)" Margin="0,8,0,-4"/>
+                <TextBox Name="ForwardTargetHostBox" AutomationProperties.AutomationId="ForwardTargetHostBox"
+                         Text="{Binding TargetHost}" FontFamily="{StaticResource FontMono}"/>
+                <TextBlock Classes="secondary" Text="Целевой порт" Margin="0,4,0,-4"/>
+                <TextBox Name="ForwardTargetPortBox" AutomationProperties.AutomationId="ForwardTargetPortBox"
+                         Text="{Binding TargetPort}" FontFamily="{StaticResource FontMono}"/>
+            </StackPanel>
+        </Panel>
+
+        <!-- Подсказки: что слушает сервер -->
+        <Panel IsVisible="{Binding NeedsTarget}">
+            <StackPanel Spacing="6" Margin="0,10,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Classes="secondary" Text="Слушающие порты на сервере" VerticalAlignment="Center"/>
+                    <Button Name="ScanButton" Classes="tool" Content="Найти"
+                            AutomationProperties.AutomationId="ForwardScanButton"
+                            IsEnabled="{Binding !IsScanning}" Click="ScanClick"/>
+                    <ProgressBar IsIndeterminate="True" Width="90" Height="12" VerticalAlignment="Center"
+                                 IsVisible="{Binding IsScanning}"/>
+                </StackPanel>
+                <ListBox Name="SuggestionsList" AutomationProperties.AutomationId="ForwardSuggestionsList"
+                         ItemsSource="{Binding Suggestions}" SelectedItem="{Binding SelectedSuggestion}"
+                         MaxHeight="140">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:PortSuggestion">
+                            <TextBlock Classes="mono" FontSize="12" Text="{Binding Label}"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Name="SuggestionStatusText" Classes="muted" FontSize="11.5"
+                           Text="{Binding SuggestionStatus}"/>
+            </StackPanel>
+        </Panel>
+
+        <Border Background="#2A1715" CornerRadius="6" Padding="10,7" Margin="0,6,0,0"
+                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Name="ForwardErrorText" AutomationProperties.AutomationId="ForwardErrorText"
+                       Text="{Binding ErrorMessage}" Foreground="#F09089" FontSize="12.5" TextWrapping="Wrap"/>
+        </Border>
+
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Name="CancelButton" Classes="tool" Content="Отмена" Width="104"
+                    AutomationProperties.AutomationId="ForwardCancelButton"
+                    IsCancel="True" Click="CancelClick"/>
+            <Button Name="OkButton" Classes="primary" Content="Создать" Width="104"
+                    AutomationProperties.AutomationId="ForwardOkButton"
+                    IsDefault="True" Click="OkClick"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

@@ -11,12 +11,6 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Opened += (_, _) => DialogService.Owner = this;
-        Closing += (_, _) =>
-        {
-            if (DialogService.Owner == this)
-                DialogService.Owner = null;
-        };
 
         // Drag&drop: окно целиком регистрируется как drop-цель (DragDropDevice в Avalonia
         // выбирает целью сам хит-тест элемент — AllowDrop наследуется от корня на всё дерево),
@@ -72,7 +66,7 @@ public partial class MainWindow : Window
     private bool FilesDrag(DragEventArgs e)
     {
         var vm = DataContext as MainWindowViewModel;
-        var hasFiles = e.Data.Contains(DataFormats.Files);
+        var hasFiles = e.DataTransfer.Formats.Contains(DataFormat.File);
         var bound = vm is { Browser.IsBound: true };
         DragLog($"files-format={hasFiles} bound={bound} connected-profile={vm?.SelectedProfile?.Name ?? "-"}");
         return hasFiles && bound;
@@ -107,12 +101,12 @@ public partial class MainWindow : Window
     {
         e.Handled = true;
         DropOverlay.IsVisible = false;
-        DragLog($"DROP files-format={e.Data.Contains(DataFormats.Files)}");
+        DragLog($"DROP files-format={e.DataTransfer.Formats.Contains(DataFormat.File)}");
 
         if (!InDropArea(e) || !FilesDrag(e) || DataContext is not MainWindowViewModel vm)
             return;
 
-        var localPaths = e.Data.GetFiles()
+        var localPaths = e.DataTransfer.TryGetFiles()
             ?.Select(f => f.TryGetLocalPath())
             .Where(p => p is not null)
             .Select(p => p!)

@@ -18,6 +18,7 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly ClientSettings _settings;
     private readonly IServerLauncher _launcher;
+    private readonly IDialogService _dialogs;
 
     // profileId -> connectionId: сервер не хранит связь профиль↔соединение,
     // поэтому активные соединения трекаются на клиенте.
@@ -31,20 +32,32 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private FileManagerApiClient Api { get; set; }
 
+    /// <summary>Доступ к текущему клиенту API (для окон, открываемых поверх соединения).</summary>
+    public FileManagerApiClient ApiClient => Api;
+
     public ObservableCollection<ProfileViewModel> Profiles { get; } = new();
 
     public FileBrowserViewModel Browser { get; }
 
-    public MainWindowViewModel(ClientSettings settings, IServerLauncher launcher)
+    public MainWindowViewModel(ClientSettings settings, IServerLauncher launcher, IDialogService dialogs)
     {
         _settings = settings;
         _launcher = launcher;
+        _dialogs = dialogs;
         ServerUrl = settings.ServerUrl;
         Api = new FileManagerApiClient(ServerUrl);
         Browser = new FileBrowserViewModel(
             () => Api,
             busy => IsBusy = busy,
-            text => StatusText = text);
+            text => StatusText = text,
+            dialogs);
+        Browser.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(FileBrowserViewModel.IsBound)
+                or nameof(FileBrowserViewModel.ConnectionName)
+                or nameof(FileBrowserViewModel.BoundProtocol))
+                OnPropertyChanged(nameof(IsTunnelsAvailable));
+        };
 
         _ = InitializeAsync();
     }
@@ -90,6 +103,18 @@ public partial class MainWindowViewModel : ViewModelBase
         });
     }
 
+    /// <summary>Туннели доступны только для SFTP/SSH-подключений.</summary>
+    public bool IsTunnelsAvailable => Browser.IsBound && Browser.BoundProtocol == Models.Protocol.Sftp;
+
+    [RelayCommand]
+    private void OpenTunnels()
+    {
+        if (!IsTunnelsAvailable)
+            return;
+        _dialogs.ShowTunnelsWindow(
+            new TunnelsViewModel(Api, Browser.ConnectionId, Browser.ConnectionName, _dialogs));
+    }
+
     /// <summary>
     /// Настройки сервера спрятаны за шестерёнкой в статус-баре: сервер — инфраструктура,
     /// пользователю не нужна отдельная плашка. Диалог недоступен без владельца (headless) — no-op.
@@ -97,7 +122,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task OpenServerSettings()
     {
-        var url = await DialogService.PromptAsync("Настройки", "Адрес локального сервера:", ServerUrl);
+        var url = await _dialogs.PromptAsync("Настройки", "Адрес локального сервера:", ServerUrl);
         if (string.IsNullOrWhiteSpace(url) || url.Trim() == ServerUrl)
             return;
         ServerUrl = url.Trim();
@@ -137,7 +162,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task AddProfile()
     {
         var editor = new ProfileEditViewModel(null);
-        if (!await DialogService.ShowProfileEditorAsync(editor))
+        if (!await _dialogs.ShowProfileEditorAsync(editor))
             return;
         await RunBusyAsync(async () =>
         {
@@ -153,7 +178,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (SelectedProfile is null)
             return;
         var editor = new ProfileEditViewModel(SelectedProfile.Profile);
-        if (!await DialogService.ShowProfileEditorAsync(editor))
+        if (!await _dialogs.ShowProfileEditorAsync(editor))
             return;
         await RunBusyAsync(async () =>
         {
@@ -170,7 +195,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (SelectedProfile is null)
             return;
         var profile = SelectedProfile;
-        if (!await DialogService.ConfirmAsync("Удаление профиля", $"Удалить профиль «{profile.Name}»?"))
+        if (!await _dialogs.ConfirmAsync("Удаление профиля", $"Удалить профиль «{profile.Name}»?"))
             return;
         await RunBusyAsync(async () =>
         {
@@ -196,7 +221,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (_activeConnections.TryGetValue(profile.Id, out var existing))
         {
-            await Browser.BindAsync(existing, profile.Name);
+            await Browser.BindAsync(existing, profile.Name, profile.Protocol);
             return;
         }
 
@@ -206,7 +231,7 @@ public partial class MainWindowViewModel : ViewModelBase
             await Api.ConnectAsync(connectionId);
             _activeConnections[profile.Id] = connectionId;
             profile.IsConnected = true;
-            await Browser.BindAsync(connectionId, profile.Name);
+            await Browser.BindAsync(connectionId, profile.Name, profile.Protocol);
             StatusText = $"Подключено: {profile.Name}";
         });
     }
@@ -240,12 +265,12 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (ApiException ex)
         {
             StatusText = "Ошибка API: " + ex.ServerMessage;
-            await DialogService.ShowMessageAsync("Ошибка", ex.ServerMessage);
+            await _dialogs.ShowMessageAsync("Ошибка", ex.ServerMessage);
         }
         catch (Exception ex)
         {
             StatusText = "Ошибка: " + ex.Message;
-            await DialogService.ShowMessageAsync("Ошибка", ex.Message);
+            await _dialogs.ShowMessageAsync("Ошибка", ex.Message);
         }
         finally
         {

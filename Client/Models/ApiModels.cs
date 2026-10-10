@@ -153,3 +153,63 @@ public static class ClientJson
         Converters = { new JsonStringEnumConverter() },
     };
 }
+
+// === Порт-форвардинг (connections/{id}/forwards, PR #31) ===
+
+/// <summary>ssh -L / -R / -D (SOCKS).</summary>
+public enum ForwardType
+{
+    Local,
+    Remote,
+    Dynamic,
+}
+
+public enum ForwardState
+{
+    Stopped,
+    Active,
+
+    /// <summary>Туннель запущен, но SSH-слой сообщил об ошибке.</summary>
+    Failed,
+}
+
+public class ForwardRule
+{
+    [JsonPropertyName("id")] public Guid Id { get; set; }
+    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    [JsonPropertyName("type")] public ForwardType Type { get; set; }
+    [JsonPropertyName("bindHost")] public string BindHost { get; set; } = string.Empty;
+    [JsonPropertyName("bindPort")] public int BindPort { get; set; }
+    [JsonPropertyName("targetHost")] public string? TargetHost { get; set; }
+    [JsonPropertyName("targetPort")] public int? TargetPort { get; set; }
+}
+
+public class ForwardStatus
+{
+    [JsonPropertyName("rule")] public ForwardRule Rule { get; set; } = new();
+    [JsonPropertyName("state")] public ForwardState State { get; set; }
+    [JsonPropertyName("actualBindPort")] public int? ActualBindPort { get; set; }
+    [JsonPropertyName("error")] public string? Error { get; set; }
+    [JsonPropertyName("startedAtUtc")] public DateTimeOffset? StartedAtUtc { get; set; }
+    [JsonPropertyName("connectionsServed")] public long ConnectionsServed { get; set; }
+}
+
+public class PortSuggestion
+{
+    [JsonPropertyName("port")] public int Port { get; set; }
+    [JsonPropertyName("address")] public string? Address { get; set; }
+    [JsonPropertyName("service")] public string? Service { get; set; }
+    [JsonPropertyName("process")] public string? Process { get; set; }
+    [JsonPropertyName("source")] public string Source { get; set; } = string.Empty;
+
+    [JsonIgnore]
+    public string Label
+    {
+        get
+        {
+            var name = Service ?? Process;
+            var scope = Address is "127.0.0.1" or "::1" or "localhost" ? " (loopback)" : "";
+            return name is null ? $"{Port}{scope}" : $"{Port} — {name}{scope}";
+        }
+    }
+}
