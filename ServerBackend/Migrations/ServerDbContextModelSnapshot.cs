@@ -19,8 +19,10 @@ namespace ServerBackend.Migrations
 
             modelBuilder.Entity("Core.Models.Credentials.UserProfile", b =>
                 {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("JsonHostProfile")
@@ -31,10 +33,7 @@ namespace ServerBackend.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
+                    b.HasKey("UserId", "Id");
 
                     b.HasIndex("UserId");
 

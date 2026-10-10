@@ -54,7 +54,7 @@ try
     builder.Services.AddSingleton<IServerSessionService, ServerSessionService>();
     builder.Services.AddHttpClient<IProfileServerClient, ProfileServerClient>(client =>
     {
-        client.BaseAddress = new Uri("http://176.53.160.4");
+        client.BaseAddress = new Uri("https://sftp-ftp-server.duckdns.org");
     });
                                                                               
     builder.Services.AddHostedService<IdleConnectionJanitor>();
