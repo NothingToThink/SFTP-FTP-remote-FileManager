@@ -16,6 +16,8 @@ using Core.Interfaces.Storage;
 using Core.Security;
 using Core.Utils;
 using System.Reflection;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 try
 {
@@ -29,6 +31,25 @@ try
         {
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        })
+        .ConfigureApiBehaviorOptions(options =>
+        {
+            // Same {"error": ...} shape as ExceptionMiddleware instead of ProblemDetails:
+            // the client only reads the "error" field.
+            options.InvalidModelStateResponseFactory = context =>
+            {
+                var queryParameters = context.ActionDescriptor.Parameters
+                    .Where(p => p.BindingInfo?.BindingSource == BindingSource.Query)
+                    .Select(p => p.Name)
+                    .ToHashSet();
+                var messages = context.ModelState
+                    .Where(e => e.Value?.Errors.Count > 0)
+                    .Select(e => queryParameters.Contains(e.Key) && string.IsNullOrEmpty(e.Value!.AttemptedValue)
+                        ? $"Query parameter '{e.Key}' is required."
+                        : string.Join(" ", e.Value!.Errors.Select(err =>
+                            string.IsNullOrEmpty(err.ErrorMessage) ? $"Invalid value for '{e.Key}'." : err.ErrorMessage)));
+                return new BadRequestObjectResult(new { error = string.Join("; ", messages) });
+            };
         });
 
     builder.Services.AddSingleton<ICredentialProtectionService, Base64CredentialProtectionService>();

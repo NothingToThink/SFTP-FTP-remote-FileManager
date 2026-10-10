@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
-using System.Text.Json;
 using Core.Interfaces.Manager;
 using Core.Models;
 using Core.Models.Credentials;
@@ -39,11 +38,7 @@ public class FilesystemEndpointTests :
         await UploadAsync(client, id, "src/a.txt", "12345");
         await UploadAsync(client, id, "src/nested/b.txt", "1234567");
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"/connections/{id}/filesystem/dir/size")
-        {
-            Content = JsonString("src"),
-        };
-        var response = await client.SendAsync(request);
+        var response = await client.GetAsync($"/connections/{id}/filesystem/dir/size?path=src");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(12L, await response.Content.ReadFromJsonAsync<long>());
@@ -101,20 +96,15 @@ public class FilesystemEndpointTests :
     }
 
     private static Task<bool> FileExistsAsync(HttpClient client, Guid id, string path)
-        => GetBoolWithBodyAsync(client, $"/connections/{id}/filesystem/file/exists", path);
+        => GetBoolAsync(client, $"/connections/{id}/filesystem/file/exists", path);
 
     private static Task<bool> DirExistsAsync(HttpClient client, Guid id, string path)
-        => GetBoolWithBodyAsync(client, $"/connections/{id}/filesystem/dir/exists", path);
+        => GetBoolAsync(client, $"/connections/{id}/filesystem/dir/exists", path);
 
-    // The path still travels in the GET body here; switching it to the query string is a separate task.
-    private static async Task<bool> GetBoolWithBodyAsync(HttpClient client, string url, string path)
+    private static async Task<bool> GetBoolAsync(HttpClient client, string url, string path)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, url) { Content = JsonString(path) };
-        var response = await client.SendAsync(request);
+        var response = await client.GetAsync($"{url}?path={Uri.EscapeDataString(path)}");
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<bool>();
     }
-
-    private static StringContent JsonString(string value)
-        => new(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
 }
