@@ -55,6 +55,25 @@ public class ConnectionsFilesystemController(
     }
 
     /// <summary>
+    /// Calculates the total size of a directory, including all nested files.
+    /// </summary>
+    /// <param name="connectionId">Unique connection identifier.</param>
+    /// <param name="path">Path of the directory on the remote file system.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Total size of the directory contents in bytes.</returns>
+    /// <response code="200">Directory size calculated successfully.</response>
+    /// <response code="404">Directory or connection instance not found.</response>
+    [HttpGet("dir/size")]
+    [ProducesResponseType(typeof(long), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDirSize([FromRoute] Guid connectionId, [FromBody] string path, CancellationToken ct)
+    {
+        logger.LogInformation("Getting directory size.");
+        var connection = connectionManager.GetConnection(connectionId);
+        return Ok(await connection.GetDirSizeAsync(path, ct));
+    }
+
+    /// <summary>
     /// Creates an empty file at the specified path.
     /// </summary>
     /// <param name="connectionId">Unique connection identifier.</param>
@@ -237,6 +256,44 @@ public class ConnectionsFilesystemController(
         logger.LogInformation("Moving file.");
         var connection = connectionManager.GetConnection(connectionId);
         await connection.MoveFileAsync(request.sourcePath, request.targetPath, request.canOverride, ct);
+        return Ok();
+    }
+
+    /// <summary>
+    /// Recursively copies a directory to a new target path.
+    /// </summary>
+    /// <param name="connectionId">Unique connection identifier.</param>
+    /// <param name="request">Copy parameters including source, target path, and override flag.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <response code="200">Directory copied successfully.</response>
+    /// <response code="400">Copy operation failed.</response>
+    [HttpPost("dir/copy")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CopyDir([FromRoute] Guid connectionId, [FromBody] CopyRequest request, CancellationToken ct)
+    {
+        logger.LogInformation("Copying directory.");
+        var connection = connectionManager.GetConnection(connectionId);
+        await connection.CopyDirAsync(request.sourcePath, request.targetPath, request.canOverride, ct);
+        return Ok();
+    }
+
+    /// <summary>
+    /// Moves a directory to a new target path.
+    /// </summary>
+    /// <param name="connectionId">Unique connection identifier.</param>
+    /// <param name="request">Move parameters including source, target path, and override flag.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <response code="200">Directory moved successfully.</response>
+    /// <response code="400">Move operation failed.</response>
+    [HttpPatch("dir/move")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> MoveDir([FromRoute] Guid connectionId, [FromBody] MoveRequest request, CancellationToken ct)
+    {
+        logger.LogInformation("Moving directory.");
+        var connection = connectionManager.GetConnection(connectionId);
+        await connection.MoveDirAsync(request.sourcePath, request.targetPath, request.canOverride, ct);
         return Ok();
     }
 
