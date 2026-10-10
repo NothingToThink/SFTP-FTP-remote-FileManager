@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Backend.Hubs;
 using Backend.Middleware;
+using Backend.Ui;
 using Backend.Services;
 using Core.Implementations.Factory;
 using Core.PortForwarding;
@@ -54,6 +56,21 @@ try
             };
         });
 
+    // Backend -> client dialogs. Same naming as the controllers (camelCase); enums as lowercase strings.
+    builder.Services.AddSignalR()
+        .AddJsonProtocol(options =>
+        {
+            options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
+            options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        });
+    builder.Services.AddSingleton<IUiSessionRegistry, UiSessionRegistry>();
+    builder.Services.AddSingleton<IUiBridge, UiBridge>();
+    if (builder.Environment.IsDevelopment())
+    {
+        builder.Services.AddSingleton<UiDemoService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<UiDemoService>());
+    }
+
     builder.Services.AddSingleton<ICredentialProtectionService, Base64CredentialProtectionService>();
     builder.Services.AddSingleton<IProfileStorage>(sp =>
     {
@@ -99,6 +116,23 @@ try
     app.UseCors(policy => policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
     app.UseMiddleware<ExceptionMiddleware>();
     app.MapControllers();
+    app.MapHub<UiHub>("/hubs/ui");
+
+    if (app.Environment.IsDevelopment())
+    {
+        // Demo of the UI channel: asks for a string, then shows it back. Dialogs run in the background.
+        app.MapPost("/dev/ui/demo", (HttpRequest request, IUiSessionRegistry registry, UiDemoService demo) =>
+        {
+            var sessionId = request.Headers["X-UI-Session"].ToString();
+            if (string.IsNullOrWhiteSpace(sessionId))
+                return Results.BadRequest(new { error = "Header X-UI-Session is required." });
+            if (!registry.IsConnected(sessionId))
+                return Results.BadRequest(new { error = $"UI client '{sessionId}' is not connected." });
+
+            _ = demo.Start(sessionId); // tracked and logged inside UiDemoService
+            return Results.Accepted();
+        });
+    }
     app.Run();
 }
 catch (Exception e)
