@@ -23,6 +23,12 @@ public sealed class DepPlugin : IPlugin
 
         context.Commands.Register("test.dep.fail", (_, _) => throw new InvalidOperationException("boom"));
 
+        context.Commands.Register("test.dep.nobuttons", async (_, token) =>
+        {
+            var answer = await context.Window.ShowMessageAsync(MessageSeverity.Info, "no buttons", ct: token);
+            context.Log.Info($"nobuttons-answer:{answer ?? "null"}");
+        });
+
         context.Commands.Register("test.dep.wait", async (_, token) =>
         {
             await context.Window.ShowMessageAsync(MessageSeverity.Info, "started", ["OK"], token);

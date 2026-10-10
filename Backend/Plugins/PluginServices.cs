@@ -75,12 +75,10 @@ public static class UiSessionScope
 /// </summary>
 public sealed class PluginWindow(IUiBridge bridge) : IWindow
 {
-    private static readonly string[] DefaultButtons = ["OK"];
-
     public Task<string?> ShowMessageAsync(MessageSeverity severity, string message,
         IReadOnlyList<string>? buttons = null, CancellationToken ct = default) =>
-        bridge.ShowMessageAsync(RequireSession(), severity, message,
-            buttons is { Count: > 0 } ? buttons : DefaultButtons, ct);
+        // No buttons is passed on as is: the client shows a single OK and answers null.
+        bridge.ShowMessageAsync(RequireSession(), severity, message, buttons ?? [], ct);
 
     public Task<string?> ShowInputBoxAsync(InputBoxOptions options, CancellationToken ct = default) =>
         bridge.ShowInputBoxAsync(RequireSession(),

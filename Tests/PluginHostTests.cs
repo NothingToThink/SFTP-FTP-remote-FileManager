@@ -100,7 +100,7 @@ public sealed class UiTestClient : IAsyncDisposable
     public Channel<WireMessage> Messages { get; } = Channel.CreateUnbounded<WireMessage>();
 
     public static async Task<UiTestClient> ConnectAsync(WebApplicationFactory<Program> factory,
-        string? inputAnswer = "answer", bool handleMessages = true)
+        string? inputAnswer = "answer", bool handleMessages = true, string? messageAnswer = "OK")
     {
         var server = factory.Server;
         var connection = new HubConnectionBuilder()
@@ -121,7 +121,7 @@ public sealed class UiTestClient : IAsyncDisposable
             connection.On<WireMessage, string?>("ShowMessage", message =>
             {
                 client.Messages.Writer.TryWrite(message);
-                return Task.FromResult<string?>("OK");
+                return Task.FromResult(messageAnswer);
             });
         }
 
@@ -175,9 +175,9 @@ public class PluginHostTests : IAsyncLifetime
     }
 
     private async Task<UiTestClient> ConnectAsync(WebApplicationFactory<Program> factory, string? inputAnswer = "answer",
-        bool handleMessages = true)
+        bool handleMessages = true, string? messageAnswer = "OK")
     {
-        var client = await UiTestClient.ConnectAsync(factory, inputAnswer, handleMessages);
+        var client = await UiTestClient.ConnectAsync(factory, inputAnswer, handleMessages, messageAnswer);
         _disposables.Add(client);
         return client;
     }
@@ -280,6 +280,21 @@ public class PluginHostTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Message_Without_Buttons_Reaches_The_Client_With_An_Empty_Array_And_Gets_Its_Answer()
+    {
+        _data.AddPlugin("DepPlugin", "dep");
+        var factory = StartBackend();
+        await using var client = await ConnectAsync(factory, messageAnswer: null);
+
+        await ExecuteAsync(factory, "test.dep.nobuttons", client.ConnectionId);
+
+        var message = await ReadAsync(client.Messages);
+        Assert.NotNull(message.Buttons);
+        Assert.Empty(message.Buttons);
+        await WaitForLogAsync(e => e.Category == "Plugin.test.dep" && e.Message == "nobuttons-answer:null");
+    }
+
+    [Fact]
     public async Task Handler_Exception_Is_Only_Logged_When_The_Client_Cannot_Show_It()
     {
         _data.AddPlugin("DepPlugin", "dep");
@@ -347,7 +362,7 @@ public class PluginHostTests : IAsyncLifetime
         _data.AddPlugin("Sample.Echo", "f-echo");
         var factory = StartBackend();
 
-        Assert.Equal(["sample.echo.ask", "test.dep.fail", "test.dep.run", "test.dep.wait"],
+        Assert.Equal(["sample.echo.ask", "test.dep.fail", "test.dep.nobuttons", "test.dep.run", "test.dep.wait"],
             await CommandIdsAsync(factory));
         Assert.True(_logs.Entries.Count(e => e.Level == LogLevel.Error && e.Category.Contains("PluginLoader")) >= 4);
     }

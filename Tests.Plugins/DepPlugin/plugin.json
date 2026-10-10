@@ -8,7 +8,8 @@
         "commands": [
             { "id": "test.dep.run", "title": "Run" },
             { "id": "test.dep.fail", "title": "Fail" },
-            { "id": "test.dep.wait", "title": "Wait" }
+            { "id": "test.dep.wait", "title": "Wait" },
+            { "id": "test.dep.nobuttons", "title": "No buttons" }
         ]
     }
 }
