@@ -1,0 +1,11 @@
+{
+    "id": "volcanoboys.agent",
+    "displayName": "ИИ-агент",
+    "version": "0.1.0",
+    "main": "VolcanoBoys.Agent.dll",
+    "contributes": {
+        "commands": [
+            { "id": "volcanoboys.agent.ask", "title": "Спросить ИИ-агента" }
+        ]
+    }
+}
