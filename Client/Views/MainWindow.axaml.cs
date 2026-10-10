@@ -1,3 +1,4 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
@@ -23,6 +24,29 @@ public partial class MainWindow : Window
             Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(DragDrop.DropEvent, OnRootDrop,
             Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+    }
+
+    private void FilesContextMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+        => RebuildPluginsMenu();
+
+    /// <summary>Пункты подменю «Плагины» из кеша команд; вызывается при каждом открытии меню.</summary>
+    internal void RebuildPluginsMenu()
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        PluginsMenuItem.Items.Clear();
+        foreach (var command in vm.PluginCommands)
+        {
+            var item = new MenuItem
+            {
+                Header = command.Title,
+                Command = vm.ExecutePluginCommandCommand,
+                CommandParameter = command,
+            };
+            AutomationProperties.SetAutomationId(item, $"PluginCommand:{command.Id}");
+            PluginsMenuItem.Items.Add(item);
+        }
     }
 
     private void FilesGridDoubleTapped(object? sender, TappedEventArgs e)

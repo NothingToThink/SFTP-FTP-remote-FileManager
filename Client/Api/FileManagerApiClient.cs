@@ -228,6 +228,28 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
         await src.CopyToAsync(dst, ct);
     }
 
+    // --- Команды плагинов ---
+
+    public Task<List<PluginCommand>> GetCommandsAsync(CancellationToken ct = default)
+        => GetAsync<List<PluginCommand>>("commands", ct);
+
+    /// <summary>
+    /// Запускает команду плагина. Ответ 202 — результата не ждём: диалоги плагин откроет сам
+    /// через хаб /hubs/ui клиента с ConnectionId = <paramref name="uiSessionId"/>.
+    /// </summary>
+    public async Task ExecuteCommandAsync(string commandId, string uiSessionId, Guid? connectionId,
+        string? currentPath, IReadOnlyList<string> selectedPaths, CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post,
+            $"commands/{Uri.EscapeDataString(commandId)}/execute")
+        {
+            Content = JsonBody(new { connectionId, currentPath, selectedPaths }),
+        };
+        req.Headers.Add("X-UI-Session", uiSessionId);
+        using var resp = await _http.SendAsync(req, ct);
+        await EnsureSuccessAsync(resp, ct);
+    }
+
     // --- Вспомогательные ---
 
     private static StringContent JsonBody(object value)

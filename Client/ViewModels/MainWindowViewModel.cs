@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileManagerClient.Api;
+using FileManagerClient.Models;
 using FileManagerClient.Services;
 
 namespace FileManagerClient.ViewModels;
@@ -19,6 +21,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ClientSettings _settings;
     private readonly IServerLauncher _launcher;
     private readonly IDialogService _dialogs;
+    private readonly UiHubClient? _hub;
 
     // profileId -> connectionId: сервер не хранит связь профиль↔соединение,
     // поэтому активные соединения трекаются на клиенте.
@@ -29,6 +32,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _statusText = "Готов";
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private ProfileViewModel? _selectedProfile;
+    [ObservableProperty] private UiChannelState _channelState;
 
     private FileManagerApiClient Api { get; set; }
 
@@ -39,11 +43,35 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public FileBrowserViewModel Browser { get; }
 
-    public MainWindowViewModel(ClientSettings settings, IServerLauncher launcher, IDialogService dialogs)
+    /// <summary>Команды плагинов для подменю «Плагины» (кеш GET /commands, обновляется при (пере)подключении канала).</summary>
+    public ObservableCollection<PluginCommand> PluginCommands { get; } = new();
+
+    public bool HasPluginCommands => PluginCommands.Count > 0;
+
+    public string ChannelText => ChannelState switch
+    {
+        UiChannelState.Connected => "Канал диалогов: подключён",
+        UiChannelState.Connecting => "Канал диалогов: подключение…",
+        UiChannelState.Reconnecting => "Канал диалогов: восстановление связи…",
+        _ => "Канал диалогов: нет связи",
+    };
+
+    partial void OnChannelStateChanged(UiChannelState value) => OnPropertyChanged(nameof(ChannelText));
+
+    /// <param name="hub">Канал диалогов Backend → клиент; без него (тесты, аудит) подменю плагинов недоступно.</param>
+    public MainWindowViewModel(ClientSettings settings, IServerLauncher launcher, IDialogService dialogs,
+        UiHubClient? hub = null)
     {
         _settings = settings;
         _launcher = launcher;
         _dialogs = dialogs;
+        _hub = hub;
+        PluginCommands.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasPluginCommands));
+        if (hub is not null)
+        {
+            hub.StateChanged += state => Dispatcher.UIThread.Post(() => ChannelState = state);
+            hub.Connected += () => Dispatcher.UIThread.Post(() => _ = LoadPluginCommandsAsync());
+        }
         ServerUrl = settings.ServerUrl;
         Api = new FileManagerApiClient(ServerUrl);
         Browser = new FileBrowserViewModel(
@@ -79,6 +107,8 @@ public partial class MainWindowViewModel : ViewModelBase
         StatusText = reachable
             ? $"Сервер: {ServerUrl}"
             : "Сервер недоступен — адрес можно сменить в настройках (шестерёнка справа внизу)";
+        if (reachable && _hub is not null)
+            await _hub.StartAsync(ServerUrl);
     }
 
     [RelayCommand]
@@ -91,6 +121,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
             Api.Dispose();
             Api = new FileManagerApiClient(ServerUrl);
+
+            if (_hub is not null)
+                await _hub.StopAsync();
+            PluginCommands.Clear();
 
             Browser.Reset();
             _activeConnections.Clear();
@@ -127,6 +161,72 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         ServerUrl = url.Trim();
         await ApplyServerUrlCommand.ExecuteAsync(null);
+    }
+
+    private async Task LoadPluginCommandsAsync()
+    {
+        try
+        {
+            var commands = await Api.GetCommandsAsync();
+            PluginCommands.Clear();
+            foreach (var command in commands)
+                PluginCommands.Add(command);
+        }
+        catch
+        {
+            // подменю «Плагины» — необязательная часть: при ошибке остаётся прежний кеш
+        }
+    }
+
+    /// <summary>Запускает команду плагина над активной панелью. Результат не ждём: плагин сам откроет диалоги.</summary>
+    [RelayCommand]
+    private async Task ExecutePluginCommand(PluginCommand? command)
+    {
+        if (command is null)
+            return;
+        var sessionId = _hub?.ConnectionId;
+        if (_hub is null || sessionId is null)
+        {
+            StatusText = "Нет связи с сервером";
+            return;
+        }
+
+        var connectionId = Browser.IsBound ? Browser.ConnectionId : (Guid?)null;
+        var currentPath = Browser.IsBound ? Browser.CurrentPath : null;
+        var selected = Browser.SelectedItem is { } item ? new[] { item.FullPath } : [];
+
+        try
+        {
+            try
+            {
+                await Api.ExecuteCommandAsync(command.Id, sessionId, connectionId, currentPath, selected);
+            }
+            catch (ApiException ex) when (ex.StatusCode == 400)
+            {
+                // Backend регистрирует клиента в OnConnectedAsync — это бывает чуть позже, чем у клиента
+                // завершился StartAsync. Один повтор; ConnectionId берём заново (мог смениться).
+                await Task.Delay(200);
+                if (_hub.ConnectionId is not { } freshSessionId)
+                {
+                    StatusText = "Нет связи с сервером";
+                    return;
+                }
+
+                await Api.ExecuteCommandAsync(command.Id, freshSessionId, connectionId, currentPath, selected);
+            }
+        }
+        catch (ApiException ex)
+        {
+            StatusText = $"Команда «{command.Title}»: {ex.ServerMessage}";
+        }
+        catch (HttpRequestException)
+        {
+            StatusText = "Нет связи с сервером";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Команда «{command.Title}»: {ex.Message}";
+        }
     }
 
     [RelayCommand]
