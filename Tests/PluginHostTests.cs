@@ -362,7 +362,7 @@ public class PluginHostTests : IAsyncLifetime
         _data.AddPlugin("Sample.Echo", "f-echo");
         var factory = StartBackend();
 
-        Assert.Equal(["sample.echo.ask", "test.dep.fail", "test.dep.nobuttons", "test.dep.run", "test.dep.wait"],
+        Assert.Equal(["sample.echo.ask", "test.dep.fail", "test.dep.nobuttons", "test.dep.run", "test.dep.wait", "test.dep.write"],
             await CommandIdsAsync(factory));
         Assert.True(_logs.Entries.Count(e => e.Level == LogLevel.Error && e.Category.Contains("PluginLoader")) >= 4);
     }
@@ -439,15 +439,6 @@ public class PluginHostTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.NotEmpty(await ErrorOfAsync(response));
-    }
-
-    [Fact]
-    public async Task Files_Is_A_Stub_Until_It_Is_Implemented()
-    {
-        var factory = StartBackend();
-        var files = factory.Services.GetRequiredService<IFileSystem>();
-
-        await Assert.ThrowsAsync<NotImplementedException>(() => files.ListAsync(Guid.NewGuid(), "/"));
     }
 }
 
