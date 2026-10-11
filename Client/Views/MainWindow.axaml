@@ -249,8 +249,12 @@
                     <PathIcon Data="{StaticResource IconFolderBig}" Width="44" Height="44"
                               Foreground="{StaticResource BorderStrongBrush}" HorizontalAlignment="Center"/>
                     <TextBlock Classes="h1" HorizontalAlignment="Center" Text="Нет активного подключения"/>
-                    <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
-                               Text="Выберите профиль слева и нажмите «Подключить»,&#10;либо создайте новый профиль со знаком «+»"/>
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
+                                   Text="Выберите профиль слева и нажмите «Подключить»,"/>
+                        <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
+                                   Text="либо создайте новый профиль со знаком «+»"/>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Оверлей при перетаскивании файлов -->

@@ -36,4 +36,7 @@ public partial class ProfileEditWindow : Window
     // IsCancel в Avalonia только пробрасывает Esc в Click — само окно не закрывает:
     // без явного обработчика «Отмена» ничего не делала.
     private void CancelClick(object? sender, RoutedEventArgs e) => Close(false);
+
+    /// <summary>Тестовый хук: имитирует нажатие Esc/«Отмена».</summary>
+    public void OnCancelPressed() => Close(false);
 }

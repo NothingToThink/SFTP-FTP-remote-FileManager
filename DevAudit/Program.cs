@@ -152,10 +152,44 @@ public static class Program
             var window = new ProfileEditWindow { DataContext = vm };
             window.Show();
             Pump();
+
+            // issue #41: секции сворачиваются, поля скрываются
+            var expanders = window.GetVisualDescendants().OfType<Expander>().ToList();
+            var hostBox = window.GetVisualDescendants().OfType<TextBox>()
+                .FirstOrDefault(b => b.Name == "HostBox");
+            Report.AppendLine($"  Expanders: {expanders.Count}");
+            if (expanders.Count >= 2 && hostBox is not null)
+            {
+                expanders[0].IsExpanded = false;
+                Pump();
+                Report.AppendLine(hostBox.IsEffectivelyVisible
+                    ? "  [ISSUE] свёрнутая секция «Подключение» не скрыла поля"
+                    : "  [OK] секция «Подключение» сворачивается (HostBox скрыт)");
+                if (hostBox.IsEffectivelyVisible)
+                    _issuesTotal++;
+                expanders[0].IsExpanded = true;
+                Pump();
+            }
+            else
+            {
+                Report.AppendLine("  [ISSUE] Expander-секции не найдены в диалоге");
+                _issuesTotal++;
+            }
+
             AnalyzeWindow(window, name);
             DumpTree(window, maxLines: 60);
             Capture(window, name.Replace(' ', '_').Replace(':', '_'));
-            window.Close();
+
+            // issue #41: Esc закрывает окно (IsCancel) — последним шагом,
+            // чтобы не закрыть окно до скриншота
+            var closed = false;
+            window.Closed += (_, _) => closed = true;
+            window.OnCancelPressed();
+            Report.AppendLine(closed
+                ? "  [OK] отмена закрывает диалог"
+                : "  [ISSUE] отмена не закрывает диалог");
+            if (!closed)
+                _issuesTotal++;
         }
     }
 
