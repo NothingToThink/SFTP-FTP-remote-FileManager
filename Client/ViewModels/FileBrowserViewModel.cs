@@ -7,6 +7,9 @@ using FileManagerClient.Services;
 
 namespace FileManagerClient.ViewModels;
 
+/// <summary>Сегмент хлебных крошек: подпись и полный путь для перехода.</summary>
+public sealed record PathCrumb(string Label, string Path, bool IsLast);
+
 /// <summary>
 /// Файловый браузер одного активного соединения. Навигация — через смену рабочей
 /// директории на сервере (PATCH dir/current) + листинг рабочей директории (GET filesystem).
@@ -26,6 +29,62 @@ public partial class FileBrowserViewModel : ViewModelBase
     [ObservableProperty] private string _currentPath = string.Empty;
     [ObservableProperty] private FileItem? _selectedItem;
     [ObservableProperty] private int _itemCount;
+    [ObservableProperty] private bool _isEditingPath;
+    [ObservableProperty] private bool _canGoBack;
+    [ObservableProperty] private bool _hasSelection;
+    [ObservableProperty] private int _selectionCount;
+
+    // История переходов для кнопки «назад»
+    private readonly Stack<string> _backStack = new();
+    private bool _suppressHistory;
+    private IReadOnlyList<FileItem> _selected = Array.Empty<FileItem>();
+
+    /// <summary>Хлебные крошки текущего пути (кликабельные сегменты).</summary>
+    public ObservableCollection<PathCrumb> Crumbs { get; } = new();
+
+    /// <summary>Панель передач (загрузки/скачивания этого соединения).</summary>
+    public TransfersViewModel Transfers { get; } = new();
+
+    /// <summary>Выбранные строки (мультивыбор); обновляется из code-behind при SelectionChanged грида.</summary>
+    public IReadOnlyList<FileItem> SelectedItems => _selected;
+
+    public void SetSelection(IEnumerable<FileItem> items)
+    {
+        _selected = items.ToList();
+        SelectionCount = _selected.Count;
+        HasSelection = _selected.Count > 0;
+        if (_selected.Count == 0)
+            SelectedItem = null;
+        else if (SelectedItem is null || !_selected.Contains(SelectedItem))
+            SelectedItem = _selected[0];
+    }
+
+    partial void OnCurrentPathChanged(string value) => RebuildCrumbs(value);
+
+    private void RebuildCrumbs(string path)
+    {
+        Crumbs.Clear();
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+        var abs = path.StartsWith('/');
+        var sep = path.Contains('\\') && !path.Contains('/') ? '\\' : '/';
+        var parts = path.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+        var list = new List<(string Label, string Path)>();
+        if (abs)
+            list.Add(("/", "/"));
+        var cur = string.Empty;
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            if (i == 0)
+                cur = abs ? "/" + part : (part.EndsWith(':') ? part + sep : part);
+            else
+                cur = cur.TrimEnd('/', '\\') + sep + part;
+            list.Add((part, cur));
+        }
+        for (var i = 0; i < list.Count; i++)
+            Crumbs.Add(new PathCrumb(list[i].Label, list[i].Path, i == list.Count - 1));
+    }
 
     /// <summary>Id активного соединения (для тестов и ручных операций).</summary>
     public Guid ConnectionId => _connectionId;
@@ -49,6 +108,8 @@ public partial class FileBrowserViewModel : ViewModelBase
         OnPropertyChanged(nameof(BoundProtocol));
         IsBound = true;
         SelectedItem = null;
+        _backStack.Clear();
+        CanGoBack = false;
         await RunAsync(async () =>
         {
             CurrentPath = await _api().GetWorkingDirectoryAsync(_connectionId);
@@ -69,8 +130,12 @@ public partial class FileBrowserViewModel : ViewModelBase
         ConnectionName = string.Empty;
         CurrentPath = string.Empty;
         SelectedItem = null;
+        SetSelection(Array.Empty<FileItem>());
         Items.Clear();
         ItemCount = 0;
+        _backStack.Clear();
+        CanGoBack = false;
+        IsEditingPath = false;
     }
 
     private async Task LoadListAsync()
@@ -85,6 +150,7 @@ public partial class FileBrowserViewModel : ViewModelBase
         }
         ItemCount = Items.Count;
         SelectedItem = null;
+        SetSelection(Array.Empty<FileItem>());
     }
 
     /// <param name="quiet">Ошибки навигации не прерывают модалкой — только статус-бар.</param>
@@ -135,6 +201,7 @@ public partial class FileBrowserViewModel : ViewModelBase
 
         var target = path.Trim();
         var previous = CurrentPath;
+        IsEditingPath = false;
         await RunAsync(async () =>
         {
             await _api().ChangeDirectoryAsync(_connectionId, target);
@@ -142,6 +209,11 @@ public partial class FileBrowserViewModel : ViewModelBase
             {
                 CurrentPath = await _api().GetWorkingDirectoryAsync(_connectionId);
                 await LoadListAsync();
+                if (!_suppressHistory && !string.IsNullOrEmpty(previous) && previous != CurrentPath)
+                {
+                    _backStack.Push(previous);
+                    CanGoBack = true;
+                }
             }
             catch
             {
@@ -151,6 +223,18 @@ public partial class FileBrowserViewModel : ViewModelBase
                 throw;
             }
         }, $"Открыт: {CurrentPath}", revertPath: previous, quiet: true);
+    }
+
+    [RelayCommand]
+    private async Task GoBack()
+    {
+        if (_backStack.Count == 0)
+            return;
+        var target = _backStack.Pop();
+        CanGoBack = _backStack.Count > 0;
+        _suppressHistory = true;
+        try { await Navigate(target); }
+        finally { _suppressHistory = false; }
     }
 
     [RelayCommand]
@@ -218,19 +302,27 @@ public partial class FileBrowserViewModel : ViewModelBase
     [RelayCommand]
     private async Task Delete()
     {
-        if (SelectedItem is not { } item)
+        var targets = _selected.Count > 0
+            ? _selected.ToList()
+            : (SelectedItem is { } one ? new List<FileItem> { one } : new List<FileItem>());
+        if (targets.Count == 0)
             return;
-        var kind = item.IsDirectory ? "папку" : "файл";
-        if (!await _dialogs.ConfirmAsync("Удаление", $"Удалить {kind} «{item.Name}»?"))
+        var question = targets.Count == 1
+            ? $"Удалить {(targets[0].IsDirectory ? "папку" : "файл")} «{targets[0].Name}»?"
+            : $"Удалить выбранное ({targets.Count} объектов)?";
+        if (!await _dialogs.ConfirmAsync("Удаление", question))
             return;
         await RunAsync(async () =>
         {
-            if (item.IsDirectory)
-                await _api().DeleteDirAsync(_connectionId, item.FullPath);
-            else
-                await _api().DeleteFileAsync(_connectionId, item.FullPath);
+            foreach (var item in targets)
+            {
+                if (item.IsDirectory)
+                    await _api().DeleteDirAsync(_connectionId, item.FullPath);
+                else
+                    await _api().DeleteFileAsync(_connectionId, item.FullPath);
+            }
             await LoadListAsync();
-        }, $"Удалено: {item.Name}");
+        }, targets.Count == 1 ? $"Удалено: {targets[0].Name}" : $"Удалено объектов: {targets.Count}");
     }
 
     [RelayCommand]
@@ -281,9 +373,10 @@ public partial class FileBrowserViewModel : ViewModelBase
             return;
 
         var remotePath = CombinePath(CurrentPath, Path.GetFileName(localPath));
+        var transfer = Transfers.Start(Path.GetFileName(localPath), true, SafeLength(localPath));
         await RunAsync(async () =>
         {
-            await _api().UploadFileAsync(_connectionId, remotePath, localPath);
+            await TrackAsync(transfer, () => _api().UploadFileAsync(_connectionId, remotePath, localPath, transfer.Token));
             await LoadListAsync();
         }, $"Загружено на сервер: {remotePath}");
     }
@@ -298,7 +391,8 @@ public partial class FileBrowserViewModel : ViewModelBase
             foreach (var localPath in localPaths)
             {
                 var remotePath = CombinePath(CurrentPath, Path.GetFileName(localPath));
-                await _api().UploadFileAsync(_connectionId, remotePath, localPath);
+                var transfer = Transfers.Start(Path.GetFileName(localPath), true, SafeLength(localPath));
+                await TrackAsync(transfer, () => _api().UploadFileAsync(_connectionId, remotePath, localPath, transfer.Token));
             }
             await LoadListAsync();
         }, $"Загружено файлов: {localPaths.Count}");
@@ -307,15 +401,51 @@ public partial class FileBrowserViewModel : ViewModelBase
     [RelayCommand]
     private async Task Download()
     {
-        if (SelectedItem is not { IsDirectory: false } item)
-            return;
-        var localPath = await _dialogs.PickSaveFileAsync(item.Name);
-        if (localPath is null)
-            return;
-        await RunAsync(async () =>
+        var source = _selected.Count > 0
+            ? _selected
+            : (SelectedItem is { } one ? new[] { one } : Array.Empty<FileItem>());
+        var files = source.Where(f => !f.IsDirectory).ToList();
+        foreach (var item in files)
         {
-            await _api().DownloadFileAsync(_connectionId, item.FullPath, localPath);
-        }, $"Скачано: {localPath}");
+            var localPath = await _dialogs.PickSaveFileAsync(item.Name);
+            if (localPath is null)
+                continue;
+            var transfer = Transfers.Start(item.Name, false, item.Size);
+            await RunAsync(async () =>
+            {
+                await TrackAsync(transfer, () => _api().DownloadFileAsync(_connectionId, item.FullPath, localPath, transfer.Token));
+            }, $"Скачано: {localPath}");
+        }
+    }
+
+    /// <summary>Оборачивает вызов API в запись панели передач: завершение, отмена, ошибка.</summary>
+    private static async Task TrackAsync(TransferItemViewModel transfer, Func<Task> work)
+    {
+        try
+        {
+            await work();
+            transfer.Complete();
+        }
+        catch (OperationCanceledException)
+        {
+            transfer.MarkCancelled();
+        }
+        catch (ApiException ex)
+        {
+            transfer.Fail(ex.ServerMessage);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            transfer.Fail(ex.Message);
+            throw;
+        }
+    }
+
+    private static long SafeLength(string path)
+    {
+        try { return new FileInfo(path).Length; }
+        catch { return 0; }
     }
 
     [RelayCommand]

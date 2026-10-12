@@ -105,8 +105,7 @@ public static class Program
             var name = dark ? "dark" : "light";
             var settings = new ClientSettings { ServerUrl = "http://127.0.0.1:1", Theme = name };
             new ThemeService(settings).Apply();
-            var vm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl),
-                new HeadlessDialogService());
+            var vm = ShotVm(settings);
             var prof = (string n, string host, Protocol pr) => new ProfileViewModel(
                 SavedProfile.Create(n, new HostProfile(host, pr, new PasswordAuth("deploy", "x"))));
             vm.Profiles.Add(prof("prod-01", "10.0.0.5", Protocol.Sftp));
@@ -114,22 +113,56 @@ public static class Program
             vm.Profiles.Add(prof("Локальная папка", "/Users/demo", Protocol.Local));
             vm.SelectedProfile = vm.Profiles[0];
             vm.Profiles[0].IsConnected = true;
-            vm.Browser.IsBound = true;
-            vm.Browser.ConnectionName = "prod-01";
-            vm.Browser.CurrentPath = "/var/www/site";
-            vm.Browser.Items.Add(new FileItem { Name = "assets", IsDirectory = true, LastModified = new DateTime(2026, 5, 2, 10, 14, 0), Permissions = "drwxr-xr-x" });
-            vm.Browser.Items.Add(new FileItem { Name = "logs", IsDirectory = true, LastModified = new DateTime(2026, 5, 3, 8, 1, 0), Permissions = "drwxr-x---" });
-            vm.Browser.Items.Add(new FileItem { Name = "index.html", Size = 18432, LastModified = new DateTime(2026, 4, 28, 17, 40, 0), Permissions = "-rw-r--r--" });
-            vm.Browser.Items.Add(new FileItem { Name = "deploy.sh", Size = 1220, LastModified = new DateTime(2026, 4, 21, 9, 5, 0), Permissions = "-rwxr-xr-x" });
-            vm.Browser.Items.Add(new FileItem { Name = "backup-2026-05-01.tar.gz", Size = 73400320, LastModified = new DateTime(2026, 5, 1, 3, 0, 0), Permissions = "-rw-------" });
-            vm.Browser.ItemCount = vm.Browser.Items.Count;
-            vm.Browser.SelectedItem = vm.Browser.Items[2];
+            vm.Profiles[1].State = ConnectionState.Error;
+            ShotBind(vm);
+            vm.Browser.Transfers.IsExpanded = false;
 
-            var window = new MainWindow { DataContext = vm, Width = 1180, Height = 740 };
-            window.Show();
-            Pump();
-            window.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"{prefix}-{name}.png"), PngBitmapEncoderOptions.Default);
-            window.Close();
+            Snap(vm, dir, $"{prefix}-{name}.png");
+
+            // Нормальный список + раскрытая панель передач
+            var up = vm.Browser.Transfers.Start("backup-2026-05-01.tar.gz", true, 73400320);
+            up.Report(33000000);
+            var dl = vm.Browser.Transfers.Start("index.html", false, 18432);
+            dl.Complete();
+            vm.Browser.Transfers.Start("deploy.sh", true, 1220);
+            vm.Browser.Transfers.IsExpanded = true;
+            Snap(vm, dir, $"{prefix}-transfers-{name}.png");
+            vm.Browser.Transfers.IsExpanded = false;
+            vm.Browser.Transfers.Items.Clear();
+
+            // Нет профилей
+            var empty = ShotVm(settings);
+            Snap(empty, dir, $"{prefix}-empty-{name}.png");
+
+            // Профили есть, подключения нет
+            var idle = ShotVm(settings);
+            idle.Profiles.Add(vm.Profiles[0]);
+            idle.Profiles.Add(vm.Profiles[1]);
+            Snap(idle, dir, $"{prefix}-idle-{name}.png");
+
+            // Подключение
+            vm.Browser.Reset();
+            vm.IsConnecting = true;
+            vm.ConnectingName = "prod-01";
+            Snap(vm, dir, $"{prefix}-connecting-{name}.png");
+            vm.IsConnecting = false;
+
+            // Ошибка
+            vm.ConnectErrorTitle = "Не удалось подключиться";
+            vm.ConnectErrorText = "Сервер prod-01 не принял логин или пароль. Проверьте их в профиле.";
+            vm.HasConnectError = true;
+            Snap(vm, dir, $"{prefix}-error-{name}.png");
+            vm.HasConnectError = false;
+
+            // Пустая папка
+            ShotBind(vm);
+            vm.Browser.Items.Clear();
+            vm.Browser.ItemCount = 0;
+            Snap(vm, dir, $"{prefix}-emptyfolder-{name}.png");
+
+            // 1280x720
+            ShotBind(vm);
+            Snap(vm, dir, $"{prefix}-1280-{name}.png", 1280, 720);
 
             var dlg = new ProfileEditWindow
             {
@@ -141,6 +174,50 @@ public static class Program
             dlg.Close();
         }
         Console.Out.WriteLine($"Скриншоты: {dir}");
+    }
+
+    /// <summary>VM для скриншотов: ждём окончания стартовой проверки сервера и считаем сервер доступным.</summary>
+    private static MainWindowViewModel ShotVm(ClientSettings settings)
+    {
+        var vm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl),
+            new HeadlessDialogService());
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (vm.ServerStatus is ServerStatus.Unknown or ServerStatus.Checking && DateTime.UtcNow < until)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(20);
+        }
+        vm.ServerStatus = ServerStatus.Reachable;
+        vm.StatusText = "Готов";
+        return vm;
+    }
+
+    private static void ShotBind(MainWindowViewModel vm)
+    {
+        vm.ActiveProfile = vm.Profiles[0];
+        vm.Browser.IsBound = true;
+        vm.Browser.BoundProtocol = Protocol.Sftp;
+        vm.Browser.ConnectionName = "prod-01";
+        vm.Browser.CurrentPath = "/var/www/site";
+        vm.Browser.Items.Clear();
+        vm.Browser.Items.Add(new FileItem { Name = "assets", IsDirectory = true, LastModified = new DateTime(2026, 5, 2, 10, 14, 0), Permissions = "drwxr-xr-x" });
+        vm.Browser.Items.Add(new FileItem { Name = "logs", IsDirectory = true, LastModified = new DateTime(2026, 5, 3, 8, 1, 0), Permissions = "drwxr-x---" });
+        vm.Browser.Items.Add(new FileItem { Name = "index.html", Size = 18432, LastModified = new DateTime(2026, 4, 28, 17, 40, 0), Permissions = "-rw-r--r--" });
+        vm.Browser.Items.Add(new FileItem { Name = "logo.png", Size = 48211, LastModified = new DateTime(2026, 4, 28, 17, 41, 0), Permissions = "-rw-r--r--" });
+        vm.Browser.Items.Add(new FileItem { Name = "deploy.sh", Size = 1220, LastModified = new DateTime(2026, 4, 21, 9, 5, 0), Permissions = "-rwxr-xr-x" });
+        vm.Browser.Items.Add(new FileItem { Name = "notes.txt", Size = 640, LastModified = new DateTime(2026, 4, 20, 9, 5, 0), Permissions = "-rw-r--r--" });
+        vm.Browser.Items.Add(new FileItem { Name = "backup-2026-05-01.tar.gz", Size = 73400320, LastModified = new DateTime(2026, 5, 1, 3, 0, 0), Permissions = "-rw-------" });
+        vm.Browser.ItemCount = vm.Browser.Items.Count;
+        vm.Browser.SelectedItem = vm.Browser.Items[2];
+    }
+
+    private static void Snap(MainWindowViewModel vm, string dir, string file, int w = 1180, int h = 740)
+    {
+        var window = new MainWindow { DataContext = vm, Width = w, Height = h };
+        window.Show();
+        Pump();
+        window.CaptureRenderedFrame()?.Save(Path.Combine(dir, file), PngBitmapEncoderOptions.Default);
+        window.Close();
     }
 
     private static async Task RunAsync(string url)

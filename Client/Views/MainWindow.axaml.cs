@@ -1,6 +1,11 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using FileManagerClient.Models;
 using FileManagerClient.Services;
 using FileManagerClient.ViewModels;
 
@@ -23,6 +28,107 @@ public partial class MainWindow : Window
             Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(DragDrop.DropEvent, OnRootDrop,
             Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+
+        // Горячие клавиши таблицы: перехватываем на туннеле, до обработки самим DataGrid
+        FilesGrid.AddHandler(KeyDownEvent, FilesGridKeyDown, RoutingStrategies.Tunnel);
+
+        DataContextChanged += (_, _) => HookViewModel();
+    }
+
+    private MainWindowViewModel? _hooked;
+
+    private void HookViewModel()
+    {
+        if (_hooked is not null)
+            _hooked.Browser.PropertyChanged -= OnBrowserChanged;
+        _hooked = DataContext as MainWindowViewModel;
+        if (_hooked is null)
+            return;
+        _hooked.Browser.PropertyChanged += OnBrowserChanged;
+        UpdatePermissionsColumn();
+    }
+
+    private void OnBrowserChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(FileBrowserViewModel.BoundProtocol))
+            UpdatePermissionsColumn();
+        else if (e.PropertyName == nameof(FileBrowserViewModel.IsEditingPath) && _hooked?.Browser.IsEditingPath == true)
+            Dispatcher.UIThread.Post(() =>
+            {
+                PathTextBox.Focus();
+                PathTextBox.SelectAll();
+            }, DispatcherPriority.Input);
+    }
+
+    /// <summary>Права (rwx) имеют смысл только для SFTP — для остальных протоколов колонку прячем.</summary>
+    private void UpdatePermissionsColumn()
+    {
+        if (FilesGrid.Columns.Count >= 4)
+            FilesGrid.Columns[3].IsVisible = _hooked?.Browser.BoundProtocol == Protocol.Sftp;
+    }
+
+    private void FilesGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+            vm.Browser.SetSelection(FilesGrid.SelectedItems.OfType<FileItem>());
+    }
+
+    private void FilesGridKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm || !vm.Browser.IsBound)
+            return;
+        var browser = vm.Browser;
+        switch (e.Key)
+        {
+            case Key.Enter:
+                browser.OpenItemCommand.Execute(null);
+                break;
+            case Key.Back:
+                browser.GoUpCommand.Execute(null);
+                break;
+            case Key.F2:
+                browser.RenameCommand.Execute(null);
+                break;
+            case Key.Delete:
+                browser.DeleteCommand.Execute(null);
+                break;
+            case Key.A when e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta):
+                FilesGrid.SelectAll();
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
+    }
+
+    private void ProfilesListKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && DataContext is MainWindowViewModel { SelectedProfile: { } profile } vm)
+        {
+            vm.ConnectProfileCommand.Execute(profile);
+            e.Handled = true;
+        }
+    }
+
+    private void CrumbClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string path } && DataContext is MainWindowViewModel vm)
+            vm.Browser.NavigateCommand.Execute(path);
+    }
+
+    /// <summary>Клик по пустому месту строки пути переключает её в режим редактирования.</summary>
+    private void PathBarTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Source is Visual v && v.FindAncestorOfType<Button>(true) is not null)
+            return;
+        if (DataContext is MainWindowViewModel vm)
+            vm.Browser.IsEditingPath = true;
+    }
+
+    private void PathBoxLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+            vm.Browser.IsEditingPath = false;
     }
 
     private void FilesGridDoubleTapped(object? sender, TappedEventArgs e)
@@ -39,11 +145,18 @@ public partial class MainWindow : Window
 
     private void PathBoxKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter)
+        if (DataContext is not MainWindowViewModel vm)
             return;
-        if (DataContext is MainWindowViewModel vm)
+        if (e.Key == Key.Enter)
+        {
             vm.Browser.NavigateCommand.Execute(vm.Browser.CurrentPath);
-        e.Handled = true;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            vm.Browser.IsEditingPath = false;
+            e.Handled = true;
+        }
     }
 
     // === Drag&drop загрузка файлов в текущую папку ===
