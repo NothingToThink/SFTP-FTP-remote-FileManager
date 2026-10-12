@@ -7,8 +7,7 @@
         <ResourceDictionary>
 
             <ResourceDictionary.MergedDictionaries>
-                <!-- TODO: подключить, когда появится файл с иконками свинки (его делает другой агент) -->
-                <!-- <ResourceInclude Source="avares://FileManagerClient/Assets/Pig/PigIcons.axaml"/> -->
+                <ResourceInclude Source="avares://FileManagerClient/Assets/Pig/PigIcons.axaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <ResourceDictionary.ThemeDictionaries>
@@ -156,8 +155,7 @@
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
-        <!-- TODO: подключить, когда появится файл со стилями контролов свинки -->
-        <!-- <StyleInclude Source="avares://FileManagerClient/Controls/PigStyles.axaml"/> -->
+        <StyleInclude Source="avares://FileManagerClient/Controls/PigStyles.axaml"/>
 
         <!-- Базовые стили -->
         <Style Selector="Window">

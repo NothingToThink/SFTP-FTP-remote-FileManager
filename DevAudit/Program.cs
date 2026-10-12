@@ -45,6 +45,12 @@ public static class Program
             return;
         }
 
+        if (args.Contains("--pig-gallery"))
+        {
+            PigGallery.Run(args.SkipWhile(a => a != "--out").Skip(1).FirstOrDefault());
+            return;
+        }
+
         var url = args.Length > 0 ? args[0] : "http://127.0.0.1:5116";
         _outDir = Path.Combine(AppContext.BaseDirectory, "audit-out");
         Directory.CreateDirectory(_outDir);
