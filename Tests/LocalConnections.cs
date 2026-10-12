@@ -33,4 +33,31 @@ public class LocalConnectionTests
         await Assert.ThrowsAsync<AccessViolationException>(()
                 => conn.FileExistsAsync(path));
     }
+
+    [Fact]
+    public async Task PathInSiblingFolderWithSamePrefix_ThenThrowsAccessViolationException()
+    {
+        DirectoryInfo parentFolder = Directory.CreateTempSubdirectory();
+        string rootPath = Path.Combine(parentFolder.FullName, "sandbox");
+        string siblingPath = Path.Combine(parentFolder.FullName, "sandbox-sibling");
+        Directory.CreateDirectory(rootPath);
+        Directory.CreateDirectory(siblingPath);
+        LocalConnection conn = new LocalConnection(rootPath);
+
+        await Assert.ThrowsAsync<AccessViolationException>(
+            () => conn.FileExistsAsync("../sandbox-sibling/secret.txt"));
+    }
+
+    [Fact]
+    public async Task PathAtRootOrNestedInRoot_IsAllowed()
+    {
+        DirectoryInfo root = Directory.CreateTempSubdirectory();
+        string nestedDirectory = Path.Combine(root.FullName, "nested");
+        Directory.CreateDirectory(nestedDirectory);
+        await File.WriteAllTextAsync(Path.Combine(nestedDirectory, "file.txt"), "content");
+        LocalConnection conn = new LocalConnection(root.FullName);
+
+        Assert.True(await conn.DirExistsAsync(""));
+        Assert.True(await conn.FileExistsAsync("nested/file.txt"));
+    }
 }

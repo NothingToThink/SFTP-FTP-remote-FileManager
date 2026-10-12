@@ -35,8 +35,16 @@ public class LocalConnection : Connection
         }
 
         var fullPath = Path.GetFullPath(combined);
+        var fullRootPath = Path.GetFullPath(_rootPath);
+        var rootPathWithSeparator = Path.EndsInDirectorySeparator(fullRootPath)
+            ? fullRootPath
+            : fullRootPath + Path.DirectorySeparatorChar;
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
 
-        if (!fullPath.StartsWith(_rootPath))
+        if (!fullPath.Equals(fullRootPath, comparison)
+            && !fullPath.StartsWith(rootPathWithSeparator, comparison))
         {
             throw new AccessViolationException($"All remote paths must be in {_rootPath} directory");
         }
