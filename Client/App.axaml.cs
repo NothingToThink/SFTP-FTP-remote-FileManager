@@ -23,7 +23,7 @@ public class App : Application
             var dialogs = new DialogService();
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(settings, launcher, dialogs),
+                DataContext = new MainWindowViewModel(settings, launcher, dialogs, new UiHubClient(dialogs)),
             };
             desktop.MainWindow.Opened += (_, _) => dialogs.Owner = desktop.MainWindow;
         }

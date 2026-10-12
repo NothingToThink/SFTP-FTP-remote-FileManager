@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
+using System.Runtime.Loader;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -261,6 +263,46 @@ public class PluginHostTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         // The dependency lives in the plugin's load context, the SDK in the Backend's default one.
         Assert.Equal("Hello, plugin!|lib:test.dep|sdk:Default", (await ReadAsync(client.Messages)).Message);
+    }
+
+    [Fact]
+    public async Task Agent_Plugin_With_The_Openai_Dependency_Is_Listed_And_Reports_A_Missing_Key()
+    {
+        var folder = _data.AddPlugin("VolcanoBoys.Agent", "agent");
+        Assert.True(File.Exists(Path.Combine(folder, "OpenAI.dll")), "the model client must be published with the plugin");
+        var factory = StartBackend();
+        await using var client = await ConnectAsync(factory);
+
+        var commands = await factory.CreateClient().GetFromJsonAsync<JsonElement>("/commands");
+        var command = Assert.Single(commands.EnumerateArray());
+        Assert.Equal("volcanoboys.agent.ask", command.GetProperty("id").GetString());
+        Assert.Equal("Спросить ИИ-агента", command.GetProperty("title").GetString());
+        Assert.Equal("volcanoboys.agent", command.GetProperty("pluginId").GetString());
+
+        // The dependency is resolved from the plugin folder by the plugin's load context.
+        var main = Path.Combine(folder, "VolcanoBoys.Agent.dll");
+        var context = AssemblyLoadContext.All.First(c => c.Assemblies.Any(a => a.Location == main));
+        Assert.Equal(Path.Combine(folder, "OpenAI.dll"), context.LoadFromAssemblyName(new AssemblyName("OpenAI")).Location);
+
+        // No key: the command ends with an error before any dialog or call of the model. The variable is emptied
+        // so that a key on the developer's machine does not turn this into a real call.
+        var previous = Environment.GetEnvironmentVariable("FILEMANAGER_AGENT_API_KEY");
+        Environment.SetEnvironmentVariable("FILEMANAGER_AGENT_API_KEY", "");
+        try
+        {
+            var response = await ExecuteAsync(factory, "volcanoboys.agent.ask", client.ConnectionId);
+
+            Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+            var message = await ReadAsync(client.Messages);
+            Assert.Equal("error", message.Severity);
+            Assert.Contains("FILEMANAGER_AGENT_API_KEY", message.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FILEMANAGER_AGENT_API_KEY", previous);
+        }
+
+        Assert.False(client.Inputs.Reader.TryRead(out _));
     }
 
     [Fact]
