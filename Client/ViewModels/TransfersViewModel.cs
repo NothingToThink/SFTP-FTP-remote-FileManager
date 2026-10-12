@@ -17,11 +17,16 @@ public enum TransferStatus
 public partial class TransferItemViewModel : ViewModelBase
 {
     private readonly CancellationTokenSource _cts = new();
-    private readonly DateTime _startedAt = DateTime.UtcNow;
+    private DateTime _startedAt = DateTime.UtcNow;
+    private bool _begun;
+    private long _lastPostTicks;
 
     public string FileName { get; }
     public bool IsUpload { get; }
-    public long TotalBytes { get; }
+    public long TotalBytes { get; private set; }
+
+    /// <summary>Текущая скорость, байт/с (0 — пока неизвестна).</summary>
+    public double BytesPerSecond { get; private set; }
     public CancellationToken Token => _cts.Token;
 
     [ObservableProperty] private double _progress;
@@ -53,6 +58,43 @@ public partial class TransferItemViewModel : ViewModelBase
         FileName = fileName;
         IsUpload = isUpload;
         TotalBytes = totalBytes;
+        _isIndeterminate = totalBytes <= 0;
+    }
+
+    /// <summary>Передача дошла до очереди: с этого момента считаем скорость.</summary>
+    public void Begin()
+    {
+        _begun = true;
+        _startedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Итоговый размер стал известен позже (например, после обхода папки).</summary>
+    public void SetTotal(long totalBytes)
+    {
+        TotalBytes = totalBytes;
+        IsIndeterminate = totalBytes <= 0;
+    }
+
+    /// <summary>
+    /// Прогресс для API-клиента: вызывается из любого потока, обновление VM троттлится (~12 раз/с)
+    /// и уходит на UI-поток. <paramref name="offset"/> — уже переданные байты (для папок из многих файлов).
+    /// </summary>
+    public IProgress<long> AsProgress(long offset = 0) => new DelegateProgress(bytes =>
+    {
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastPostTicks);
+        if (now - last < 80 || Interlocked.CompareExchange(ref _lastPostTicks, now, last) != last)
+            return;
+        var total = offset + bytes;
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            Report(total);
+        else
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (IsRunning) Report(total); });
+    });
+
+    private sealed class DelegateProgress(Action<long> report) : IProgress<long>
+    {
+        public void Report(long value) => report(value);
     }
 
     /// <summary>
@@ -67,7 +109,10 @@ public partial class TransferItemViewModel : ViewModelBase
         Progress = Math.Clamp(bytesDone * 100.0 / TotalBytes, 0, 100);
         var seconds = (DateTime.UtcNow - _startedAt).TotalSeconds;
         if (seconds > 0.2)
-            SpeedText = FormatSpeed(bytesDone / seconds);
+        {
+            BytesPerSecond = bytesDone / seconds;
+            SpeedText = FormatSpeed(BytesPerSecond);
+        }
     }
 
     public void Complete()
@@ -75,6 +120,7 @@ public partial class TransferItemViewModel : ViewModelBase
         IsIndeterminate = false;
         Progress = 100;
         SpeedText = string.Empty;
+        BytesPerSecond = 0;
         Status = TransferStatus.Done;
     }
 
@@ -84,18 +130,27 @@ public partial class TransferItemViewModel : ViewModelBase
         Status = TransferStatus.Failed;
     }
 
-    public void MarkCancelled() => Status = TransferStatus.Cancelled;
+    public void MarkCancelled()
+    {
+        BytesPerSecond = 0;
+        SpeedText = string.Empty;
+        Status = TransferStatus.Cancelled;
+    }
 
     partial void OnSpeedTextChanged(string value) => OnPropertyChanged(nameof(StatusText));
 
     [RelayCommand]
     private void Cancel()
     {
-        if (IsRunning)
-            _cts.Cancel();
+        if (!IsRunning)
+            return;
+        _cts.Cancel();
+        // ещё не начавшаяся передача сама до отмены не доберётся — помечаем сразу
+        if (!_begun)
+            MarkCancelled();
     }
 
-    private static string FormatSpeed(double bytesPerSecond)
+    public static string FormatSpeed(double bytesPerSecond)
     {
         string[] units = { "Б/с", "КБ/с", "МБ/с", "ГБ/с" };
         var v = bytesPerSecond;
@@ -139,7 +194,10 @@ public partial class TransfersViewModel : ViewModelBase
             var tail = known.Count == active.Count
                 ? $"{(int)Math.Round(known.Average(i => i.Progress))}%"
                 : "идёт";
-            return $"{Plural(active.Count)} · {tail}";
+            var speed = active.Sum(i => i.BytesPerSecond);
+            return speed > 0
+                ? $"{Plural(active.Count)} · {tail} · {TransferItemViewModel.FormatSpeed(speed)}"
+                : $"{Plural(active.Count)} · {tail}";
         }
     }
 
@@ -150,7 +208,9 @@ public partial class TransfersViewModel : ViewModelBase
         {
             var running = Items.FirstOrDefault(i => i.IsRunning);
             if (running is null)
-                return PigState.TransferDone;
+                return Items.Any(i => i.Status == TransferStatus.Failed) && Items.All(i => i.Status != TransferStatus.Done)
+                    ? PigState.Error
+                    : PigState.TransferDone;
             return running.IsUpload ? PigState.Upload : PigState.Download;
         }
     }

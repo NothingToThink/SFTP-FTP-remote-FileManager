@@ -335,6 +335,7 @@
             <Setter Property="SelectionForegroundBrush" Value="{DynamicResource Brush.OnAccent}"/>
         </Style>
         <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="{DynamicResource Brush.Input}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
         </Style>
 

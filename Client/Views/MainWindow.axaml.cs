@@ -206,6 +206,12 @@ public partial class MainWindow : Window
         }
     }
 
+    private void SetDropActive(bool active)
+    {
+        if (DataContext is MainWindowViewModel vm)
+            vm.Browser.IsDropActive = active;
+    }
+
     private bool FilesDrag(DragEventArgs e)
     {
         var vm = DataContext as MainWindowViewModel;
@@ -230,20 +236,20 @@ public partial class MainWindow : Window
         e.Handled = true;
         var allow = InDropArea(e) && FilesDrag(e);
         e.DragEffects = allow ? DragDropEffects.Copy : DragDropEffects.None;
-        DropOverlay.IsVisible = allow;
+        SetDropActive(allow);
     }
 
     private void OnRootDragLeave(object? sender, DragEventArgs e)
     {
         e.Handled = true;
-        DropOverlay.IsVisible = false;
+        SetDropActive(false);
         DragLog("DragLeave");
     }
 
     private async void OnRootDrop(object? sender, DragEventArgs e)
     {
         e.Handled = true;
-        DropOverlay.IsVisible = false;
+        SetDropActive(false);
         DragLog($"DROP files-format={e.DataTransfer.Formats.Contains(DataFormat.File)}");
 
         if (!InDropArea(e) || !FilesDrag(e) || DataContext is not MainWindowViewModel vm)
@@ -258,6 +264,7 @@ public partial class MainWindow : Window
         if (localPaths is not { Count: > 0 })
             return;
 
-        await vm.Browser.UploadFilesAsync(localPaths);
+        // файлы и папки: папки загружаются рекурсивно
+        await vm.Browser.UploadPathsAsync(localPaths);
     }
 }

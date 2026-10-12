@@ -45,6 +45,11 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private bool _hasConnectError;
     [ObservableProperty] private string _connectErrorTitle = string.Empty;
     [ObservableProperty] private string _connectErrorText = string.Empty;
+    [ObservableProperty] private string _connectErrorDetails = string.Empty;
+    [ObservableProperty] private bool _isErrorDetailsExpanded;
+    // пока открыт диалог ключа сервера, свинка в панели визжит
+    [ObservableProperty] private bool _isHostKeyDialogOpen;
+    private IReadOnlyList<ErrorActionItem> _connectErrorActions = Array.Empty<ErrorActionItem>();
 
     // --- Активное подключение (строка состояния) ---
     [ObservableProperty] private ProfileViewModel? _activeProfile;
@@ -167,6 +172,19 @@ public partial class MainWindowViewModel : ViewModelBase
         ? ConnectErrorText
         : $"Сервер {ServerUrl} не отвечает. Проверьте адрес в настройках (шестерёнка внизу).";
 
+    /// <summary>Кнопки под ошибкой: из UserError либо «Повторить» для недоступного сервера.</summary>
+    public IReadOnlyList<ErrorActionItem> ErrorActions => HasConnectError
+        ? _connectErrorActions
+        : ErrorActionItem.From([UserErrorAction.Retry]);
+
+    public bool HasErrorDetails => HasConnectError && !string.IsNullOrWhiteSpace(ConnectErrorDetails);
+
+    public string ErrorDetails => HasConnectError ? ConnectErrorDetails : string.Empty;
+
+    public PigState ErrorMascot => IsHostKeyDialogOpen ? PigState.Squeal : PigState.Error;
+
+    partial void OnIsHostKeyDialogOpenChanged(bool value) => OnPropertyChanged(nameof(ErrorMascot));
+
     public string ConnectingText => $"Подключаемся к {ConnectingName}…";
 
     private void NotifyPanel()
@@ -179,6 +197,9 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowNotConnected));
         OnPropertyChanged(nameof(ErrorTitle));
         OnPropertyChanged(nameof(ErrorText));
+        OnPropertyChanged(nameof(ErrorActions));
+        OnPropertyChanged(nameof(HasErrorDetails));
+        OnPropertyChanged(nameof(ErrorDetails));
         OnPropertyChanged(nameof(ConnectingText));
     }
 
@@ -223,6 +244,43 @@ public partial class MainWindowViewModel : ViewModelBase
         await CheckServerCommand.ExecuteAsync(null);
         if (ServerStatus == ServerStatus.Reachable)
             await RefreshProfilesCommand.ExecuteAsync(null);
+    }
+
+    [RelayCommand]
+    private void ToggleErrorDetails() => IsErrorDetailsExpanded = !IsErrorDetailsExpanded;
+
+    /// <summary>Кнопка под ошибкой в панели: Повторить / Открыть профиль / Закрыть.</summary>
+    [RelayCommand]
+    private async Task RunErrorAction(ErrorActionItem? item)
+    {
+        switch (item?.Action)
+        {
+            case UserErrorAction.Retry:
+                await Retry();
+                break;
+            case UserErrorAction.OpenProfile:
+                await OpenFailedProfile();
+                break;
+            case UserErrorAction.Close:
+                HasConnectError = false;
+                _failedProfile = null;
+                break;
+        }
+    }
+
+    /// <summary>«Открыть профиль»: редактор профиля, с которым не получилось; после сохранения — повторное подключение.</summary>
+    private async Task OpenFailedProfile()
+    {
+        var profile = _failedProfile ?? SelectedProfile;
+        if (profile is null)
+            return;
+        SelectedProfile = profile;
+        if (await EditProfileCore(profile))
+        {
+            var fresh = Profiles.FirstOrDefault(p => p.Id == profile.Id);
+            if (fresh is not null)
+                await ConnectProfile(fresh);
+        }
     }
 
     /// <summary>Отмена подключения из состояния «загрузка».</summary>
@@ -326,7 +384,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 }
                 catch (ApiException ex)
                 {
-                    StatusText = $"Профиль {id}: {ex.ServerMessage}";
+                    StatusText = $"Профиль {id}: {ErrorPresenter.Present(ex).Title}";
                 }
             }
 
@@ -354,16 +412,25 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (SelectedProfile is null)
             return;
-        var editor = new ProfileEditViewModel(SelectedProfile.Profile);
+        await EditProfileCore(SelectedProfile);
+    }
+
+    /// <summary>Редактор профиля; true — профиль сохранён.</summary>
+    private async Task<bool> EditProfileCore(ProfileViewModel target)
+    {
+        var editor = new ProfileEditViewModel(target.Profile);
         if (!await _dialogs.ShowProfileEditorAsync(editor))
-            return;
+            return false;
+        var saved = false;
         await RunBusyAsync(async () =>
         {
             var profile = editor.ToSavedProfile();
             await Api.SaveProfileAsync(profile);
             await RefreshProfilesCommand.ExecuteAsync(null);
             StatusText = $"Профиль обновлён: {profile.Name}";
+            saved = true;
         });
+        return saved;
     }
 
     [RelayCommand]
@@ -390,9 +457,10 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Подключение к профилю. Состояния панели: загрузка (IsConnecting) → файлы либо ошибка
-    /// (HasConnectError/ConnectErrorTitle/ConnectErrorText). Ошибку подключения ловим здесь, а не в RunBusyAsync:
-    /// текст берётся из ex.ServerMessage — сюда подключается маппинг ошибок.
+    /// Подключение к профилю. Состояния панели: загрузка (IsConnecting) → файлы либо ошибка.
+    /// Ошибка проходит через <see cref="ErrorPresenter"/>: заголовок и текст «что случилось и что делать»,
+    /// технические детали — под «Подробнее». Неизвестный/подменённый ключ сервера открывает свой диалог;
+    /// после согласия ключ запоминается на сервере и подключение повторяется.
     /// </summary>
     [RelayCommand]
     private async Task ConnectProfile(ProfileViewModel? profile)
@@ -408,6 +476,14 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        // второй заход — только после того, как пользователь осознанно доверился ключу
+        if (await ConnectOnce(profile))
+            await ConnectOnce(profile);
+    }
+
+    /// <returns>true — ключ сервера принят и подключение стоит повторить.</returns>
+    private async Task<bool> ConnectOnce(ProfileViewModel profile)
+    {
         _connectCts?.Dispose();
         _connectCts = new CancellationTokenSource();
         var ct = _connectCts.Token;
@@ -430,7 +506,7 @@ public partial class MainWindowViewModel : ViewModelBase
             await Browser.BindAsync(connectionId, profile.Name, profile.Protocol);
             StatusText = $"Подключено: {profile.Name}";
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             if (created is { } id)
                 await TryAsync(() => Api.DeleteConnectionAsync(id));
@@ -443,15 +519,90 @@ public partial class MainWindowViewModel : ViewModelBase
                 await TryAsync(() => Api.DeleteConnectionAsync(id));
             profile.State = ConnectionState.Error;
             _failedProfile = profile;
-            ConnectErrorTitle = "Не удалось подключиться";
-            ConnectErrorText = ex is ApiException api ? api.ServerMessage : ex.Message;
-            HasConnectError = true;
-            StatusText = "Ошибка: " + ConnectErrorText;
+            IsConnecting = false;
+            IsBusy = false;
+            var error = ErrorPresenter.Present(ex, new ErrorContext(profile.Name, true));
+            ShowConnectError(error);
+            if (error.Kind is UserErrorKind.HostKeyMismatch or UserErrorKind.UnknownHostKey)
+                return await ResolveHostKeyAsync(profile, error, ex as ApiException);
         }
         finally
         {
             IsConnecting = false;
             IsBusy = false;
+        }
+        return false;
+    }
+
+    /// <summary>Показывает ошибку в панели файлов (заголовок, текст, «Подробнее», кнопки действий).</summary>
+    public void ShowConnectError(UserError error, IReadOnlyList<UserErrorAction>? actions = null)
+    {
+        ConnectErrorTitle = error.Title;
+        ConnectErrorText = error.Text;
+        ConnectErrorDetails = error.Details ?? string.Empty;
+        IsErrorDetailsExpanded = false;
+        _connectErrorActions = ErrorActionItem.From(actions ?? error.Actions);
+        HasConnectError = true;
+        NotifyPanel();
+        StatusText = error.StatusLine;
+    }
+
+    /// <summary>
+    /// Диалог ключа сервера. Панель при этом показывает ошибку, а свинка визжит.
+    /// true — пользователь доверился ключу и сервер его запомнил.
+    /// </summary>
+    private async Task<bool> ResolveHostKeyAsync(ProfileViewModel profile, UserError error, ApiException? api)
+    {
+        var host = api?.Host ?? profile.Profile.HostProfile.Host;
+        var port = api?.Port ?? profile.Profile.HostProfile.EffectivePort;
+        var presented = api?.PresentedFingerprint;
+        var mismatch = error.Kind == UserErrorKind.HostKeyMismatch;
+
+        // без отпечатка доверять нечему — оставляем обычное сообщение об ошибке
+        if (presented is null)
+        {
+            ShowConnectError(error, [UserErrorAction.Retry, UserErrorAction.Close]);
+            return false;
+        }
+
+        bool trust;
+        IsHostKeyDialogOpen = true;
+        try
+        {
+            trust = mismatch
+                ? await _dialogs.ShowHostKeyMismatchAsync(host, port, api?.ExpectedFingerprint, presented)
+                : await _dialogs.ShowUnknownHostKeyAsync(host, port, presented);
+        }
+        finally
+        {
+            IsHostKeyDialogOpen = false;
+        }
+
+        if (!trust)
+        {
+            ShowConnectError(error, [UserErrorAction.Retry, UserErrorAction.Close]);
+            return false;
+        }
+
+        try
+        {
+            await Api.TrustHostKeyAsync(host, port, presented);
+            return true;
+        }
+        catch (ApiException ex) when (ex.StatusCode is 404 or 405)
+        {
+            // TODO(S7): эндпоинт hostkeys/{host}/{port}/trust появится на бэкенде — тогда эта ветка не понадобится
+            ShowConnectError(new UserError("Сервер пока не умеет запоминать ключи",
+                "Подключение остановлено: серверу не хватает метода для сохранения ключа (S7). " +
+                "Обновите серверную часть и попробуйте снова.",
+                ErrorPresenter.Present(ex).Details, UserErrorKind.Server,
+                [UserErrorAction.Retry, UserErrorAction.Close]));
+            return false;
+        }
+        catch (Exception ex)
+        {
+            ShowConnectError(ErrorPresenter.Present(ex, new ErrorContext(profile.Name, true)));
+            return false;
         }
     }
 
@@ -483,15 +634,11 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             await work();
         }
-        catch (ApiException ex)
-        {
-            StatusText = "Ошибка API: " + ex.ServerMessage;
-            await _dialogs.ShowMessageAsync("Ошибка", ex.ServerMessage);
-        }
         catch (Exception ex)
         {
-            StatusText = "Ошибка: " + ex.Message;
-            await _dialogs.ShowMessageAsync("Ошибка", ex.Message);
+            var error = ErrorPresenter.Present(ex, new ErrorContext(SelectedProfile?.Name));
+            StatusText = error.StatusLine;
+            await _dialogs.ShowErrorAsync(error);
         }
         finally
         {

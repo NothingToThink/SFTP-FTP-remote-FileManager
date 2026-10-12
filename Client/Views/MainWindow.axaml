@@ -13,7 +13,7 @@
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
-        <conv:ServerStatusToBrushConverter x:Key="StatusBrush"/>
+        <conv:EnumEqualsConverter x:Key="EnumEq"/>
         <conv:FileItemToIconConverter x:Key="FileIcon"/>
     </Window.Resources>
 
@@ -28,6 +28,19 @@
         <Style Selector="Button.crumb.last">
             <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <!-- Точка статуса сервера: цвет из токенов темы через классы (меняется при смене темы) -->
+        <Style Selector="Ellipse.statusDot">
+            <Setter Property="Fill" Value="{DynamicResource Brush.TextFaint}"/>
+        </Style>
+        <Style Selector="Ellipse.statusDot.reachable">
+            <Setter Property="Fill" Value="{DynamicResource Brush.Success}"/>
+        </Style>
+        <Style Selector="Ellipse.statusDot.unreachable">
+            <Setter Property="Fill" Value="{DynamicResource Brush.Error}"/>
+        </Style>
+        <Style Selector="Ellipse.statusDot.checking">
+            <Setter Property="Fill" Value="{DynamicResource Brush.Warning}"/>
         </Style>
         <Style Selector="Button.toolbar:disabled, Button.icon:disabled">
             <Setter Property="Opacity" Value="0.4"/>
@@ -101,8 +114,11 @@
                     <TextBlock Classes="muted" Text="{Binding ConnectedFor, StringFormat='· в сети {0}'}" VerticalAlignment="Center"/>
                     <ctl:PigTail Classes="small alive" VerticalAlignment="Center"/>
                 </StackPanel>
-                <Ellipse Grid.Column="1" Name="ServerStatusDot" Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,8,0"
-                         Fill="{Binding ServerStatus, Converter={StaticResource StatusBrush}}"/>
+                <Ellipse Grid.Column="1" Name="ServerStatusDot" Classes="statusDot" Width="8" Height="8"
+                         VerticalAlignment="Center" Margin="0,0,8,0"
+                         Classes.reachable="{Binding ServerStatus, Converter={StaticResource EnumEq}, ConverterParameter=Reachable}"
+                         Classes.unreachable="{Binding ServerStatus, Converter={StaticResource EnumEq}, ConverterParameter=Unreachable}"
+                         Classes.checking="{Binding ServerStatus, Converter={StaticResource EnumEq}, ConverterParameter=Checking}"/>
                 <TextBlock Grid.Column="2" Name="StatusTextBlock" Classes="muted" Text="{Binding StatusText}"
                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                 <ProgressBar Grid.Column="3" IsIndeterminate="True" Width="120" HorizontalAlignment="Right"
@@ -446,16 +462,49 @@
                                 Command="{Binding CancelConnectCommand}"/>
                     </StackPanel>
 
-                    <!-- Состояние: ошибка -->
+                    <!-- Состояние: ошибка (текст из ErrorPresenter, детали под «Подробнее») -->
                     <StackPanel Name="ErrorState" HorizontalAlignment="Center" VerticalAlignment="Center"
                                 Spacing="10" MaxWidth="460" IsVisible="{Binding ShowError}">
-                        <ctl:PigMascot State="Error" Width="220" Height="165" HorizontalAlignment="Center"/>
-                        <TextBlock Classes="h2" HorizontalAlignment="Center" TextAlignment="Center" Text="{Binding ErrorTitle}"/>
-                        <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
+                        <ctl:PigMascot Name="ErrorMascot" State="{Binding ErrorMascot}" Width="220" Height="165"
+                                       HorizontalAlignment="Center"/>
+                        <TextBlock Name="ErrorTitleText" Classes="h2" HorizontalAlignment="Center"
+                                   TextAlignment="Center" TextWrapping="Wrap" Text="{Binding ErrorTitle}"/>
+                        <TextBlock Name="ErrorBodyText" Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
                                    TextWrapping="Wrap" Text="{Binding ErrorText}"/>
-                        <Button Name="RetryButton" Classes="primary" Content="Повторить" HorizontalAlignment="Center"
-                                Margin="0,6,0,0" AutomationProperties.AutomationId="RetryButton"
-                                Command="{Binding RetryCommand}"/>
+                        <ItemsControl Name="ErrorActionsList" ItemsSource="{Binding ErrorActions}"
+                                      HorizontalAlignment="Center" Margin="0,6,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="8"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ErrorActionItem">
+                                    <Button Classes="tool" Classes.primary="{Binding IsPrimary}" Content="{Binding Label}"
+                                            AutomationProperties.AutomationId="{Binding Action, StringFormat=ErrorAction{0}}"
+                                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).RunErrorActionCommand}"
+                                            CommandParameter="{Binding}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Name="ErrorDetailsButton" Classes="ghost" HorizontalAlignment="Center"
+                                IsVisible="{Binding HasErrorDetails}"
+                                AutomationProperties.AutomationId="ErrorDetailsButton"
+                                Command="{Binding ToggleErrorDetailsCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="Подробнее" VerticalAlignment="Center"/>
+                                <ctl:LineIcon Data="{StaticResource Line.ChevronDown}" Size="16"
+                                              IsVisible="{Binding !IsErrorDetailsExpanded}"/>
+                                <ctl:LineIcon Data="{StaticResource Line.ChevronUp}" Size="16"
+                                              IsVisible="{Binding IsErrorDetailsExpanded}"/>
+                            </StackPanel>
+                        </Button>
+                        <Border Name="ErrorDetailsBox" Background="{DynamicResource Brush.Bg}"
+                                BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="8"
+                                Padding="12,10" IsVisible="{Binding IsErrorDetailsExpanded}">
+                            <SelectableTextBlock Classes="mono" FontSize="13" TextWrapping="Wrap"
+                                                 Foreground="{DynamicResource Brush.TextMuted}" Text="{Binding ErrorDetails}"/>
+                        </Border>
                     </StackPanel>
 
                     <!-- Состояние: нет профилей -->
@@ -482,19 +531,50 @@
                                    Text="Дважды щёлкните по серверу в списке слева, чтобы подключиться."/>
                     </StackPanel>
 
-                    <!-- Оверлей при перетаскивании файлов -->
-                    <Border x:Name="DropOverlay" IsVisible="False"
-                            Background="{DynamicResource Brush.Scrim}" Margin="4" CornerRadius="10"
-                            BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2"
-                            IsHitTestVisible="False">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-                            <ctl:PigIcon Kind="UploadCoin" Size="40" Foreground="{DynamicResource AccentBrush}"
-                                         HorizontalAlignment="Center"/>
-                            <TextBlock Classes="h2" HorizontalAlignment="Center" Text="Отпустите файлы"/>
-                            <TextBlock Classes="secondary" HorizontalAlignment="Center"
-                                       Text="Загрузятся в текущую папку"/>
-                        </StackPanel>
+                    <!-- Итог передачи: «Положили в копилку» / «Достали, не разбивая» -->
+                    <Border Name="TransferResultBanner" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                            Margin="16" Padding="14,10" MaxWidth="560" CornerRadius="12"
+                            Background="{DynamicResource Brush.Surface}"
+                            BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                            BoxShadow="0 6 24 0 #33000000"
+                            IsVisible="{Binding Browser.HasResult}">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                            <ctl:PigMascot Grid.Column="0" State="TransferDone" Width="56" Height="42" Margin="0,0,12,0"
+                                           VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Name="TransferResultTitle" FontWeight="SemiBold" Text="{Binding Browser.LastResult.Title}"/>
+                                <TextBlock Name="TransferResultText" Classes="secondary" TextWrapping="Wrap"
+                                           Text="{Binding Browser.LastResult.Text}"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Name="TransferResultAction" Classes="tool" Margin="12,0,0,0"
+                                    VerticalAlignment="Center" Content="{Binding Browser.LastResult.ActionLabel}"
+                                    AutomationProperties.AutomationId="TransferResultAction"
+                                    Command="{Binding Browser.RunResultActionCommand}"/>
+                            <Button Grid.Column="3" Classes="icon" ToolTip.Tip="Закрыть" VerticalAlignment="Center"
+                                    AutomationProperties.Name="Закрыть сообщение"
+                                    Command="{Binding Browser.DismissResultCommand}">
+                                <ctl:LineIcon Data="{StaticResource Line.Close}" Size="16"/>
+                            </Button>
+                        </Grid>
                     </Border>
+
+                    <!-- Подсветка зоны при перетаскивании файлов и папок из проводника -->
+                    <Grid x:Name="DropOverlay" IsVisible="{Binding Browser.IsDropActive}" IsHitTestVisible="False"
+                          Margin="6">
+                        <Border Background="{DynamicResource Brush.Accent}" Opacity="0.10" CornerRadius="12"/>
+                        <Rectangle Stroke="{DynamicResource Brush.Accent}" StrokeThickness="2"
+                                   StrokeDashArray="6,5" RadiusX="12" RadiusY="12"/>
+                        <Border HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,16" CornerRadius="12"
+                                Background="{DynamicResource Brush.Surface}"
+                                BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="1">
+                            <StackPanel Spacing="8" HorizontalAlignment="Center">
+                                <ctl:PigIcon Kind="UploadCoin" Size="40" Foreground="{DynamicResource Brush.Accent}"
+                                             HorizontalAlignment="Center"/>
+                                <TextBlock Name="DropOverlayText" Classes="h2" HorizontalAlignment="Center"
+                                           Text="Отпустите, чтобы положить в копилку"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </Grid>
             </Grid>
         </Border>

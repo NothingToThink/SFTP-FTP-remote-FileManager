@@ -23,6 +23,9 @@ public interface IDialogService
     Task<string?> PickSaveFileAsync(string suggestedName);
     Task<bool> ShowProfileEditorAsync(ProfileEditViewModel viewModel);
 
+    /// <summary>Выбор папки (куда скачать). Реализация по умолчанию — для заглушек: ничего не выбирает.</summary>
+    Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
+
     // --- Диалоги волны 2D. Реализации по умолчанию — для заглушек в тестах/DevAudit (ничего не показывают). ---
 
     /// <summary>Показать ошибку (свинка, текст, «Подробнее», кнопки). Результат — нажатое действие или null (Esc).</summary>
@@ -144,6 +147,20 @@ public class DialogService : IDialogService
             AllowMultiple = false,
         });
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
+
+    public async Task<string?> PickFolderAsync(string title)
+    {
+        if (Owner is null)
+            return null;
+
+        var folders = await Owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            SuggestedStartLocation = await Owner.StorageProvider.TryGetWellKnownFolderAsync(WellKnownFolder.Downloads),
+        });
+        return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
     }
 
     public async Task<string?> PickSaveFileAsync(string suggestedName)

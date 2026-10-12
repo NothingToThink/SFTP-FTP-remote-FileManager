@@ -41,6 +41,11 @@ public sealed record UserError(
     IReadOnlyList<UserErrorAction> Actions,
     HostKeyInfo? HostKey = null)
 {
+    /// <summary>Одна строка для статус-бара: «Заголовок. Текст».</summary>
+    public string StatusLine => Title.EndsWith('!') || Title.EndsWith('?') || Title.EndsWith('.')
+        ? $"{Title} {Text}"
+        : $"{Title}. {Text}";
+
     public static string ActionLabel(UserErrorAction action) => action switch
     {
         UserErrorAction.Retry => "Повторить",

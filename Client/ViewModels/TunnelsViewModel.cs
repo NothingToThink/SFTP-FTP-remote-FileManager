@@ -85,11 +85,11 @@ public partial class TunnelsViewModel : ViewModelBase
         {
             ErrorText = ex.StatusCode == 400
                 ? "Туннели доступны только для SFTP/SSH-подключений"
-                : ex.ServerMessage;
+                : ErrorPresenter.Present(ex).Text;
         }
         catch (Exception ex)
         {
-            ErrorText = ex.Message;
+            ErrorText = ErrorPresenter.Present(ex).Text;
         }
     }
 
@@ -116,11 +116,11 @@ public partial class TunnelsViewModel : ViewModelBase
         }
         catch (ApiException ex)
         {
-            ErrorText = "Не удалось создать туннель: " + ex.ServerMessage;
+            ErrorText = "Не удалось создать туннель. " + ErrorPresenter.Present(ex).Text;
         }
         catch (Exception ex)
         {
-            ErrorText = ex.Message;
+            ErrorText = ErrorPresenter.Present(ex).Text;
         }
     }
 
@@ -137,7 +137,7 @@ public partial class TunnelsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorText = "Не удалось запустить: " + ex.Message;
+            ErrorText = "Не удалось запустить. " + ErrorPresenter.Present(ex).Text;
         }
     }
 
@@ -154,7 +154,7 @@ public partial class TunnelsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorText = "Не удалось остановить: " + ex.Message;
+            ErrorText = "Не удалось остановить. " + ErrorPresenter.Present(ex).Text;
         }
     }
 
@@ -173,7 +173,7 @@ public partial class TunnelsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorText = "Не удалось удалить: " + ex.Message;
+            ErrorText = "Не удалось удалить. " + ErrorPresenter.Present(ex).Text;
         }
     }
 }

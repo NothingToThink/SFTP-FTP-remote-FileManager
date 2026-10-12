@@ -10,8 +10,21 @@
         WindowStartupLocation="CenterOwner">
 
     <Window.Resources>
-        <conv:ForwardStateToBrushConverter x:Key="StateBrush"/>
+        <conv:EnumEqualsConverter x:Key="EnumEq"/>
     </Window.Resources>
+
+    <Window.Styles>
+        <!-- Точка состояния туннеля: цвета из токенов темы -->
+        <Style Selector="Ellipse.stateDot">
+            <Setter Property="Fill" Value="{DynamicResource Brush.TextFaint}"/>
+        </Style>
+        <Style Selector="Ellipse.stateDot.active">
+            <Setter Property="Fill" Value="{DynamicResource Brush.Success}"/>
+        </Style>
+        <Style Selector="Ellipse.stateDot.failed">
+            <Setter Property="Fill" Value="{DynamicResource Brush.Error}"/>
+        </Style>
+    </Window.Styles>
 
     <DockPanel Margin="12">
         <!-- Ошибка / предупреждение -->
@@ -60,8 +73,9 @@
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="vm:TunnelItemViewModel">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Ellipse Width="8" Height="8" VerticalAlignment="Center"
-                                         Fill="{Binding Status.State, Converter={StaticResource StateBrush}}"/>
+                                <Ellipse Classes="stateDot" Width="8" Height="8" VerticalAlignment="Center"
+                                         Classes.active="{Binding Status.State, Converter={StaticResource EnumEq}, ConverterParameter=Active}"
+                                         Classes.failed="{Binding Status.State, Converter={StaticResource EnumEq}, ConverterParameter=Failed}"/>
                                 <TextBlock Text="{Binding Name}" FontWeight="Medium"/>
                             </StackPanel>
                         </DataTemplate>
