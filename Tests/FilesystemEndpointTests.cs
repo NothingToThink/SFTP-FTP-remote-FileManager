@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using Core.Interfaces.Manager;
 using Core.Models;
@@ -195,12 +194,21 @@ public class FilesystemEndpointTests :
 
     private static async Task UploadAsync(HttpClient client, Guid id, string remotePath, string content)
     {
-        using var form = new MultipartFormDataContent();
-        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(content)), "file", Path.GetFileName(remotePath));
-
-        var response = await client.PostAsync(
-            $"/connections/{id}/filesystem/file/upload?remotePath={Uri.EscapeDataString(remotePath)}", form);
-        response.EnsureSuccessStatusCode();
+        var localPath = Path.Combine(Path.GetTempPath(), $"fs-tests-{Guid.NewGuid():N}");
+        await File.WriteAllTextAsync(localPath, content);
+        try
+        {
+            var response = await client.PostAsync(
+                $"/connections/{id}/filesystem/file/upload" +
+                $"?localPath={Uri.EscapeDataString(localPath)}" +
+                $"&remotePath={Uri.EscapeDataString(remotePath)}",
+                content: null);
+            response.EnsureSuccessStatusCode();
+        }
+        finally
+        {
+            File.Delete(localPath);
+        }
     }
 
     private static async Task CreateDirAsync(HttpClient client, Guid id, string path)
