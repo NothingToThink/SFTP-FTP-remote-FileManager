@@ -30,11 +30,16 @@ public class PigTail : Control
         AvaloniaProperty.Register<PigTail, double>(nameof(MaxTurn), Math.PI * 2.8);
     public static readonly StyledProperty<bool> FitToBoundsProperty =
         AvaloniaProperty.Register<PigTail, bool>(nameof(FitToBounds));
+    /// <summary>Диапазон поз (Curl), по которому FitToBounds считает масштаб: анимация внутри него не вылезает из контрола.</summary>
+    public static readonly StyledProperty<double> FitMinCurlProperty =
+        AvaloniaProperty.Register<PigTail, double>(nameof(FitMinCurl), 0.4);
+    public static readonly StyledProperty<double> FitMaxCurlProperty =
+        AvaloniaProperty.Register<PigTail, double>(nameof(FitMaxCurl), 1.0);
 
     static PigTail()
     {
         AffectsRender<PigTail>(CurlProperty, StrokeProperty, StrokeThicknessProperty, DirectionProperty,
-            LengthProperty, MaxTurnProperty, FitToBoundsProperty);
+            LengthProperty, MaxTurnProperty, FitToBoundsProperty, FitMinCurlProperty, FitMaxCurlProperty);
     }
 
     public double Curl { get => GetValue(CurlProperty); set => SetValue(CurlProperty, value); }
@@ -44,6 +49,8 @@ public class PigTail : Control
     public double Length { get => GetValue(LengthProperty); set => SetValue(LengthProperty, value); }
     public double MaxTurn { get => GetValue(MaxTurnProperty); set => SetValue(MaxTurnProperty, value); }
     public bool FitToBounds { get => GetValue(FitToBoundsProperty); set => SetValue(FitToBoundsProperty, value); }
+    public double FitMinCurl { get => GetValue(FitMinCurlProperty); set => SetValue(FitMinCurlProperty, value); }
+    public double FitMaxCurl { get => GetValue(FitMaxCurlProperty); set => SetValue(FitMaxCurlProperty, value); }
 
     private const int Steps = 72;
 
@@ -88,10 +95,10 @@ public class PigTail : Control
         var thickness = StrokeThickness;
         if (FitToBounds && Bounds.Width > 0 && Bounds.Height > 0)
         {
-            // масштаб и сдвиг по объединённому bbox крайних поз (Curl 0.6 и 1): не зависят от текущего Curl,
+            // масштаб и сдвиг по объединённому bbox крайних поз (FitMinCurl и FitMaxCurl): не зависят от текущего Curl,
             // поэтому анимация не дёргает размер, а хвост всегда целиком влезает в контрол
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-            foreach (var p in BuildPoints(0.6).Concat(BuildPoints(1)))
+            foreach (var p in BuildPoints(FitMinCurl).Concat(BuildPoints(FitMaxCurl)))
             {
                 minX = Math.Min(minX, p.X); maxX = Math.Max(maxX, p.X);
                 minY = Math.Min(minY, p.Y); maxY = Math.Max(maxY, p.Y);
