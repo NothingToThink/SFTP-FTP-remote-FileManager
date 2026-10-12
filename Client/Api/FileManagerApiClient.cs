@@ -209,9 +209,12 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
     public Task ChangeDirectoryAsync(Guid id, string path, CancellationToken ct = default)
         => PatchStringAsync($"connections/{id}/filesystem/dir/current", path, ct);
 
-    public async Task UploadFileAsync(Guid id, string remotePath, string localFilePath, CancellationToken ct = default)
+    /// <param name="progress">Нарастающий итог отправленных байт (вызывается из потока пула).</param>
+    public async Task UploadFileAsync(Guid id, string remotePath, string localFilePath,
+        CancellationToken ct = default, IProgress<long>? progress = null)
     {
-        await using var stream = File.OpenRead(localFilePath);
+        await using var file = File.OpenRead(localFilePath);
+        Stream stream = progress is null ? file : new ProgressStream(file, progress);
         using var form = new MultipartFormDataContent();
         using var content = new StreamContent(stream);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
@@ -224,7 +227,9 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
         await EnsureSuccessAsync(resp, ct);
     }
 
-    public async Task DownloadFileAsync(Guid id, string remotePath, string localFilePath, CancellationToken ct = default)
+    /// <param name="progress">Нарастающий итог скачанных байт.</param>
+    public async Task DownloadFileAsync(Guid id, string remotePath, string localFilePath,
+        CancellationToken ct = default, IProgress<long>? progress = null)
     {
         using var resp = await _http.GetAsync(
             $"connections/{id}/filesystem/file/download?path={Uri.EscapeDataString(remotePath)}",
@@ -234,7 +239,15 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
 
         await using var src = await resp.Content.ReadAsStreamAsync(ct);
         await using var dst = File.Create(localFilePath);
-        await src.CopyToAsync(dst, ct);
+        var buffer = new byte[81920];
+        long total = 0;
+        int read;
+        while ((read = await src.ReadAsync(buffer, ct)) > 0)
+        {
+            await dst.WriteAsync(buffer.AsMemory(0, read), ct);
+            total += read;
+            progress?.Report(total);
+        }
     }
 
     // --- Вспомогательные ---

@@ -26,7 +26,7 @@ namespace DevAudit;
 /// Запуск: dotnet run --project DevAudit -- [url]
 /// Отчёт: DevAudit/bin/.../audit-report.txt (+ PNG-кадры в audit-out/ для контроля).
 /// </summary>
-public static class Program
+public static partial class Program
 {
     private static readonly int[] Widths = Environment.GetEnvironmentVariable("AUDIT_WIDTHS") is { } w ? w.Split(',').Select(int.Parse).ToArray() : new[] { 860, 1024, 1366, 1920 };
     private const int Height = 700;
@@ -154,6 +154,21 @@ public static class Program
             Snap(vm, dir, $"{prefix}-error-{name}.png");
             vm.HasConnectError = false;
 
+            // 3E: ошибка из ErrorPresenter с раскрытым «Подробнее» и кнопками действий
+            vm.ShowConnectError(ErrorPresenter.Present(new ApiException(500, "Internal server error"),
+                new ErrorContext("prod-01", true)));
+            vm.IsErrorDetailsExpanded = true;
+            Snap(vm, dir, $"{prefix}-error-details-{name}.png");
+            vm.IsErrorDetailsExpanded = false;
+            // 3E: подмена ключа — свинка визжит, пока открыт диалог
+            vm.ShowConnectError(ErrorPresenter.Present(
+                new ApiException(409, "host key changed", ApiException.KindHostKeyMismatch, "prod-01", 22, "SHA256:old", "SHA256:new"),
+                new ErrorContext("prod-01", true)));
+            vm.IsHostKeyDialogOpen = true;
+            Snap(vm, dir, $"{prefix}-error-squeal-{name}.png");
+            vm.IsHostKeyDialogOpen = false;
+            vm.HasConnectError = false;
+
             // Пустая папка
             ShotBind(vm);
             vm.Browser.Items.Clear();
@@ -163,6 +178,37 @@ public static class Program
             // 1280x720
             ShotBind(vm);
             Snap(vm, dir, $"{prefix}-1280-{name}.png", 1280, 720);
+
+            // 3E: передачи с реальным процентом и скоростью, затем итог «Положили в копилку»
+            ShotBind(vm);
+            vm.Browser.Transfers.Items.Clear();
+            var x1 = vm.Browser.Transfers.Start("backup-2026-05-01.tar.gz", true, 73400320);
+            var x2 = vm.Browser.Transfers.Start("logo.png", true, 48211);
+            x1.Begin();
+            Thread.Sleep(350);
+            x1.Report(33_000_000);
+            x2.Report(21_000);
+            Snap(vm, dir, $"{prefix}-xfer-active-{name}.png");
+            vm.Browser.Transfers.IsExpanded = true;
+            Snap(vm, dir, $"{prefix}-xfer-active-open-{name}.png");
+            x1.Complete();
+            x2.Complete();
+            vm.Browser.Transfers.IsExpanded = false;
+            vm.Browser.LastResult = new TransferResult(TransferResultKind.Upload,
+                TransferText.UploadDone(2, 73448531, "/var/www/site").Title,
+                TransferText.UploadDone(2, 73448531, "/var/www/site").Text, "Показать", "logo.png");
+            Snap(vm, dir, $"{prefix}-xfer-done-{name}.png");
+            vm.Browser.LastResult = new TransferResult(TransferResultKind.Download,
+                TransferText.DownloadDone(3, 12582912, "/Users/demo/Downloads").Title,
+                TransferText.DownloadDone(3, 12582912, "/Users/demo/Downloads").Text, "Открыть папку", "/tmp");
+            Snap(vm, dir, $"{prefix}-xfer-done-download-{name}.png");
+            vm.Browser.LastResult = null;
+            vm.Browser.Transfers.Items.Clear();
+
+            // 3E: подсветка зоны при перетаскивании файлов из проводника
+            vm.Browser.IsDropActive = true;
+            Snap(vm, dir, $"{prefix}-drop-{name}.png");
+            vm.Browser.IsDropActive = false;
 
             var dlg = new ProfileEditWindow
             {
@@ -250,6 +296,13 @@ public static class Program
             await ScenarioManyProfiles(api!);
         if (serverUp && localProfileId is not null)
             await ScenarioFullFunctional(api!, url, localProfileId.Value);
+        ScenarioTransferTexts();
+        await ScenarioKeyboard();
+        await ScenarioConnectErrors();
+        if (serverUp && localProfileId is not null)
+            await ScenarioTransfers(api!, url, localProfileId.Value);
+        else
+            Report.AppendLine("  [SKIP] передачи на живом бэкенде: сервер недоступен");
         await ScenarioProfileValidation();
         await ScenarioTunnels();
         await ScenarioServerDown();
@@ -1181,6 +1234,55 @@ public sealed class HeadlessDialogService : IDialogService
     public Queue<bool> ConfirmResults { get; } = new();
     public Queue<string?> PickOpenResults { get; } = new();
     public Queue<string?> PickSaveResults { get; } = new();
+    public Queue<string?> PickFolderResults { get; } = new();
+    /// <summary>Ответы на ключи сервера (доверять / нет); по умолчанию — отказ.</summary>
+    public Queue<bool> HostKeyResults { get; } = new();
+    /// <summary>Ответы на «Заменить?»; по умолчанию — не заменять.</summary>
+    public Queue<bool> OverwriteResults { get; } = new();
+    /// <summary>Выбранное действие в диалоге ошибки; по умолчанию — закрыть.</summary>
+    public Queue<UserErrorAction?> ErrorActionResults { get; } = new();
+    /// <summary>Вызывается в момент показа диалога ключа (проверить состояние панели «пока диалог открыт»).</summary>
+    public Action<string>? OnHostKeyDialog { get; set; }
+    public List<UserError> Errors { get; } = new();
+
+    public Task<string?> PickFolderAsync(string title)
+    {
+        Calls.Add($"pickFolder:{title}");
+        return Task.FromResult(PickFolderResults.Count > 0 ? PickFolderResults.Dequeue() : null);
+    }
+
+    public Task<UserErrorAction?> ShowErrorAsync(UserError error)
+    {
+        Calls.Add($"error:{error.Title}");
+        Errors.Add(error);
+        return Task.FromResult(ErrorActionResults.Count > 0 ? ErrorActionResults.Dequeue() : null);
+    }
+
+    public Task<bool> ShowUnknownHostKeyAsync(string host, int port, string fingerprint)
+    {
+        Calls.Add($"unknownHostKey:{host}:{port}");
+        OnHostKeyDialog?.Invoke("unknown");
+        return Task.FromResult(HostKeyResults.Count > 0 && HostKeyResults.Dequeue());
+    }
+
+    public Task<bool> ShowHostKeyMismatchAsync(string host, int port, string? expected, string? presented)
+    {
+        Calls.Add($"hostKeyMismatch:{host}:{port}");
+        OnHostKeyDialog?.Invoke("mismatch");
+        return Task.FromResult(HostKeyResults.Count > 0 && HostKeyResults.Dequeue());
+    }
+
+    public Task<bool> ConfirmDeleteAsync(int count, string? singleName = null, bool hasFolders = false)
+    {
+        Calls.Add($"confirmDelete:{count}:{singleName}:{hasFolders}");
+        return Task.FromResult(ConfirmResults.Count > 0 ? ConfirmResults.Dequeue() : false);
+    }
+
+    public Task<bool> ConfirmOverwriteAsync(string name)
+    {
+        Calls.Add($"confirmOverwrite:{name}");
+        return Task.FromResult(OverwriteResults.Count > 0 && OverwriteResults.Dequeue());
+    }
 
     public Task<string?> PromptAsync(string title, string label, string defaultValue = "")
     {

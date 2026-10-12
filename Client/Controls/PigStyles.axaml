@@ -242,8 +242,11 @@
         <Setter Property="Curl" Value="1"/>
     </Style>
     <Style Selector="pig|PigTail.small.error">
-        <Setter Property="Curl" Value="0"/>
-        <Setter Property="Direction" Value="100"/>
+        <!-- Ошибка: хвост свисает вниз с лёгким изгибом на конце. FitToBounds масштабирует по позам Curl 0.6 и 1,
+             поэтому поза должна лежать в этом диапазоне, а изгиб задаёт малый MaxTurn (иначе прямая линия вылезает за 16x16) -->
+        <Setter Property="MaxTurn" Value="2.2"/>
+        <Setter Property="Curl" Value="0.6"/>
+        <Setter Property="Direction" Value="95"/>
         <Setter Property="Stroke" Value="{DynamicResource Brush.Error}"/>
     </Style>
     <Style Selector="pig|PigTail.small.connecting">

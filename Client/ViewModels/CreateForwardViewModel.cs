@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using FileManagerClient.Api;
 using FileManagerClient.Models;
+using FileManagerClient.Services;
 
 namespace FileManagerClient.ViewModels;
 
@@ -45,11 +46,11 @@ public partial class CreateForwardViewModel : ViewModelBase
         }
         catch (ApiException ex)
         {
-            SuggestionStatus = "Сканер недоступен: " + ex.ServerMessage;
+            SuggestionStatus = "Сканер недоступен. " + ErrorPresenter.Present(ex).Text;
         }
         catch (Exception ex)
         {
-            SuggestionStatus = "Сканер недоступен: " + ex.Message;
+            SuggestionStatus = "Сканер недоступен. " + ErrorPresenter.Present(ex).Text;
         }
         finally
         {
