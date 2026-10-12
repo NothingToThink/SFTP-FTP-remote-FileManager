@@ -181,6 +181,23 @@
                 <Setter Property="FontSize" Value="13"/>
             </Style>
 
+            <Style Selector="Expander">
+                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                <Setter Property="FontSize" Value="12.5"/>
+                <Setter Property="FontWeight" Value="Medium"/>
+            </Style>
+            <!-- В Avalonia 12 Fluent части шаблона Expander: ToggleButton#ExpanderHeader и Border#ExpanderContent.
+                 Тона поверхностей и ховер задаются ресурсами темы, переопределёнными в ProfileEditWindow. -->
+            <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+                <Setter Property="Padding" Value="12,11"/>
+            </Style>
+            <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            </Style>
+            <Style Selector="Expander /template/ Border#ExpanderContent">
+                <Setter Property="Padding" Value="12"/>
+            </Style>
+
             <Style Selector="DataGrid">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="BorderThickness" Value="0"/>
