@@ -1,0 +1,116 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:FileManagerClient.ViewModels;assembly=FileManagerClient"
+             xmlns:ctl="using:FileManagerClient.Controls"
+             xmlns:v="using:FileManagerClient.Views"
+             x:Class="FileManagerClient.Views.CommandPalette"
+             x:DataType="vm:CommandPaletteViewModel"
+             IsVisible="False" Opacity="0">
+
+    <UserControl.Resources>
+        <v:IconKeyConverter x:Key="IconKey"/>
+    </UserControl.Resources>
+
+    <UserControl.Transitions>
+        <Transitions>
+            <DoubleTransition Property="Opacity" Duration="0:0:0.18"/>
+        </Transitions>
+    </UserControl.Transitions>
+
+    <UserControl.Styles>
+        <Style Selector="TextBox.palette">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="17"/>
+            <Setter Property="MinHeight" Value="48"/>
+            <Setter Property="Padding" Value="0,10"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBox.palette:focus /template/ Border#PART_BorderElement, TextBox.palette:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="ListBox#ResultsList ListBoxItem">
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Focusable" Value="False"/>
+        </Style>
+        <Style Selector="Border.paletteCard">
+            <Setter Property="RenderTransform" Value="scale(0.97)"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.paletteCard.shown">
+            <Setter Property="RenderTransform" Value="scale(1)"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <!-- Скрим: клик вне карточки закрывает палитру -->
+        <Border x:Name="Scrim" Background="{DynamicResource Brush.Scrim}"/>
+
+        <Border x:Name="Card" Classes="paletteCard"
+                Width="640" MaxHeight="520" VerticalAlignment="Top" HorizontalAlignment="Center"
+                Margin="24,88,24,24"
+                Background="{DynamicResource Brush.Surface}"
+                BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                CornerRadius="{StaticResource Radius.Dialog}"
+                BoxShadow="0 12 40 0 #50000000"
+                ClipToBounds="True">
+            <Grid RowDefinitions="Auto,Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="20,0,16,0">
+                    <ctl:LineIcon Data="{StaticResource Line.Command}" Size="20" Margin="0,0,12,0"
+                                  Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" x:Name="SearchBox" Classes="palette"
+                             Text="{Binding Query, Mode=TwoWay}"
+                             PlaceholderText="{Binding PlaceholderText}"
+                             AutomationProperties.AutomationId="PaletteSearchBox"
+                             AutomationProperties.Name="Поиск команды"/>
+                </Grid>
+                <Border Grid.Row="1" Height="1" Background="{DynamicResource Brush.Border}"/>
+
+                <ListBox Grid.Row="2" x:Name="ResultsList" Margin="8,8,8,8"
+                         Focusable="False"
+                         ItemsSource="{Binding Items}"
+                         SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+                         IsVisible="{Binding HasItems}"
+                         AutomationProperties.AutomationId="PaletteResults">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PaletteItemViewModel">
+                            <Grid ColumnDefinitions="Auto,*,Auto" MinHeight="40" Opacity="{Binding RowOpacity}">
+                                <Panel Width="28" Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <ctl:PigIcon Kind="{Binding PigIcon}" Size="26" IsVisible="{Binding HasPigIcon}"
+                                                 Foreground="{DynamicResource Brush.Accent}"/>
+                                    <ctl:LineIcon Data="{Binding IconKey, Converter={StaticResource IconKey}}" Size="20"
+                                                  IsVisible="{Binding HasLineIcon}"
+                                                  Foreground="{DynamicResource Brush.TextMuted}"
+                                                  HorizontalAlignment="Center"/>
+                                </Panel>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                    <v:HighlightedText Text="{Binding Title}" Matches="{Binding Matches}"
+                                                       FontSize="15" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Classes="caption" Text="{Binding Caption}" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                <Border Grid.Column="2" Margin="12,0,4,0" VerticalAlignment="Center"
+                                        IsVisible="{Binding HasShortcut}"
+                                        Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="6" Padding="8,2">
+                                    <TextBlock Classes="mono" FontSize="12" Text="{Binding Shortcut}"
+                                               Foreground="{DynamicResource Brush.TextMuted}"/>
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Ничего не нашлось -->
+                <StackPanel Grid.Row="2" Margin="24,28" Spacing="4" HorizontalAlignment="Center"
+                            IsVisible="{Binding IsEmptyResult}">
+                    <TextBlock Classes="h2" FontSize="17" HorizontalAlignment="Center" Text="Ничего не нашлось"/>
+                    <TextBlock Classes="secondary" HorizontalAlignment="Center" Text="Попробуйте другое слово"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

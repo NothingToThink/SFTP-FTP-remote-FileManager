@@ -4,6 +4,7 @@
         xmlns:models="clr-namespace:FileManagerClient.Models;assembly=FileManagerClient"
         xmlns:conv="clr-namespace:FileManagerClient.Converters"
         xmlns:ctl="using:FileManagerClient.Controls"
+        xmlns:views="using:FileManagerClient.Views"
         x:Class="FileManagerClient.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="FileManager"
@@ -44,6 +45,7 @@
         <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding OpenCommandPaletteCommand}"/>
     </Window.KeyBindings>
 
+    <Grid>
     <DockPanel>
         <!-- 1. Заголовок: логотип, поиск, палитра команд, тема -->
         <Border DockPanel.Dock="Top" Padding="16,10" Background="{DynamicResource BgPanelBrush}"
@@ -388,8 +390,9 @@
                         <DataGrid.ContextMenu>
                             <!-- ContextMenu не в визуальном дереве: DataContext в него не наследуется,
                                  задаем явно из грида; иначе пункты меню остаются без команд -->
-                            <ContextMenu x:DataType="vm:MainWindowViewModel"
-                                         DataContext="{Binding #FilesGrid.DataContext}">
+                            <ContextMenu x:Name="FilesMenu" x:DataType="vm:MainWindowViewModel"
+                                         DataContext="{Binding #FilesGrid.DataContext}"
+                                         Opening="FilesMenuOpening">
                                 <MenuItem Header="Открыть" Command="{Binding Browser.OpenItemCommand}"/>
                                 <MenuItem Header="Переименовать…" InputGesture="F2" Command="{Binding Browser.RenameCommand}"/>
                                 <MenuItem Header="Копировать в…" Command="{Binding Browser.CopyToCommand}"/>
@@ -496,4 +499,8 @@
             </Grid>
         </Border>
     </DockPanel>
+
+    <!-- Палитра команд (Ctrl+Shift+P): оверлей поверх всего окна -->
+    <views:CommandPalette DataContext="{Binding CommandPalette}"/>
+    </Grid>
 </Window>

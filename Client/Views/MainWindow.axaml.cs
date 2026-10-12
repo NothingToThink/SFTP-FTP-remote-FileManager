@@ -67,6 +67,36 @@ public partial class MainWindow : Window
             FilesGrid.Columns[3].IsVisible = _hooked?.Browser.BoundProtocol == Protocol.Sftp;
     }
 
+    /// <summary>
+    /// Динамические пункты контекстного меню файла: команды реестра с контекстом «file».
+    /// Пересобираются при каждом открытии, поэтому команды плагинов появляются без перезапуска.
+    /// </summary>
+    private void FilesMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (sender is not ContextMenu menu || DataContext is not MainWindowViewModel vm)
+            return;
+        var items = menu.Items;
+        foreach (var old in items.OfType<Control>().Where(c => c.Tag as string == "dynamic").ToList())
+            items.Remove(old);
+        var commands = vm.Commands.ForContext(Commands.AppCommand.FileContext);
+        if (commands.Count == 0)
+            return;
+        items.Add(new Separator { Tag = "dynamic" });
+        var target = vm.Browser.SelectedItem;
+        foreach (var cmd in commands)
+        {
+            var ctx = new Commands.CommandContext { Target = target };
+            var item = new MenuItem
+            {
+                Header = cmd.Title,
+                Tag = "dynamic",
+                IsEnabled = cmd.GetDisabledReason(ctx) is null,
+            };
+            item.Click += async (_, _) => await vm.Commands.ExecuteAsync(cmd, ctx);
+            items.Add(item);
+        }
+    }
+
     private void FilesGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (DataContext is MainWindowViewModel vm)

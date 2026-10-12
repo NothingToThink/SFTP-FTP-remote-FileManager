@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.csproj" />
     <ProjectReference Include="..\Backend\Backend.csproj" />
+    <ProjectReference Include="..\Client\FileManagerClient.csproj" />
   </ItemGroup>
 
 </Project>

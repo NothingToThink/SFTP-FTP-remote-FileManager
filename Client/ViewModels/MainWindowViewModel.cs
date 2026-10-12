@@ -3,6 +3,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileManagerClient.Api;
+using FileManagerClient.Commands;
 using FileManagerClient.Controls;
 using FileManagerClient.Services;
 
@@ -69,6 +70,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public FileBrowserViewModel Browser { get; }
 
+    /// <summary>Реестр команд (встроенные + плагинные) и палитра над ним.</summary>
+    public CommandRegistry Commands { get; } = new();
+
+    public CommandPaletteViewModel CommandPalette { get; }
+
     public MainWindowViewModel(ClientSettings settings, IServerLauncher launcher, IDialogService dialogs)
     {
         _settings = settings;
@@ -100,6 +106,8 @@ public partial class MainWindowViewModel : ViewModelBase
             NotifyPanel();
         };
         _clock.Tick += (_, _) => UpdateClock();
+        CommandPalette = new CommandPaletteViewModel(Commands);
+        BuiltInCommands.Register(Commands, this, dialogs);
 
         _ = InitializeAsync();
     }
@@ -197,15 +205,9 @@ public partial class MainWindowViewModel : ViewModelBase
             : $"{t.Minutes:00}:{t.Seconds:00}";
     }
 
-    /// <summary>
-    /// Заготовка палитры команд (Ctrl+Shift+P). TODO: открыть палитру со всеми командами, включая плагинные.
-    /// Сюда же подключается агент палитры.
-    /// </summary>
+    /// <summary>Палитра команд (Ctrl+Shift+P): все команды, включая плагинные.</summary>
     [RelayCommand]
-    private void OpenCommandPalette()
-    {
-        StatusText = "Палитра команд пока в разработке";
-    }
+    private void OpenCommandPalette() => CommandPalette.Open();
 
     /// <summary>Повторить: переподключиться к профилю с ошибкой либо перепроверить сервер.</summary>
     [RelayCommand]
