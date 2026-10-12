@@ -320,7 +320,7 @@ public static class Program
                 && !await api.DirExistsAsync(browser.ConnectionId, "copied-dir"));
         }
 
-        // TC09: upload через пикер (фейк отдаёт реальный файл) + download с проверкой содержимого
+        // TC09: upload (localPath в query) + download с проверкой содержимого
         var payload = $"func-test {DateTime.Now:O}";
         var uploadSource = Path.Combine(Path.GetTempPath(), $"func-upload-{Guid.NewGuid():N}.txt");
         await File.WriteAllTextAsync(uploadSource, payload);
@@ -344,7 +344,7 @@ public static class Program
         {
             // скачивание не удалось — кейс ниже зафиксирует
         }
-        Case("upload + download: содержимое совпало",
+        Case("upload + download : содержимое совпало",
             uploaded is not null && downloadedOk,
             uploaded is null ? "upload не удался" : "файл не скачан");
 

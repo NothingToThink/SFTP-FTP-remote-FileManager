@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using FileManagerClient.Models;
@@ -25,10 +24,12 @@ public interface IForwardingApi
 }
 
 /// <summary>
-/// Типизированный клиент Backend API (контракт ветки dev @ bdd4928).
+/// Типизированный клиент Backend API.
 ///
 /// Нюансы контракта:
-///  - часть GET/DELETE эндпоинтов принимает путь в теле запроса как JSON-строку;
+///  - пути передаются в query-параметрах: у GET/DELETE напрямую (path=...),
+///    у upload/download — localPath (файл читает/пишет сам Backend) + remotePath/path;
+///    в теле остаются только составные запросы (rename/copy/move) и создание;
 ///  - ответы — camelCase, кроме HostProfile внутри профиля (PascalCase + "$type");
 ///  - ошибки приходят как {"error": "..."} с кодами 400/404/500.
 /// </summary>
@@ -200,32 +201,27 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
     public Task ChangeDirectoryAsync(Guid id, string path, CancellationToken ct = default)
         => PatchStringAsync($"connections/{id}/filesystem/dir/current", path, ct);
 
+    /// <summary>Файл читает Backend сам по localPath (Backend локален — это путь пользователя).</summary>
     public async Task UploadFileAsync(Guid id, string remotePath, string localFilePath, CancellationToken ct = default)
     {
-        await using var stream = File.OpenRead(localFilePath);
-        using var form = new MultipartFormDataContent();
-        using var content = new StreamContent(stream);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        form.Add(content, "file", Path.GetFileName(localFilePath));
-
         using var resp = await _http.PostAsync(
-            $"connections/{id}/filesystem/file/upload?remotePath={Uri.EscapeDataString(remotePath)}",
-            form,
+            $"connections/{id}/filesystem/file/upload" +
+            $"?localPath={Uri.EscapeDataString(localFilePath)}" +
+            $"&remotePath={Uri.EscapeDataString(remotePath)}",
+            content: null,
             ct);
         await EnsureSuccessAsync(resp, ct);
     }
 
+    /// <summary>Файл пишет Backend сам по localPath; тело ответа пустое.</summary>
     public async Task DownloadFileAsync(Guid id, string remotePath, string localFilePath, CancellationToken ct = default)
     {
         using var resp = await _http.GetAsync(
-            $"connections/{id}/filesystem/file/download?path={Uri.EscapeDataString(remotePath)}",
-            HttpCompletionOption.ResponseHeadersRead,
+            $"connections/{id}/filesystem/file/download" +
+            $"?path={Uri.EscapeDataString(remotePath)}" +
+            $"&localPath={Uri.EscapeDataString(localFilePath)}",
             ct);
         await EnsureSuccessAsync(resp, ct);
-
-        await using var src = await resp.Content.ReadAsStreamAsync(ct);
-        await using var dst = File.Create(localFilePath);
-        await src.CopyToAsync(dst, ct);
     }
 
     // --- Вспомогательные ---
