@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 
 # Песочница Local-протокола Backend
 Backend/tmp/
+
+# Демо-бандл (tools/publish-demo.sh)
+dist/

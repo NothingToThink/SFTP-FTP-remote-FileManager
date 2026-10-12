@@ -47,6 +47,21 @@ public class PigTail : Control
 
     private const int Steps = 72;
 
+    private void OnMotionChanged() => Classes.Set("reduce", FileManagerClient.Services.MotionSettings.ReduceMotion);
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        FileManagerClient.Services.MotionSettings.Changed += OnMotionChanged;
+        OnMotionChanged();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        FileManagerClient.Services.MotionSettings.Changed -= OnMotionChanged;
+        base.OnDetachedFromVisualTree(e);
+    }
+
     private Point[] BuildPoints(double curl)
     {
         var theta0 = Direction * Math.PI / 180.0;

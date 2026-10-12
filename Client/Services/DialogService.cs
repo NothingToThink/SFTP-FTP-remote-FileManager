@@ -71,7 +71,12 @@ public class DialogService : IDialogService
             MinWidth = 360,
         };
 
-        var (dialog, buttons) = BuildDialog(title, label, input);
+        // диалог «Настройки» (шестерёнка): рядом с адресом - глобальная «Уменьшить анимацию»
+        var reduce = title == "Настройки"
+            ? new CheckBox { Content = "Уменьшить анимацию", IsChecked = MotionSettings.ReduceMotion }
+            : null;
+        Control content = reduce is null ? input : new StackPanel { Spacing = 12, Children = { input, reduce } };
+        var (dialog, buttons) = BuildDialog(title, label, content);
         string? result = null;
 
         var ok = new Button { Content = "OK", Width = 90, IsDefault = true };
@@ -79,6 +84,7 @@ public class DialogService : IDialogService
         ok.Click += (_, _) =>
         {
             result = input.Text;
+            if (reduce is not null) MotionSettings.ReduceMotion = reduce.IsChecked == true;
             dialog.Close();
         };
         cancel.Click += (_, _) => dialog.Close();

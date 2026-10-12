@@ -50,13 +50,29 @@ public class PigMascot : Decorator
         Rebuild();
     }
 
+    // Глобальная настройка «Уменьшить анимацию» действует на все свинки без привязок в views
+    private void OnMotionChanged() => UpdateClasses();
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        FileManagerClient.Services.MotionSettings.Changed += OnMotionChanged;
+        UpdateClasses();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        FileManagerClient.Services.MotionSettings.Changed -= OnMotionChanged;
+        base.OnDetachedFromVisualTree(e);
+    }
+
     public PigState State { get => GetValue(StateProperty); set => SetValue(StateProperty, value); }
     public bool ReduceMotion { get => GetValue(ReduceMotionProperty); set => SetValue(ReduceMotionProperty, value); }
 
     private void UpdateClasses()
     {
         foreach (var (state, cls) in Classes) PseudoClasses.Set(cls, State == state);
-        PseudoClasses.Set(":reduce", ReduceMotion);
+        PseudoClasses.Set(":reduce", ReduceMotion || FileManagerClient.Services.MotionSettings.ReduceMotion);
     }
 
     private static Control CreateScene(PigState state) => state switch
