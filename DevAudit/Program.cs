@@ -45,6 +45,12 @@ public static class Program
             return;
         }
 
+        if (args.Length >= 2 && args[0] == "--dialog-shots")
+        {
+            DialogShots.Run(args[1]);
+            return;
+        }
+
         if (args.Contains("--pig-gallery"))
         {
             PigGallery.Run(args.SkipWhile(a => a != "--out").Skip(1).FirstOrDefault());

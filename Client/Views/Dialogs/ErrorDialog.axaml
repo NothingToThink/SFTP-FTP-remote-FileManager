@@ -1,0 +1,42 @@
+<dlg:DialogWindowBase xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dlg="clr-namespace:FileManagerClient.Views.Dialogs"
+        xmlns:pig="using:FileManagerClient.Controls"
+        x:Class="FileManagerClient.Views.Dialogs.ErrorDialog"
+        Title="Ошибка">
+    <dlg:DialogWindowBase.Styles>
+        <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0,4"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.AccentStrong}"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style Selector="Expander /template/ Border#ToggleContentBorder">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </dlg:DialogWindowBase.Styles>
+    <Border Classes="dialog" Margin="20" Width="520"
+            BoxShadow="0 8 32 0 #40000000">
+        <StackPanel Spacing="16">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="20">
+                <pig:PigMascot Grid.Column="0" State="Error" Width="120" Height="90" VerticalAlignment="Top"/>
+                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock x:Name="TitleText" Classes="h2" TextWrapping="Wrap"
+                               AutomationProperties.AutomationId="ErrorTitle"/>
+                    <TextBlock x:Name="BodyText" TextWrapping="Wrap" FontSize="15"
+                               AutomationProperties.AutomationId="ErrorText"/>
+                </StackPanel>
+            </Grid>
+            <Expander x:Name="DetailsExpander" Header="Подробнее" IsVisible="False"
+                      HorizontalAlignment="Stretch" AutomationProperties.AutomationId="ErrorDetailsExpander">
+                <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="8" Padding="12,8">
+                    <SelectableTextBlock x:Name="DetailsText" Classes="mono" FontSize="13"
+                                         TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextMuted}"/>
+                </Border>
+            </Expander>
+            <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"/>
+        </StackPanel>
+    </Border>
+</dlg:DialogWindowBase>

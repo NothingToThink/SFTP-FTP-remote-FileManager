@@ -1,0 +1,58 @@
+<dlg:DialogWindowBase xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dlg="clr-namespace:FileManagerClient.Views.Dialogs"
+        xmlns:pig="using:FileManagerClient.Controls"
+        x:Class="FileManagerClient.Views.Dialogs.HostKeyDialog"
+        Title="Ключ сервера">
+    <Border Classes="dialog" Margin="20" x:Name="Card" Width="560"
+            BoxShadow="0 8 32 0 #40000000">
+        <StackPanel Spacing="16">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                <!-- первое знакомство: значок доверенного ключа -->
+                <Border x:Name="TrustedBadge" Grid.Column="0" Width="72" Height="72" CornerRadius="16" VerticalAlignment="Top"
+                        Background="{DynamicResource Brush.SurfaceAlt}">
+                    <pig:PigIcon Kind="HostkeyTrusted" Size="40" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 Foreground="{DynamicResource Brush.AccentStrong}"/>
+                </Border>
+                <!-- подмена: визжащая свинка -->
+                <pig:PigMascot x:Name="Squeal" Grid.Column="0" State="Squeal" Width="150" Height="112" VerticalAlignment="Top" IsVisible="False"/>
+                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock x:Name="TitleText" Classes="h2" TextWrapping="Wrap"
+                               AutomationProperties.AutomationId="HostKeyTitle"/>
+                    <TextBlock x:Name="BodyText" TextWrapping="Wrap" FontSize="15"
+                               AutomationProperties.AutomationId="HostKeyText"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- первое знакомство: один отпечаток -->
+            <Border x:Name="SingleBox" Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="8" Padding="14,12">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="caption" Text="Отпечаток ключа (SHA-256)"/>
+                    <SelectableTextBlock x:Name="SingleFingerprint" Classes="mono" TextWrapping="Wrap"
+                                         AutomationProperties.AutomationId="HostKeyFingerprint"/>
+                </StackPanel>
+            </Border>
+
+            <!-- подмена: было / стало рядом -->
+            <Grid x:Name="CompareBox" ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="False">
+                <Border Grid.Column="0" Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="8" Padding="14,12">
+                    <StackPanel Spacing="4">
+                        <TextBlock Classes="caption" Text="Было (сохранённый ключ)"/>
+                        <SelectableTextBlock x:Name="OldFingerprint" Classes="mono" TextWrapping="Wrap"
+                                             AutomationProperties.AutomationId="HostKeyOldFingerprint"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Background="{DynamicResource Brush.ErrorSoft}" CornerRadius="8" Padding="14,12"
+                        BorderBrush="{DynamicResource Brush.Error}" BorderThickness="1">
+                    <StackPanel Spacing="4">
+                        <TextBlock Classes="caption" Text="Стало (ключ сейчас)" Foreground="{DynamicResource Brush.Error}"/>
+                        <SelectableTextBlock x:Name="NewFingerprint" Classes="mono" TextWrapping="Wrap"
+                                             AutomationProperties.AutomationId="HostKeyNewFingerprint"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"/>
+        </StackPanel>
+    </Border>
+</dlg:DialogWindowBase>

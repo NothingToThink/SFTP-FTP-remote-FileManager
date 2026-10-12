@@ -1,93 +1,266 @@
-<Window xmlns="https://github.com/avaloniaui"
+<dlg:DialogWindowBase xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:FileManagerClient.ViewModels;assembly=FileManagerClient"
-        xmlns:conv="clr-namespace:FileManagerClient.Converters"
+        xmlns:models="clr-namespace:FileManagerClient.Models;assembly=FileManagerClient"
+        xmlns:dlg="clr-namespace:FileManagerClient.Views.Dialogs"
+        xmlns:pig="using:FileManagerClient.Controls"
         x:Class="FileManagerClient.Views.ProfileEditWindow"
         x:DataType="vm:ProfileEditViewModel"
-        Title="Профиль подключения"
-        Width="520" SizeToContent="Height"
-        CanResize="False"
-        WindowStartupLocation="CenterOwner"
-        ShowInTaskbar="False"
-        Background="{DynamicResource BgBaseBrush}">
+        Title="Профиль подключения">
 
-    <Window.Resources>
-        <conv:EnumEqualsConverter x:Key="AuthIs"/>
-    </Window.Resources>
+    <dlg:DialogWindowBase.Styles>
+        <!-- Плитка-прорезь выбора протокола -->
+        <Style Selector="Button.slot">
+            <Setter Property="Width" Value="168"/>
+            <Setter Property="Height" Value="84"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.slot:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.RowHover}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+        </Style>
+        <Style Selector="Button.slot.selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+        </Style>
 
-    <StackPanel Margin="20" Spacing="10">
-        <TextBlock Classes="h1" Text="Профиль подключения"/>
+        <!-- Сегментная кнопка способа входа -->
+        <Style Selector="Button.seg">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="MinWidth" Value="120"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.seg:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.RowHover}"/>
+        </Style>
+        <Style Selector="Button.seg.selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+        </Style>
+        <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0,4"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.AccentStrong}"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style Selector="Expander /template/ Border#ToggleContentBorder">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="TextBlock.fielderr">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Error}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </dlg:DialogWindowBase.Styles>
 
-        <TextBlock Classes="secondary" Text="Название" Margin="0,6,0,-4"/>
-        <TextBox Name="NameBox" AutomationProperties.AutomationId="ProfileNameBox"
-                 Text="{Binding Name}" PlaceholderText="Мой сервер"/>
+    <Border Classes="dialog" Margin="20" Width="620" Padding="0" BoxShadow="0 8 32 0 #40000000">
+        <Grid RowDefinitions="Auto,*,Auto,Auto">
 
-        <TextBlock Classes="secondary" Text="Протокол" Margin="0,8,0,-4"/>
-        <ComboBox Name="ProtocolCombo" AutomationProperties.AutomationId="ProfileProtocolCombo"
-                  ItemsSource="{Binding Protocols}" SelectedItem="{Binding Protocol}"
-                  HorizontalAlignment="Left" MinWidth="220"/>
-
-        <Panel IsVisible="{Binding !IsLocal}">
-            <StackPanel Spacing="10">
-                <TextBlock Classes="secondary" Text="Хост" Margin="0,8,0,-4"/>
-                <TextBox Name="HostBox" AutomationProperties.AutomationId="ProfileHostBox"
-                         Text="{Binding Host}" PlaceholderText="host или IP" FontFamily="{StaticResource FontMono}"/>
-                <TextBlock Classes="secondary" Text="Порт (пусто — стандартный для протокола)" Margin="0,4,0,-4"/>
-                <TextBox Name="PortBox" AutomationProperties.AutomationId="ProfilePortBox"
-                         Text="{Binding Port}" PlaceholderText="22 / 21" FontFamily="{StaticResource FontMono}"/>
+            <!-- Заголовок -->
+            <StackPanel Grid.Row="0" Margin="28,22,28,8" Spacing="2">
+                <TextBlock Classes="h2" Text="Профиль подключения"/>
             </StackPanel>
-        </Panel>
 
-        <Panel IsVisible="{Binding NeedsAuth}">
-            <StackPanel Spacing="10">
-                <TextBlock Classes="secondary" Text="Авторизация" Margin="0,10,0,-4"/>
-                <ComboBox Name="AuthKindCombo" AutomationProperties.AutomationId="ProfileAuthKindCombo"
-                          ItemsSource="{Binding AuthKinds}" SelectedItem="{Binding AuthKind}"
-                          HorizontalAlignment="Left" MinWidth="220"/>
-                <TextBlock Classes="secondary" Text="Логин" Margin="0,4,0,-4"/>
-                <TextBox Name="UsernameBox" AutomationProperties.AutomationId="ProfileUsernameBox"
-                         Text="{Binding Username}" FontFamily="{StaticResource FontMono}"/>
+            <ScrollViewer Grid.Row="1" MaxHeight="470" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="28,4,28,12" Spacing="14">
 
-                <Panel IsVisible="{Binding AuthKind, Converter={StaticResource AuthIs}, ConverterParameter=Password}">
-                    <StackPanel Spacing="10">
-                        <TextBlock Classes="secondary" Text="Пароль" Margin="0,4,0,-4"/>
-                        <TextBox Name="PasswordBox" AutomationProperties.AutomationId="ProfilePasswordBox"
-                                 Text="{Binding Password}" PasswordChar="•"/>
+                    <!-- Название -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="secondary" Text="Название"/>
+                        <TextBox Name="NameBox" AutomationProperties.AutomationId="ProfileNameBox"
+                                 Text="{Binding Name}" PlaceholderText="Мой сервер"/>
                     </StackPanel>
-                </Panel>
 
-                <Panel IsVisible="{Binding AuthKind, Converter={StaticResource AuthIs}, ConverterParameter=Key}">
-                    <StackPanel Spacing="10">
-                        <TextBlock Classes="secondary" Text="Путь к приватному ключу" Margin="0,4,0,-4"/>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBox Name="KeyPathBox" AutomationProperties.AutomationId="ProfileKeyPathBox"
-                                     Text="{Binding KeyPath}" Width="350" FontFamily="{StaticResource FontMono}"
-                                     PlaceholderText="~/.ssh/id_rsa"/>
-                            <Button Name="BrowseKeyButton" Classes="tool" Content="…"
-                                    AutomationProperties.AutomationId="ProfileKeyBrowseButton"
-                                    ToolTip.Tip="Выбрать файл ключа" Click="BrowseKeyClick"/>
+                    <!-- Протокол: три прорези -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="secondary" Text="Протокол"/>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Button Classes="slot" Classes.selected="{Binding IsLocal}"
+                                    Command="{Binding SelectProtocolCommand}"
+                                    CommandParameter="{x:Static models:Protocol.Local}"
+                                    AutomationProperties.AutomationId="ProfileSlotLocal">
+                                <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                    <pig:PigIcon Kind="SlotLocal" Size="36" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Локальная папка" FontSize="14" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Classes="slot" Classes.selected="{Binding IsFtp}"
+                                    Command="{Binding SelectProtocolCommand}"
+                                    CommandParameter="{x:Static models:Protocol.Ftp}"
+                                    AutomationProperties.AutomationId="ProfileSlotFtp">
+                                <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                    <pig:PigIcon Kind="SlotFtp" Size="36" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="FTP" FontSize="14" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Classes="slot" Classes.selected="{Binding IsSftp}"
+                                    Command="{Binding SelectProtocolCommand}"
+                                    CommandParameter="{x:Static models:Protocol.Sftp}"
+                                    AutomationProperties.AutomationId="ProfileSlotSftp">
+                                <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                    <pig:PigIcon Kind="SlotSftp" Size="36" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="SFTP" FontSize="14" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
-                        <TextBlock Classes="secondary" Text="Пароль ключа (если установлен)" Margin="0,4,0,-4"/>
-                        <TextBox Name="PassphraseBox" AutomationProperties.AutomationId="ProfilePassphraseBox"
-                                 Text="{Binding Passphrase}" PasswordChar="•"/>
                     </StackPanel>
-                </Panel>
+
+                    <!-- Local: корневая папка -->
+                    <StackPanel Spacing="6" IsVisible="{Binding IsLocal}">
+                        <TextBlock Classes="secondary" Text="Корневая папка"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Name="RootBox" AutomationProperties.AutomationId="ProfileRootBox"
+                                     Text="{Binding Host}" FontFamily="{StaticResource Font.Mono}" FontSize="14"
+                                     PlaceholderText="/Users/me/Documents"/>
+                            <Button Grid.Column="1" Classes="tool" Content="Выбрать…" Click="BrowseRootClick"
+                                    AutomationProperties.AutomationId="ProfileRootBrowseButton"/>
+                        </Grid>
+                        <TextBlock Classes="fielderr" Text="{Binding HostError}"
+                                   IsVisible="{Binding HostError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+
+                    <!-- FTP/SFTP: адрес и порт -->
+                    <Grid ColumnDefinitions="*,140" ColumnSpacing="12" IsVisible="{Binding NeedsHost}">
+                        <StackPanel Grid.Column="0" Spacing="6">
+                            <TextBlock Classes="secondary" Text="Адрес сервера"/>
+                            <TextBox Name="HostBox" AutomationProperties.AutomationId="ProfileHostBox"
+                                     Text="{Binding Host}" PlaceholderText="prod-01.example.com или 10.0.0.5"
+                                     FontFamily="{StaticResource Font.Mono}" FontSize="14"/>
+                            <TextBlock Classes="fielderr" Text="{Binding HostError}"
+                                       IsVisible="{Binding HostError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Classes="secondary" Text="Порт"/>
+                            <TextBox Name="PortBox" AutomationProperties.AutomationId="ProfilePortBox"
+                                     Text="{Binding Port}" PlaceholderText="{Binding PortPlaceholder}"
+                                     FontFamily="{StaticResource Font.Mono}" FontSize="14"/>
+                            <TextBlock Classes="fielderr" Text="{Binding PortError}"
+                                       IsVisible="{Binding PortError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Способ входа -->
+                    <StackPanel Spacing="6" IsVisible="{Binding NeedsAuth}">
+                        <TextBlock Classes="secondary" Text="Вход"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Classes="seg" Classes.selected="{Binding IsAuthPassword}" Content="Пароль"
+                                    Command="{Binding SelectAuthCommand}"
+                                    CommandParameter="{x:Static vm:AuthKind.Password}"
+                                    AutomationProperties.AutomationId="ProfileAuthPassword"/>
+                            <Button Classes="seg" Classes.selected="{Binding IsAuthKey}" Content="Ключ"
+                                    IsVisible="{Binding CanKey}"
+                                    Command="{Binding SelectAuthCommand}"
+                                    CommandParameter="{x:Static vm:AuthKind.Key}"
+                                    AutomationProperties.AutomationId="ProfileAuthKey"/>
+                            <Button Classes="seg" Classes.selected="{Binding IsAuthAnonymous}" Content="Анонимно"
+                                    IsVisible="{Binding CanAnonymous}"
+                                    Command="{Binding SelectAuthCommand}"
+                                    CommandParameter="{x:Static vm:AuthKind.Anonymous}"
+                                    AutomationProperties.AutomationId="ProfileAuthAnonymous"/>
+                        </StackPanel>
+                        <TextBlock Classes="fielderr" Text="{Binding AuthError}"
+                                   IsVisible="{Binding AuthError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+
+                    <!-- Логин и пароль -->
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding NeedsLogin}">
+                        <StackPanel Grid.Column="0" Spacing="6">
+                            <TextBlock Classes="secondary" Text="Логин"/>
+                            <TextBox Name="UsernameBox" AutomationProperties.AutomationId="ProfileUsernameBox"
+                                     Text="{Binding Username}" FontFamily="{StaticResource Font.Mono}" FontSize="14"
+                                     PlaceholderText="deploy"/>
+                            <TextBlock Classes="fielderr" Text="{Binding UsernameError}"
+                                       IsVisible="{Binding UsernameError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="6" IsVisible="{Binding IsAuthPassword}">
+                            <TextBlock Classes="secondary" Text="Пароль"/>
+                            <TextBox Name="PasswordBox" AutomationProperties.AutomationId="ProfilePasswordBox"
+                                     Text="{Binding Password}" PasswordChar="•"/>
+                            <TextBlock Classes="fielderr" Text="{Binding PasswordError}"
+                                       IsVisible="{Binding PasswordError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="6" IsVisible="{Binding IsAuthKey}">
+                            <TextBlock Classes="secondary" Text="Пароль ключа (если задан)"/>
+                            <TextBox Name="PassphraseBox" AutomationProperties.AutomationId="ProfilePassphraseBox"
+                                     Text="{Binding Passphrase}" PasswordChar="•"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Ключ -->
+                    <StackPanel Spacing="6" IsVisible="{Binding IsAuthKey}">
+                        <TextBlock Classes="secondary" Text="Приватный ключ"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Name="KeyPathBox" AutomationProperties.AutomationId="ProfileKeyPathBox"
+                                     Text="{Binding KeyPath}" FontFamily="{StaticResource Font.Mono}" FontSize="14"
+                                     PlaceholderText="~/.ssh/id_ed25519"/>
+                            <Button Grid.Column="1" Classes="tool" Content="Выбрать…" Click="BrowseKeyClick"
+                                    AutomationProperties.AutomationId="ProfileKeyBrowseButton"/>
+                        </Grid>
+                        <TextBlock Classes="fielderr" Text="{Binding KeyPathError}"
+                                   IsVisible="{Binding KeyPathError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Проверка подключения: всегда на виду -->
+                    <Border Grid.Row="2" Margin="28,0,28,0" Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="12" Padding="14,12">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                            <Button Grid.Column="0" Classes="tool" VerticalAlignment="Center"
+                                    Content="Проверить подключение" Command="{Binding TestConnectionCommand}"
+                                    IsEnabled="{Binding !IsTestRunning}"
+                                    AutomationProperties.AutomationId="ProfileTestButton"/>
+                            <Grid Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="10"
+                                  IsVisible="{Binding TestMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <Panel Grid.Column="0" Width="64" Height="48">
+                                    <pig:PigMascot State="Connecting" Width="64" Height="48" IsVisible="{Binding IsTestRunning}"/>
+                                    <pig:PigMascot State="Connected" Width="64" Height="48" IsVisible="{Binding IsTestSuccess}"/>
+                                    <pig:PigMascot State="Error" Width="64" Height="48" IsVisible="{Binding IsTestFailed}"/>
+                                </Panel>
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding TestTitle}" FontWeight="SemiBold" FontSize="15" TextWrapping="Wrap"
+                                               IsVisible="{Binding TestTitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                               AutomationProperties.AutomationId="ProfileTestTitle"/>
+                                    <TextBlock Text="{Binding TestMessage}" FontSize="14" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Brush.TextMuted}"
+                                               AutomationProperties.AutomationId="ProfileTestMessage"/>
+                                    <Expander Header="Подробнее" IsVisible="{Binding HasTestDetails}" Padding="0,4,0,0">
+                                        <SelectableTextBlock Text="{Binding TestDetails}" Classes="mono" FontSize="13"
+                                                             TextWrapping="Wrap"
+                                                             Foreground="{DynamicResource Brush.TextMuted}"/>
+                                    </Expander>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                
+            <!-- Кнопки -->
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="28,14,28,24">
+                <Button Name="OkButton" Classes="primary" Content="Сохранить" MinWidth="130"
+                        HorizontalContentAlignment="Center"
+                        AutomationProperties.AutomationId="ProfileOkButton"
+                        Click="OkClick" IsDefault="True"/>
+                <Button Name="CancelButton" Classes="tool" Content="Отмена" MinWidth="110"
+                        HorizontalContentAlignment="Center"
+                        AutomationProperties.AutomationId="ProfileCancelButton"
+                        Click="CancelClick"/>
             </StackPanel>
-        </Panel>
-
-        <Border Background="{DynamicResource Brush.ErrorSoft}" CornerRadius="6" Padding="10,7" Margin="0,6,0,0"
-                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-            <TextBlock Name="ErrorText" AutomationProperties.AutomationId="ProfileErrorText"
-                       Text="{Binding ErrorMessage}" Foreground="{DynamicResource Brush.Error}" FontSize="12.5" TextWrapping="Wrap"/>
-        </Border>
-
-        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,10,0,0">
-            <Button Name="CancelButton" Classes="tool" Content="Отмена" Width="104"
-                    AutomationProperties.AutomationId="ProfileCancelButton"
-                    IsCancel="True" Click="CancelClick"/>
-            <Button Name="OkButton" Classes="primary" Content="Сохранить" Width="104"
-                    AutomationProperties.AutomationId="ProfileOkButton"
-                    Click="OkClick" IsDefault="True"/>
-        </StackPanel>
-    </StackPanel>
-</Window>
+        </Grid>
+    </Border>
+</dlg:DialogWindowBase>
