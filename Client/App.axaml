@@ -8,6 +8,7 @@
 
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://FileManagerClient/Assets/Pig/PigIcons.axaml"/>
+                <ResourceInclude Source="avares://FileManagerClient/Assets/NeutralIcons.axaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <ResourceDictionary.ThemeDictionaries>
