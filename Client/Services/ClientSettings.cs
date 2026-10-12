@@ -13,6 +13,9 @@ public class ClientSettings
 
     public string ServerUrl { get; set; } = "http://127.0.0.1:5116";
 
+    /// <summary>Тема интерфейса: "light" или "dark". По умолчанию светлая.</summary>
+    public string Theme { get; set; } = "light";
+
     private static string SettingsDir =>
         Path.Combine(
             Environment.GetEnvironmentVariable(DataDirEnvironmentVariable) is { Length: > 0 } custom
@@ -36,6 +39,11 @@ public class ClientSettings
             {
                 settings.ServerUrl = value;
             }
+            if (doc.RootElement.TryGetProperty("theme", out var theme)
+                && theme.GetString() is "light" or "dark")
+            {
+                settings.Theme = theme.GetString()!;
+            }
             return settings;
         }
         catch
@@ -47,6 +55,6 @@ public class ClientSettings
     public void Save()
     {
         Directory.CreateDirectory(SettingsDir);
-        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(new { serverUrl = ServerUrl }));
+        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(new { serverUrl = ServerUrl, theme = Theme }));
     }
 }

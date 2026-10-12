@@ -19,6 +19,7 @@ public class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var settings = ClientSettings.Load();
+            new ThemeService(settings).Apply();
             var launcher = new ExternalServerLauncher(() => settings.ServerUrl);
             var dialogs = new DialogService();
             desktop.MainWindow = new MainWindow

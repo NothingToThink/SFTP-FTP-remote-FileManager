@@ -38,6 +38,13 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Режим скриншотов без сервера: DevAudit --shots <папка> <префикс>
+        if (args.Length >= 2 && args[0] == "--shots")
+        {
+            RunShots(args[1], args.Length > 2 ? args[2] : "shot");
+            return;
+        }
+
         var url = args.Length > 0 ? args[0] : "http://127.0.0.1:5116";
         _outDir = Path.Combine(AppContext.BaseDirectory, "audit-out");
         Directory.CreateDirectory(_outDir);
@@ -64,6 +71,64 @@ public static class Program
             new UTF8Encoding(false));
         Console.Out.WriteLine($"ИТОГО ПРОБЛЕМ: {_issuesTotal}");
         Console.Out.WriteLine($"Отчёт: {Path.Combine(_outDir, "audit-report.txt")}");
+    }
+
+    /// <summary>
+    /// Headless-скриншоты главного окна и диалога профиля в обеих темах: &lt;префикс&gt;-light.png / -dark.png
+    /// (главное окно с фейковыми данными, без сервера) и &lt;префикс&gt;-dialog-*.png.
+    /// </summary>
+    private static void RunShots(string dir, string prefix)
+    {
+        Directory.CreateDirectory(dir);
+        AppBuilder.Configure<App>()
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            .LogToTrace(LogEventLevel.Error)
+            .SetupWithoutStarting();
+
+        var tmp = Path.Combine(Path.GetTempPath(), "devaudit-shots-" + Guid.NewGuid().ToString("N"));
+        Environment.SetEnvironmentVariable(ClientSettings.DataDirEnvironmentVariable, tmp);
+        foreach (var dark in new[] { false, true })
+        {
+            var name = dark ? "dark" : "light";
+            var settings = new ClientSettings { ServerUrl = "http://127.0.0.1:1", Theme = name };
+            new ThemeService(settings).Apply();
+            var vm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl),
+                new HeadlessDialogService());
+            var prof = (string n, string host, Protocol pr) => new ProfileViewModel(
+                SavedProfile.Create(n, new HostProfile(host, pr, new PasswordAuth("deploy", "x"))));
+            vm.Profiles.Add(prof("prod-01", "10.0.0.5", Protocol.Sftp));
+            vm.Profiles.Add(prof("backup-ftp", "ftp.example.com", Protocol.Ftp));
+            vm.Profiles.Add(prof("Локальная папка", "/Users/demo", Protocol.Local));
+            vm.SelectedProfile = vm.Profiles[0];
+            vm.Profiles[0].IsConnected = true;
+            vm.Browser.IsBound = true;
+            vm.Browser.ConnectionName = "prod-01";
+            vm.Browser.CurrentPath = "/var/www/site";
+            vm.Browser.Items.Add(new FileItem { Name = "assets", IsDirectory = true, LastModified = new DateTime(2026, 5, 2, 10, 14, 0), Permissions = "drwxr-xr-x" });
+            vm.Browser.Items.Add(new FileItem { Name = "logs", IsDirectory = true, LastModified = new DateTime(2026, 5, 3, 8, 1, 0), Permissions = "drwxr-x---" });
+            vm.Browser.Items.Add(new FileItem { Name = "index.html", Size = 18432, LastModified = new DateTime(2026, 4, 28, 17, 40, 0), Permissions = "-rw-r--r--" });
+            vm.Browser.Items.Add(new FileItem { Name = "deploy.sh", Size = 1220, LastModified = new DateTime(2026, 4, 21, 9, 5, 0), Permissions = "-rwxr-xr-x" });
+            vm.Browser.Items.Add(new FileItem { Name = "backup-2026-05-01.tar.gz", Size = 73400320, LastModified = new DateTime(2026, 5, 1, 3, 0, 0), Permissions = "-rw-------" });
+            vm.Browser.ItemCount = vm.Browser.Items.Count;
+            vm.Browser.SelectedItem = vm.Browser.Items[2];
+
+            var window = new MainWindow { DataContext = vm, Width = 1180, Height = 740 };
+            window.Show();
+            Pump();
+            window.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"{prefix}-{name}.png"), PngBitmapEncoderOptions.Default);
+            window.Close();
+
+            var dlg = new ProfileEditWindow
+            {
+                DataContext = new ProfileEditViewModel(null) { Protocol = Protocol.Sftp, AuthKind = AuthKind.Key },
+            };
+            dlg.Show();
+            Pump();
+            dlg.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"{prefix}-dialog-{name}.png"), PngBitmapEncoderOptions.Default);
+            dlg.Close();
+        }
+        Console.Out.WriteLine($"Скриншоты: {dir}");
     }
 
     private static async Task RunAsync(string url)

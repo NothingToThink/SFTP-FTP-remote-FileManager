@@ -9,7 +9,7 @@
         CanResize="False"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        Background="{StaticResource BgBaseBrush}">
+        Background="{DynamicResource BgBaseBrush}">
 
     <Window.Resources>
         <conv:EnumEqualsConverter x:Key="AuthIs"/>
@@ -75,10 +75,10 @@
             </StackPanel>
         </Panel>
 
-        <Border Background="#2A1715" CornerRadius="6" Padding="10,7" Margin="0,6,0,0"
+        <Border Background="{DynamicResource Brush.ErrorSoft}" CornerRadius="6" Padding="10,7" Margin="0,6,0,0"
                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
             <TextBlock Name="ErrorText" AutomationProperties.AutomationId="ProfileErrorText"
-                       Text="{Binding ErrorMessage}" Foreground="#F09089" FontSize="12.5" TextWrapping="Wrap"/>
+                       Text="{Binding ErrorMessage}" Foreground="{DynamicResource Brush.Error}" FontSize="12.5" TextWrapping="Wrap"/>
         </Border>
 
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,10,0,0">

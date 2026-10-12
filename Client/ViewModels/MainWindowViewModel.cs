@@ -19,6 +19,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ClientSettings _settings;
     private readonly IServerLauncher _launcher;
     private readonly IDialogService _dialogs;
+    private readonly ThemeService _theme;
 
     // profileId -> connectionId: сервер не хранит связь профиль↔соединение,
     // поэтому активные соединения трекаются на клиенте.
@@ -29,6 +30,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _statusText = "Готов";
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private ProfileViewModel? _selectedProfile;
+    [ObservableProperty] private bool _isDarkTheme;
 
     private FileManagerApiClient Api { get; set; }
 
@@ -44,6 +46,8 @@ public partial class MainWindowViewModel : ViewModelBase
         _settings = settings;
         _launcher = launcher;
         _dialogs = dialogs;
+        _theme = new ThemeService(settings);
+        _isDarkTheme = _theme.IsDark;
         ServerUrl = settings.ServerUrl;
         Api = new FileManagerApiClient(ServerUrl);
         Browser = new FileBrowserViewModel(
@@ -60,6 +64,14 @@ public partial class MainWindowViewModel : ViewModelBase
         };
 
         _ = InitializeAsync();
+    }
+
+    /// <summary>Переключает светлую/тёмную тему и сохраняет выбор.</summary>
+    [RelayCommand]
+    private void ToggleTheme()
+    {
+        _theme.Toggle();
+        IsDarkTheme = _theme.IsDark;
     }
 
     private async Task InitializeAsync()
