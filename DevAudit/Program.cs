@@ -57,6 +57,12 @@ public static class Program
             return;
         }
 
+        if (args.Length >= 2 && args[0] is "--splash-shots" or "--app-icon")
+        {
+            if (args[0] == "--splash-shots") SplashShots.RunSplash(args[1]); else SplashShots.RunAppIcon(args[1]);
+            return;
+        }
+
         if (args.Contains("--pig-gallery"))
         {
             PigGallery.Run(args.SkipWhile(a => a != "--out").Skip(1).FirstOrDefault());
