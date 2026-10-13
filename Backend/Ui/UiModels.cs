@@ -8,5 +8,9 @@ public record ShowMessageRequest(MessageSeverity Severity, string Message, IRead
 /// <summary>Argument of the client method <c>ShowInputBox</c>.</summary>
 public record InputBoxRequest(string Prompt, string? Value = null, string? Placeholder = null, bool Password = false);
 
+public record OpenChatRequest(Guid SessionId, string Title, string WelcomeMessage);
+
+public record ChatMessageRequest(Guid SessionId, ChatMessageRole Role, string Content);
+
 /// <summary>A connected UI client.</summary>
 public record UiSession(string ConnectionId, DateTimeOffset ConnectedAt);

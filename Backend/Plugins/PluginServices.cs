@@ -50,13 +50,30 @@ public sealed class PluginLogger(ILogger logger) : IPluginLogger
         logger.Log(LogLevel.Error, exception, "{PluginMessage}", message);
 }
 
-public sealed class PluginContext(ICommandService commands, IWindow window, IFileSystem files, IPluginLogger log)
+public sealed class PluginContext(
+    ICommandService commands,
+    IWindow window,
+    IChatService chat,
+    IFileSystem files,
+    IPluginLogger log)
     : IPluginContext
 {
     public ICommandService Commands { get; } = commands;
     public IWindow Window { get; } = window;
+    public IChatService Chat { get; } = chat;
     public IFileSystem Files { get; } = files;
     public IPluginLogger Log { get; } = log;
+}
+
+public sealed class PluginChatService(IUiBridge bridge) : IChatService
+{
+    public Task<IChatSession> OpenAsync(ChatSessionOptions options, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var sessionId = UiSessionScope.SessionId
+                        ?? throw new UiUnavailableException("No UI client: the chat was not started by a command.");
+        return bridge.OpenChatAsync(sessionId, options, ct);
+    }
 }
 
 /// <summary>The UI client of the command that is running in the current async flow.</summary>

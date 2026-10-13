@@ -12,6 +12,7 @@ public interface IPluginContext
 {
     ICommandService Commands { get; }
     IWindow Window { get; }
+    IChatService Chat { get; }
     IFileSystem Files { get; }
     IPluginLogger Log { get; }
 }

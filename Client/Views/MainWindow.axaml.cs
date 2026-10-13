@@ -1,6 +1,7 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using FileManagerClient.Services;
 using FileManagerClient.ViewModels;
@@ -12,6 +13,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ChatInputBox.AddHandler(InputElement.KeyDownEvent, ChatInputKeyDown,
+            RoutingStrategies.Bubble, handledEventsToo: true);
 
         DataContextChanged += (_, _) =>
         {
@@ -72,6 +75,20 @@ public partial class MainWindow : Window
             return;
         if (DataContext is MainWindowViewModel vm)
             vm.Browser.NavigateCommand.Execute(vm.Browser.CurrentPath);
+        e.Handled = true;
+    }
+
+    private async void ChatInputKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, ChatInputBox) || e.Key != Key.Enter ||
+            e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+            return;
+        if (DataContext is MainWindowViewModel vm)
+        {
+            e.Handled = true;
+            await vm.SendChatMessageCommand.ExecuteAsync(null);
+            return;
+        }
         e.Handled = true;
     }
 

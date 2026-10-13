@@ -107,6 +107,48 @@
             </DockPanel>
         </Border>
 
+        <!-- Постоянная панель чата, открываемая командами плагинов через UI-канал -->
+        <Border DockPanel.Dock="Right" Width="360" Margin="0,12,12,12" Padding="12"
+                Background="{StaticResource BgPanelBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                IsVisible="{Binding IsChatOpen}">
+            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Classes="secondary" FontWeight="Medium"
+                               Text="{Binding ChatTitle}" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Classes="icon" Content="×" ToolTip.Tip="Закрыть чат"
+                            AutomationProperties.Name="Закрыть чат"
+                            AutomationProperties.AutomationId="CloseChatButton"
+                            Command="{Binding CloseChatCommand}"/>
+                </Grid>
+                <ScrollViewer Grid.Row="1" AutomationProperties.AutomationId="ChatMessagesScroll">
+                    <ItemsControl ItemsSource="{Binding ChatMessages}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ChatMessageViewModel">
+                                <Border Margin="0,0,0,8" Padding="9"
+                                        Background="{StaticResource BgElevatedBrush}"
+                                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                                        CornerRadius="6">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Classes="muted" FontSize="11" Text="{Binding Sender}"/>
+                                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBox Grid.Column="0" Name="ChatInputBox" AutomationProperties.AutomationId="ChatInputBox"
+                             Text="{Binding ChatDraft}" PlaceholderText="Сообщение…"
+                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" MaxHeight="140"/>
+                    <Button Grid.Column="1" Classes="primary" Content="Отправить"
+                            AutomationProperties.AutomationId="SendChatMessageButton"
+                            Command="{Binding SendChatMessageCommand}" VerticalAlignment="Bottom"/>
+                </Grid>
+            </Grid>
+        </Border>
+
         <!-- Рабочая область -->
         <Grid Margin="16,12,16,12">
             <Grid.RowDefinitions>

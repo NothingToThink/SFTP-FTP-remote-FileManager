@@ -12,6 +12,7 @@ namespace Backend.Plugins;
 public sealed class PluginLoader(
     CommandRegistry registry,
     IWindow window,
+    IChatService chat,
     IConnectionManager connections,
     IWriteConfirmation confirmation,
     ILoggerFactory loggerFactory,
@@ -75,7 +76,7 @@ public sealed class PluginLoader(
 
             // One IFileSystem per plugin: the confirmation dialog names the plugin that asks.
             var files = new ConnectionFileSystem(connections, confirmation, plugin.DisplayName);
-            var pluginContext = new PluginContext(new PluginCommandService(plugin), window, files,
+            var pluginContext = new PluginContext(new PluginCommandService(plugin), window, chat, files,
                 new PluginLogger(plugin.Logger));
             await instance.ActivateAsync(pluginContext, ct);
 
