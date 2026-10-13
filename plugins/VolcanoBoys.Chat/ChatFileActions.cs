@@ -42,12 +42,18 @@ public static class ChatFileActionParser
         {
             using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 8 });
             var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object ||
-                !root.TryGetProperty("message", out var messageElement) ||
-                messageElement.ValueKind != JsonValueKind.String)
+            if (root.ValueKind != JsonValueKind.Object)
                 return new ParsedChatResponse(response, []);
 
-            var message = messageElement.GetString() ?? string.Empty;
+            var message = string.Empty;
+            if (root.TryGetProperty("message", out var messageElement))
+            {
+                if (messageElement.ValueKind == JsonValueKind.String)
+                    message = messageElement.GetString() ?? string.Empty;
+                else if (messageElement.ValueKind is not JsonValueKind.Null)
+                    return new ParsedChatResponse(response, []);
+            }
+
             if (!root.TryGetProperty("actions", out var actionsElement) ||
                 actionsElement.ValueKind != JsonValueKind.Array)
                 return new ParsedChatResponse(message, []);

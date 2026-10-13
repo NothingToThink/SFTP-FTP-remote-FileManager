@@ -166,6 +166,24 @@ public class AgentChatTests
     }
 
     [Fact]
+    public async Task Chat_Executes_Actions_When_Message_Is_Empty_Or_Missing()
+    {
+        var window = new FakeWindow { Answer = "Подтвердить запись" };
+        var chatSession = new FakeChatSession("Создай файл /work/hello.txt", "/exit");
+        var chat = new FakeChatService(chatSession);
+        var files = new FakeFiles();
+        var model = new FakeModel(
+            """{"actions":[{"type":"write","path":"/work/hello.txt","content":"Привет"}]}""");
+        var command = CreateCommand(window, chat, files, model);
+
+        await command.RunAsync(new CommandContext(Guid.NewGuid(), "/work", [], "test"), CancellationToken.None);
+
+        Assert.Equal("Привет", Encoding.UTF8.GetString(files.Writes["/work/hello.txt"]));
+        Assert.DoesNotContain(chatSession.Sent, item => item.Content.Contains("\"actions\""));
+        Assert.Contains(chatSession.Sent, item => item.Content.Contains("Записан файл"));
+    }
+
+    [Fact]
     public async Task Chat_Does_Not_Read_File_Content_Unless_User_Approves_External_Disclosure()
     {
         var window = new FakeWindow { Answer = "Отмена" };
