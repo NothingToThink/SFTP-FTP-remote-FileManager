@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -167,10 +168,16 @@ public class DialogService : IDialogService
             VerticalAlignment = VerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(text, "UiMessageText");
+        var messageScroll = new ScrollViewer
+        {
+            Content = text,
+            MaxHeight = 480,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
 
         var body = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14 };
         body.Children.Add(icon);
-        body.Children.Add(text);
+        body.Children.Add(messageScroll);
 
         var (dialog, buttonPanel) = BuildDialog(title, message: null, content: body);
         AutomationProperties.SetAutomationId(dialog, "UiMessageDialog");

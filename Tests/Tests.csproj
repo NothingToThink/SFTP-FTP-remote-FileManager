@@ -29,12 +29,14 @@
   <ItemGroup>
     <TestPlugin Include="..\plugins\Sample.Echo\Sample.Echo.csproj" PublishName="Sample.Echo" />
     <TestPlugin Include="..\Tests.Plugins\DepPlugin\DepPlugin.csproj" PublishName="DepPlugin" />
+    <TestPlugin Include="..\plugins\VolcanoBoys.Chat\VolcanoBoys.Chat.csproj" PublishName="VolcanoBoys.Chat" />
     <ProjectReference Include="@(TestPlugin)" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <!-- The agent plugin is also referenced for real: the scenario tests use its classes with fake dependencies. -->
+  <!-- Plugin scenario tests use real plugin classes with fake dependencies. -->
   <ItemGroup>
     <ProjectReference Include="..\plugins\VolcanoBoys.Agent\VolcanoBoys.Agent.csproj" />
+    <ProjectReference Include="..\plugins\VolcanoBoys.Chat\VolcanoBoys.Chat.csproj" />
   </ItemGroup>
 
   <Target Name="PublishTestPlugins" AfterTargets="Build">

@@ -20,6 +20,10 @@ public record ShowMessageArgs(string? Severity, string? Message, string[]? Butto
 /// <summary>Аргумент клиентского метода ShowInputBox.</summary>
 public record ShowInputBoxArgs(string? Prompt, string? Value, string? Placeholder, bool Password);
 
+public record OpenChatArgs(Guid SessionId, string? Title, string? WelcomeMessage);
+
+public record ChatMessageArgs(Guid SessionId, string? Role, string? Content);
+
 /// <summary>
 /// Канал Backend → клиент (SignalR-хаб /hubs/ui): Backend вызывает ShowMessage и ShowInputBox,
 /// клиент отвечает через <see cref="IDialogService"/>. Сам переподключается: сначала встроенный
@@ -56,6 +60,10 @@ public sealed class UiHubClient(IDialogService dialogs) : IAsyncDisposable
     /// <summary>Подключились (в том числе после переподключения). Вызывается из любого потока.</summary>
     public event Action? Connected;
 
+    public event Action<OpenChatArgs>? ChatOpened;
+    public event Action<ChatMessageArgs>? ChatMessageReceived;
+    public event Action<Guid>? ChatClosed;
+
     /// <summary>
     /// Запускает подключение к <paramref name="serverUrl"/> (/hubs/ui). Если уже работает с этим адресом —
     /// ничего не делает; с другим — переключается. Не ждёт подключения: попытки идут в фоне.
@@ -81,6 +89,21 @@ public sealed class UiHubClient(IDialogService dialogs) : IAsyncDisposable
         // Обработчики — до StartAsync: иначе вызов Backend до регистрации даст ему ошибку SignalR.
         connection.On<ShowMessageArgs, string?>("ShowMessage", ShowMessageAsync);
         connection.On<ShowInputBoxArgs, string?>("ShowInputBox", ShowInputBoxAsync);
+        connection.On<OpenChatArgs>("OpenChat", args =>
+        {
+            ChatOpened?.Invoke(args);
+            return Task.CompletedTask;
+        });
+        connection.On<ChatMessageArgs>("ChatMessage", args =>
+        {
+            ChatMessageReceived?.Invoke(args);
+            return Task.CompletedTask;
+        });
+        connection.On<Guid>("ChatClosed", sessionId =>
+        {
+            ChatClosed?.Invoke(sessionId);
+            return Task.CompletedTask;
+        });
 
         connection.Reconnecting += _ =>
         {
@@ -143,6 +166,26 @@ public sealed class UiHubClient(IDialogService dialogs) : IAsyncDisposable
     }
 
     public ValueTask DisposeAsync() => new(StopAsync());
+
+    public Task SendChatMessageAsync(Guid sessionId, string message, CancellationToken ct = default) =>
+        InvokeChatHubAsync("SendChatMessage", sessionId, message, ct);
+
+    public Task CloseChatAsync(Guid sessionId, CancellationToken ct = default) =>
+        InvokeChatHubAsync("CloseChat", sessionId, null, ct);
+
+    private async Task InvokeChatHubAsync(string method, Guid sessionId, object? message, CancellationToken ct)
+    {
+        HubConnection? connection;
+        lock (_gate)
+            connection = _connection;
+        if (connection is null || State != UiChannelState.Connected)
+            throw new InvalidOperationException("Канал чата не подключён.");
+
+        if (message is null)
+            await connection.InvokeAsync(method, sessionId, ct);
+        else
+            await connection.InvokeAsync(method, sessionId, message, ct);
+    }
 
     private async Task ConnectLoopAsync(HubConnection connection, CancellationToken ct)
     {

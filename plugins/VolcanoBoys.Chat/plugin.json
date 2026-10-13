@@ -1,0 +1,11 @@
+{
+    "id": "volcanoboys.chat",
+    "displayName": "Чат с ИИ-агентом",
+    "version": "0.1.0",
+    "main": "VolcanoBoys.Chat.dll",
+    "contributes": {
+        "commands": [
+            { "id": "volcanoboys.chat.open", "title": "Открыть чат с ИИ-агентом" }
+        ]
+    }
+}

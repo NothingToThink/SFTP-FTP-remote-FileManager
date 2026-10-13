@@ -33,6 +33,11 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private ProfileViewModel? _selectedProfile;
     [ObservableProperty] private UiChannelState _channelState;
+    [ObservableProperty] private bool _isChatOpen;
+    [ObservableProperty] private string _chatTitle = "Чат с ИИ-агентом";
+    [ObservableProperty] private string _chatDraft = string.Empty;
+
+    private Guid? _chatSessionId;
 
     private FileManagerApiClient Api { get; set; }
 
@@ -45,6 +50,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>Команды плагинов для подменю «Плагины» (кеш GET /commands, обновляется при (пере)подключении канала).</summary>
     public ObservableCollection<PluginCommand> PluginCommands { get; } = new();
+
+    public ObservableCollection<ChatMessageViewModel> ChatMessages { get; } = new();
 
     public bool HasPluginCommands => PluginCommands.Count > 0;
 
@@ -69,8 +76,19 @@ public partial class MainWindowViewModel : ViewModelBase
         PluginCommands.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasPluginCommands));
         if (hub is not null)
         {
-            hub.StateChanged += state => Dispatcher.UIThread.Post(() => ChannelState = state);
+            hub.StateChanged += state => Dispatcher.UIThread.Post(() =>
+            {
+                ChannelState = state;
+                if ((state is UiChannelState.Reconnecting or UiChannelState.Disconnected) && IsChatOpen)
+                {
+                    ResetChat();
+                    StatusText = "Чат завершён: связь с сервером потеряна";
+                }
+            });
             hub.Connected += () => Dispatcher.UIThread.Post(() => _ = LoadPluginCommandsCommand.ExecuteAsync(null));
+            hub.ChatOpened += args => Dispatcher.UIThread.Post(() => OpenChat(args));
+            hub.ChatMessageReceived += args => Dispatcher.UIThread.Post(() => AddChatMessage(args));
+            hub.ChatClosed += sessionId => Dispatcher.UIThread.Post(() => EndChat(sessionId));
         }
         ServerUrl = settings.ServerUrl;
         Api = new FileManagerApiClient(ServerUrl);
@@ -124,6 +142,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
             if (_hub is not null)
                 await _hub.StopAsync();
+            ResetChat();
             PluginCommands.Clear();
 
             Browser.Reset();
@@ -235,6 +254,90 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             StatusText = $"Команда «{command.Title}»: {ex.Message}";
         }
+    }
+
+    [RelayCommand]
+    private async Task SendChatMessage()
+    {
+        if (_hub is null || _chatSessionId is not { } sessionId || string.IsNullOrWhiteSpace(ChatDraft))
+            return;
+
+        var content = ChatDraft.Trim();
+        if (content.Length > 4000)
+        {
+            StatusText = "Сообщение чата не должно превышать 4000 символов";
+            return;
+        }
+
+        ChatDraft = string.Empty;
+        ChatMessages.Add(new ChatMessageViewModel("Вы", content));
+        try
+        {
+            await _hub.SendChatMessageAsync(sessionId, content);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Не удалось отправить сообщение чата: {ex.Message}";
+            ChatMessages.Add(new ChatMessageViewModel("Система", "Сообщение не отправлено."));
+        }
+    }
+
+    [RelayCommand]
+    private async Task CloseChat()
+    {
+        if (_hub is not null && _chatSessionId is { } sessionId)
+        {
+            try
+            {
+                await _hub.CloseChatAsync(sessionId);
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Не удалось закрыть чат на сервере: {ex.Message}";
+            }
+            finally
+            {
+                EndChat(sessionId);
+            }
+        }
+    }
+
+    private void OpenChat(OpenChatArgs args)
+    {
+        _chatSessionId = args.SessionId;
+        ChatTitle = string.IsNullOrWhiteSpace(args.Title) ? "Чат с ИИ-агентом" : args.Title;
+        ChatMessages.Clear();
+        if (!string.IsNullOrWhiteSpace(args.WelcomeMessage))
+            ChatMessages.Add(new ChatMessageViewModel("Система", args.WelcomeMessage));
+        IsChatOpen = true;
+    }
+
+    private void AddChatMessage(ChatMessageArgs args)
+    {
+        if (_chatSessionId != args.SessionId || string.IsNullOrWhiteSpace(args.Content))
+            return;
+
+        var sender = args.Role?.ToLowerInvariant() switch
+        {
+            "assistant" => "ИИ-агент",
+            _ => "Система",
+        };
+        ChatMessages.Add(new ChatMessageViewModel(sender, args.Content));
+    }
+
+    private void EndChat(Guid sessionId)
+    {
+        if (_chatSessionId != sessionId)
+            return;
+        ResetChat();
+    }
+
+    private void ResetChat()
+    {
+        _chatSessionId = null;
+        ChatDraft = string.Empty;
+        ChatMessages.Clear();
+        IsChatOpen = false;
     }
 
     [RelayCommand]

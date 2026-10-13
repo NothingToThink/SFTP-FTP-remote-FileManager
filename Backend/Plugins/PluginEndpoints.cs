@@ -13,6 +13,8 @@ public static class PluginEndpoints
     {
         services.AddSingleton<CommandRegistry>();
         services.AddSingleton<IWindow, PluginWindow>();
+        services.AddSingleton<IPluginChatSessionRegistry, PluginChatSessionRegistry>();
+        services.AddSingleton<IChatService, PluginChatService>();
         services.AddSingleton<IWriteConfirmation, WriteConfirmation>();
         services.AddSingleton<CommandRunner>();
         // Stopped in reverse order: the runner cancels running commands before the plugins are deactivated.

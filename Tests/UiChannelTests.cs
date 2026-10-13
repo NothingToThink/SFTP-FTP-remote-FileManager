@@ -5,6 +5,7 @@ using FileManager.Plugins;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,6 +15,10 @@ namespace Tests;
 public record WireMessage(string Severity, string Message, string[] Buttons);
 
 public record WireInput(string Prompt, string? Value, string? Placeholder, bool Password);
+
+public record WireOpenChat(Guid SessionId, string Title, string WelcomeMessage);
+
+public record WireChatMessage(Guid SessionId, string Role, string Content);
 
 public class UiChannelTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
 {
@@ -111,6 +116,42 @@ public class UiChannelTests(WebApplicationFactory<Program> factory) : IClassFixt
 
         Assert.Equal("secret", answer);
         Assert.Equal(new WireInput("Пароль", null, "введите", true), received);
+    }
+
+    [Fact]
+    public async Task Chat_Session_Exchanges_Messages_And_Closes_On_Client_Request()
+    {
+        var opened = new TaskCompletionSource<WireOpenChat>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<WireChatMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var connection = await ConnectAsync(c =>
+        {
+            c.On<WireOpenChat>("OpenChat", opened.SetResult);
+            c.On<WireChatMessage>("ChatMessage", response.SetResult);
+        });
+
+        var chat = await Bridge.OpenChatAsync(connection.ConnectionId!,
+            new ChatSessionOptions("ИИ", "Предупреждение о внешней модели"), CancellationToken.None);
+        var openedArgs = await WithTimeout(opened.Task);
+        Assert.Equal("ИИ", openedArgs.Title);
+        Assert.Equal("Предупреждение о внешней модели", openedArgs.WelcomeMessage);
+
+        await using var otherConnection = await ConnectAsync();
+        await Assert.ThrowsAsync<HubException>(() =>
+            otherConnection.InvokeAsync("SendChatMessage", openedArgs.SessionId, "Чужое сообщение"));
+
+        await connection.InvokeAsync("SendChatMessage", openedArgs.SessionId, "Привет");
+        Assert.Equal("Привет", await WithTimeout(chat.ReadMessageAsync()));
+
+        await chat.SendMessageAsync(new ChatMessage(ChatMessageRole.Assistant, "Здравствуйте!"));
+        var responseArgs = await WithTimeout(response.Task);
+        Assert.Equal(openedArgs.SessionId, responseArgs.SessionId);
+        Assert.Equal("assistant", responseArgs.Role);
+        Assert.Equal("Здравствуйте!", responseArgs.Content);
+
+        await connection.InvokeAsync("CloseChat", openedArgs.SessionId);
+        Assert.Null(await WithTimeout(chat.ReadMessageAsync()));
+        Assert.True(chat.ClosedToken.IsCancellationRequested);
+        await chat.DisposeAsync();
     }
 
     [Fact]
