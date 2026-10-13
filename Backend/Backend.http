@@ -4,3 +4,40 @@ GET {{Backend_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+# Файловая система: путь к файлу/папке — query-параметр ?path= (GET/DELETE не читают тело).
+# Кодировать через encodeURIComponent / Uri.EscapeDataString: «+» в query читается как пробел.
+@connectionId = 00000000-0000-0000-0000-000000000000
+
+GET {{Backend_HostAddress}}/connections/{{connectionId}}/filesystem/info?path=docs%2Fa.txt
+Accept: application/json
+
+###
+
+GET {{Backend_HostAddress}}/connections/{{connectionId}}/filesystem/dir/size?path=docs
+Accept: application/json
+
+###
+
+GET {{Backend_HostAddress}}/connections/{{connectionId}}/filesystem/file/exists?path=c%2B%2B%20%D1%84%D0%B0%D0%B9%D0%BB%20%231.txt
+Accept: application/json
+
+###
+
+GET {{Backend_HostAddress}}/connections/{{connectionId}}/filesystem/dir/exists?path=docs
+Accept: application/json
+
+###
+
+DELETE {{Backend_HostAddress}}/connections/{{connectionId}}/filesystem/file?path=a.txt
+
+###
+
+DELETE {{Backend_HostAddress}}/connections/{{connectionId}}/filesystem/dir?path=docs
+
+###
+
+# Без path -> 400 {"error": "Query parameter 'path' is required."}
+GET {{Backend_HostAddress}}/connections/{{connectionId}}/filesystem/info
+
+###

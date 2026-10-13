@@ -17,6 +17,13 @@ public class FakeConnectionManager : IConnectionManager
         return connection.Id;
     }
 
+    /// <summary>Registers a connection made by the test (e.g. a LocalConnection with a known root folder).</summary>
+    public Guid Add(Connection connection)
+    {
+        _connections[connection.Id] = connection;
+        return connection.Id;
+    }
+
     public List<Guid> GetConnectionIdList()
     {
         return  _connections.Keys.ToList();

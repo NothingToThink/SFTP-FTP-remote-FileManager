@@ -1,0 +1,16 @@
+{
+    "id": "test.dep",
+    "displayName": "Dep Plugin",
+    "version": "1.0.0",
+    "main": "Test.DepPlugin.dll",
+    "unknownField": { "ignored": true },
+    "contributes": {
+        "commands": [
+            { "id": "test.dep.run", "title": "Run" },
+            { "id": "test.dep.fail", "title": "Fail" },
+            { "id": "test.dep.wait", "title": "Wait" },
+            { "id": "test.dep.write", "title": "Write" },
+            { "id": "test.dep.nobuttons", "title": "No buttons" }
+        ]
+    }
+}

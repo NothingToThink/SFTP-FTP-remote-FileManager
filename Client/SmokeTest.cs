@@ -4,9 +4,6 @@ using FileManagerClient.Models;
 
 namespace FileManagerClient;
 
-/// <summary>Шаг не применим из-за известной регрессии сервера — не считается ошибкой.</summary>
-public class SkipException(string message) : Exception(message);
-
 /// <summary>
 /// Самопроверка API-клиента против живого Backend (без GUI):
 /// FileManagerClient.exe --smoke http://127.0.0.1:5117
@@ -21,7 +18,6 @@ public static class SmokeTest
     {
         var report = new StringBuilder();
         var failures = 0;
-        var skipped = 0;
 
         void Step(string name, Action action)
         {
@@ -35,24 +31,9 @@ public static class SmokeTest
             {
                 // .Wait()/.Result оборачивают в AggregateException — разворачиваем
                 var ex = raw is AggregateException ae ? (ae.InnerExceptions.Count > 0 ? ae.InnerException ?? raw : raw) : raw;
-                if (ex is SkipException)
-                {
-                    skipped++;
-                    report.AppendLine($"[SKIP] {name}: {ex.Message}");
-                    Console.Out.WriteLine($"[SKIP] {name}");
-                }
-                else if (ex is ApiException { StatusCode: 404 })
-                {
-                    skipped++;
-                    report.AppendLine($"[SKIP] {name}: сервер отдаёт 404 — регрессия бэка (BACKEND-BUGS.md #3)");
-                    Console.Out.WriteLine($"[SKIP] {name}");
-                }
-                else
-                {
-                    failures++;
-                    report.AppendLine($"[FAIL] {name}: {ex.Message}");
-                    Console.Out.WriteLine($"[FAIL] {name}: {ex.Message}");
-                }
+                failures++;
+                report.AppendLine($"[FAIL] {name}: {ex.Message}");
+                Console.Out.WriteLine($"[FAIL] {name}: {ex.Message}");
             }
         }
 
@@ -166,7 +147,7 @@ public static class SmokeTest
                 throw new Exception($"FileItem разобран неверно: {file.FullPath}, dir={file.IsDirectory}");
         });
 
-        Step("GET filesystem/info (GET с телом)", () =>
+        Step("GET filesystem/info (path в query)", () =>
         {
             var info = api.GetFileInfoAsync(connectionId, "ui-smoke.txt").Result;
             if (info.Name != "ui-smoke.txt")
@@ -184,6 +165,24 @@ public static class SmokeTest
             if (!api.FileExistsAsync(connectionId, "ui-smoke-moved.txt").Result)
                 throw new Exception("файл после move не найден");
         });
+
+        // Спецсимволы в path: клиент должен кодировать query так же, как ждёт сервер
+        foreach (var name in new[] { "ui-smoke a b.txt", "ui-smoke c++.txt", "ui-smoke #1.txt",
+                     "ui-smoke 50%.txt", "ui-smoke a&b=c.txt", "ui-smoke файл.txt" })
+        {
+            Step($"path в query: «{name}» (create → exists → info → delete)", () =>
+            {
+                api.CreateFileAsync(connectionId, name).Wait();
+                if (!api.FileExistsAsync(connectionId, name).Result)
+                    throw new Exception("file/exists вернул false после создания");
+                var info = api.GetFileInfoAsync(connectionId, name).Result;
+                if (info.Name != name)
+                    throw new Exception($"info вернул «{info.Name}»");
+                api.DeleteFileAsync(connectionId, name).Wait();
+                if (api.FileExistsAsync(connectionId, name).Result)
+                    throw new Exception("file/exists вернул true после удаления");
+            });
+        }
 
         // Загрузка/скачивание
         var localUpload = Path.Combine(Path.GetTempPath(), "ui-smoke-upload.txt");
@@ -217,9 +216,6 @@ public static class SmokeTest
             api.MoveDirAsync(connectionId, "ui-smoke-dir-copy", "ui-smoke-dir-moved").Wait());
         Step("GET filesystem/dir/exists (копия на месте)", () =>
         {
-            if (api.DirExistsAsync(connectionId, "ui-smoke-dir").Result
-                && !api.DirExistsAsync(connectionId, "ui-smoke-dir-moved").Result)
-                throw new SkipException("dir/move недоступен — регрессия бэка (BACKEND-BUGS.md #3)");
             if (!api.DirExistsAsync(connectionId, "ui-smoke-dir-moved").Result)
                 throw new Exception("папка после move не найдена");
         });
@@ -272,11 +268,8 @@ public static class SmokeTest
         }
 
         report.AppendLine();
-        report.AppendLine(skipped > 0
-            ? $"{skipped} шагов пропущено из-за известной регрессии бэка (BACKEND-BUGS.md #3)"
-            : string.Empty);
         report.AppendLine(failures == 0
-            ? $"ИТОГ: все обязательные шаги пройдены (пропущено {skipped})"
+            ? "ИТОГ: все шаги пройдены"
             : $"ИТОГ: ошибок — {failures}");
         await File.WriteAllTextAsync(ReportFile, report.ToString());
         Console.Out.WriteLine();

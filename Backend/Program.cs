@@ -1,6 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Backend.Hubs;
 using Backend.Middleware;
+using Backend.Plugins;
+using Backend.Ui;
 using Backend.Services;
 using Core.Implementations.Factory;
 using Core.PortForwarding;
@@ -10,12 +13,16 @@ using Core.Ssh.HostKey;
 using Microsoft.Extensions.Options;
 using Core.Implementations.Manager;
 using Core.Implementations.Storage;
+using Core.Implementations.ServerClient;
 using Core.Interfaces.Factory;
 using Core.Interfaces.Manager;
 using Core.Interfaces.Storage;
+using Core.Interfaces.ServerClient;
 using Core.Security;
 using Core.Utils;
 using System.Reflection;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 try
 {
@@ -29,7 +36,40 @@ try
         {
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        })
+        .ConfigureApiBehaviorOptions(options =>
+        {
+            // Same {"error": ...} shape as ExceptionMiddleware instead of ProblemDetails:
+            // the client only reads the "error" field.
+            options.InvalidModelStateResponseFactory = context =>
+            {
+                var queryParameters = context.ActionDescriptor.Parameters
+                    .Where(p => p.BindingInfo?.BindingSource == BindingSource.Query)
+                    .Select(p => p.Name)
+                    .ToHashSet();
+                var messages = context.ModelState
+                    .Where(e => e.Value?.Errors.Count > 0)
+                    .Select(e => queryParameters.Contains(e.Key) && string.IsNullOrEmpty(e.Value!.AttemptedValue)
+                        ? $"Query parameter '{e.Key}' is required."
+                        : string.Join(" ", e.Value!.Errors.Select(err =>
+                            string.IsNullOrEmpty(err.ErrorMessage) ? $"Invalid value for '{e.Key}'." : err.ErrorMessage)));
+                return new BadRequestObjectResult(new { error = string.Join("; ", messages) });
+            };
         });
+
+    builder.Services.AddSignalR()
+        .AddJsonProtocol(options =>
+        {
+            // Same rules as the controllers (camelCase, string enums); severity goes out as "info"/"warning"/"error".
+            options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
+            options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        });
+    builder.Services.AddSingleton(TimeProvider.System);
+    builder.Services.AddSingleton<IUiSessionRegistry, UiSessionRegistry>();
+    builder.Services.AddSingleton<IUiBridge, UiBridge>();
+    builder.Services.AddSingleton<UiDemoRunner>();
+    builder.Services.AddPluginHost();
 
     builder.Services.AddSingleton<ICredentialProtectionService, Base64CredentialProtectionService>();
     builder.Services.AddSingleton<IProfileStorage>(sp =>
@@ -49,7 +89,12 @@ try
     builder.Services.AddSingleton<IConnectionFactory, ConnectionFactory>();
     builder.Services.AddSingleton<IConnectionManager, ConnectionManager>();
     builder.Services.AddSingleton<IProfileManager, ProfileManager>();
-
+    builder.Services.AddSingleton<IServerSessionService, ServerSessionService>();
+    builder.Services.AddHttpClient<IProfileServerClient, ProfileServerClient>(client =>
+    {
+        client.BaseAddress = new Uri("https://sftp-ftp-server.duckdns.org");
+    });
+                                                                              
     builder.Services.AddHostedService<IdleConnectionJanitor>();
 
 
@@ -71,6 +116,10 @@ try
     app.UseCors(policy => policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
     app.UseMiddleware<ExceptionMiddleware>();
     app.MapControllers();
+    app.MapHub<UiHub>("/hubs/ui");
+    app.MapPluginCommands();
+    if (app.Environment.IsDevelopment())
+        app.MapUiDemo();
     app.Run();
 }
 catch (Exception e)

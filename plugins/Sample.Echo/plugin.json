@@ -1,0 +1,11 @@
+{
+    "id": "sample.echo",
+    "displayName": "Sample Echo",
+    "version": "0.1.0",
+    "main": "Sample.Echo.dll",
+    "contributes": {
+        "commands": [
+            { "id": "sample.echo.ask", "title": "Эхо: спросить и показать" }
+        ]
+    }
+}
