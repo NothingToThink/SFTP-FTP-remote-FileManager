@@ -312,6 +312,8 @@ public partial class MainWindowViewModel : ViewModelBase
         StatusText = reachable
             ? $"Сервер: {ServerUrl}"
             : "Сервер недоступен — адрес можно сменить в настройках (шестерёнка справа внизу)";
+        if (reachable && _hub is not null)
+            await _hub.StartAsync(ServerUrl);
     }
 
     [RelayCommand]
@@ -324,6 +326,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
             Api.Dispose();
             Api = new FileManagerApiClient(ServerUrl);
+
+            if (_hub is not null)
+                await _hub.StopAsync();
+            PluginCommands.Clear();
 
             Browser.Reset();
             _activeConnections.Clear();
@@ -361,6 +367,80 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         ServerUrl = url.Trim();
         await ApplyServerUrlCommand.ExecuteAsync(null);
+    }
+
+    /// <summary>
+    /// Обновляет кеш команд из GET /commands. Список заменяется, только если он изменился: пункты
+    /// открытого подменю не должны пересоздаваться зря. Привязан к пункту «Плагины» (родитель подменю).
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadPluginCommands()
+    {
+        try
+        {
+            var commands = await Api.GetCommandsAsync();
+            if (commands.Select(c => (c.Id, c.Title)).SequenceEqual(PluginCommands.Select(c => (c.Id, c.Title))))
+                return;
+
+            PluginCommands.Clear();
+            foreach (var command in commands)
+                PluginCommands.Add(command);
+        }
+        catch
+        {
+            // подменю «Плагины» — необязательная часть: при ошибке остаётся прежний кеш
+        }
+    }
+
+    /// <summary>Запускает команду плагина над активной панелью. Результат не ждём: плагин сам откроет диалоги.</summary>
+    [RelayCommand]
+    private async Task ExecutePluginCommand(PluginCommand? command)
+    {
+        if (command is null)
+            return;
+        var sessionId = _hub?.ConnectionId;
+        if (_hub is null || sessionId is null)
+        {
+            StatusText = "Нет связи с сервером";
+            return;
+        }
+
+        var connectionId = Browser.IsBound ? Browser.ConnectionId : (Guid?)null;
+        var currentPath = Browser.IsBound ? Browser.CurrentPath : null;
+        var selected = Browser.SelectedItem is { } item ? new[] { item.FullPath } : [];
+
+        try
+        {
+            try
+            {
+                await Api.ExecuteCommandAsync(command.Id, sessionId, connectionId, currentPath, selected);
+            }
+            catch (ApiException ex) when (ex.StatusCode == 400)
+            {
+                // Backend регистрирует клиента в OnConnectedAsync — это бывает чуть позже, чем у клиента
+                // завершился StartAsync. Один повтор; ConnectionId берём заново (мог смениться).
+                await Task.Delay(200);
+                if (_hub.ConnectionId is not { } freshSessionId)
+                {
+                    StatusText = "Нет связи с сервером";
+                    return;
+                }
+
+                await Api.ExecuteCommandAsync(command.Id, freshSessionId, connectionId, currentPath, selected);
+            }
+        }
+        catch (ApiException ex)
+        {
+            StatusText = $"Команда «{command.Title}»: {ex.ServerMessage}";
+        }
+        catch (HttpRequestException)
+        {
+            StatusText = "Нет связи с сервером";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Команда «{command.Title}»: {ex.Message}";
+        }
     }
 
     [RelayCommand]

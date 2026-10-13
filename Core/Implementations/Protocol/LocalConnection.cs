@@ -5,6 +5,8 @@ namespace Core.Implementations.Protocol;
 
 public class LocalConnection : Connection
 {
+    private const int FileBufferSize = 81920;
+
     private readonly string _rootPath;
     private string _currentPath = "";
     private bool _isConnected;
@@ -61,8 +63,8 @@ public class LocalConnection : Connection
         var localPath = GetLocalPath(remotePath);
         Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
         if (content.CanSeek) content.Position = 0;
-        await using var fileStream = new FileStream(localPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
-        await content.CopyToAsync(fileStream, ct);
+        await using var fileStream = new FileStream(localPath, FileMode.Create, FileAccess.Write, FileShare.None, FileBufferSize, useAsync: true);
+        await content.CopyToAsync(fileStream, FileBufferSize, ct);
     }
 
     public override Task CreateFileAsync(string remotePath, CancellationToken ct = default)
@@ -118,9 +120,9 @@ public class LocalConnection : Connection
         if (Directory.Exists(localTarget))
             throw new InvalidOperationException("Cannot copy file: target file is a directory.");
 
-        await using var src = new FileStream(localSource, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-        await using var dst = new FileStream(localTarget, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
-        await src.CopyToAsync(dst, ct);
+        await using var src = new FileStream(localSource, FileMode.Open, FileAccess.Read, FileShare.Read, FileBufferSize, useAsync: true);
+        await using var dst = new FileStream(localTarget, FileMode.Create, FileAccess.Write, FileShare.None, FileBufferSize, useAsync: true);
+        await src.CopyToAsync(dst, FileBufferSize, ct);
     }
 
     public override Task CreateDirAsync(string remotePath, CancellationToken ct = default)
@@ -294,7 +296,7 @@ public class LocalConnection : Connection
     {
         ct.ThrowIfCancellationRequested();
         string localPath = GetLocalPath(path);
-        Stream stream = new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+        Stream stream = new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.Read, FileBufferSize, useAsync: true);
         return Task.FromResult(stream);
     }
 

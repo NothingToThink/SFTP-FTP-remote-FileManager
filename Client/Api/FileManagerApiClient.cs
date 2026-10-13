@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using FileManagerClient.Models;
@@ -25,10 +24,12 @@ public interface IForwardingApi
 }
 
 /// <summary>
-/// Типизированный клиент Backend API (контракт ветки dev @ bdd4928).
+/// Типизированный клиент Backend API.
 ///
 /// Нюансы контракта:
-///  - часть GET/DELETE эндпоинтов принимает путь в теле запроса как JSON-строку;
+///  - пути передаются в query-параметрах: у GET/DELETE напрямую (path=...),
+///    у upload/download — localPath (файл читает/пишет сам Backend) + remotePath/path;
+///    в теле остаются только составные запросы (rename/copy/move) и создание;
 ///  - ответы — camelCase, кроме HostProfile внутри профиля (PascalCase + "$type");
 ///  - ошибки приходят как {"error": "..."} с кодами 400/404/500.
 /// </summary>
@@ -209,45 +210,58 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
     public Task ChangeDirectoryAsync(Guid id, string path, CancellationToken ct = default)
         => PatchStringAsync($"connections/{id}/filesystem/dir/current", path, ct);
 
-    /// <param name="progress">Нарастающий итог отправленных байт (вызывается из потока пула).</param>
+    /// <summary>
+    /// Файл читает Backend сам по localPath (Backend локален — это путь пользователя), поэтому
+    /// байтовый прогресс недоступен; репортим полный размер после завершения передачи.
+    /// </summary>
     public async Task UploadFileAsync(Guid id, string remotePath, string localFilePath,
         CancellationToken ct = default, IProgress<long>? progress = null)
     {
-        await using var file = File.OpenRead(localFilePath);
-        Stream stream = progress is null ? file : new ProgressStream(file, progress);
-        using var form = new MultipartFormDataContent();
-        using var content = new StreamContent(stream);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        form.Add(content, "file", Path.GetFileName(localFilePath));
-
         using var resp = await _http.PostAsync(
-            $"connections/{id}/filesystem/file/upload?remotePath={Uri.EscapeDataString(remotePath)}",
-            form,
+            $"connections/{id}/filesystem/file/upload" +
+            $"?localPath={Uri.EscapeDataString(localFilePath)}" +
+            $"&remotePath={Uri.EscapeDataString(remotePath)}",
+            content: null,
             ct);
         await EnsureSuccessAsync(resp, ct);
+        progress?.Report(new FileInfo(localFilePath).Length);
     }
 
-    /// <param name="progress">Нарастающий итог скачанных байт.</param>
+    /// <summary>Файл пишет Backend сам по localPath; тело ответа пустое. Прогресс — по факту завершения.</summary>
     public async Task DownloadFileAsync(Guid id, string remotePath, string localFilePath,
         CancellationToken ct = default, IProgress<long>? progress = null)
     {
         using var resp = await _http.GetAsync(
-            $"connections/{id}/filesystem/file/download?path={Uri.EscapeDataString(remotePath)}",
-            HttpCompletionOption.ResponseHeadersRead,
+            $"connections/{id}/filesystem/file/download" +
+            $"?path={Uri.EscapeDataString(remotePath)}" +
+            $"&localPath={Uri.EscapeDataString(localFilePath)}",
             ct);
         await EnsureSuccessAsync(resp, ct);
+    }
 
-        await using var src = await resp.Content.ReadAsStreamAsync(ct);
-        await using var dst = File.Create(localFilePath);
-        var buffer = new byte[81920];
-        long total = 0;
-        int read;
-        while ((read = await src.ReadAsync(buffer, ct)) > 0)
+        progress?.Report(new FileInfo(localFilePath).Length);
+    }
+
+    // --- Команды плагинов ---
+
+    public Task<List<PluginCommand>> GetCommandsAsync(CancellationToken ct = default)
+        => GetAsync<List<PluginCommand>>("commands", ct);
+
+    /// <summary>
+    /// Запускает команду плагина. Ответ 202 — результата не ждём: диалоги плагин откроет сам
+    /// через хаб /hubs/ui клиента с ConnectionId = <paramref name="uiSessionId"/>.
+    /// </summary>
+    public async Task ExecuteCommandAsync(string commandId, string uiSessionId, Guid? connectionId,
+        string? currentPath, IReadOnlyList<string> selectedPaths, CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post,
+            $"commands/{Uri.EscapeDataString(commandId)}/execute")
         {
-            await dst.WriteAsync(buffer.AsMemory(0, read), ct);
-            total += read;
-            progress?.Report(total);
-        }
+            Content = JsonBody(new { connectionId, currentPath, selectedPaths }),
+        };
+        req.Headers.Add("X-UI-Session", uiSessionId);
+        using var resp = await _http.SendAsync(req, ct);
+        await EnsureSuccessAsync(resp, ct);
     }
 
     // --- Вспомогательные ---
