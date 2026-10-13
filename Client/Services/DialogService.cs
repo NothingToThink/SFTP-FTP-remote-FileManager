@@ -32,6 +32,21 @@ public interface IDialogService
     Task<string?> PickSaveFileAsync(string suggestedName);
     Task<bool> ShowProfileEditorAsync(ProfileEditViewModel viewModel);
 
+    /// <summary>
+    /// Сообщение с произвольными кнопками и значком по <paramref name="severity"/>.
+    /// Возвращает текст нажатой кнопки или null, если окно закрыли. Реализация по умолчанию —
+    /// «окна нет» (null): так подмены IDialogService в тестах не обязаны её реализовывать.
+    /// </summary>
+    Task<string?> ShowMessageBoxAsync(DialogSeverity severity, string message, IReadOnlyList<string> buttons)
+        => Task.FromResult<string?>(null);
+
+    /// <summary>
+    /// Поле ввода: подсказка, начальное значение, плейсхолдер, режим пароля.
+    /// Возвращает введённую строку или null при отмене. Реализация по умолчанию — null.
+    /// </summary>
+    Task<string?> ShowInputBoxAsync(string prompt, string? value, string? placeholder, bool password)
+        => Task.FromResult<string?>(null);
+
     /// <summary>Выбор папки (куда скачать). Реализация по умолчанию — для заглушек: ничего не выбирает.</summary>
     Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
 

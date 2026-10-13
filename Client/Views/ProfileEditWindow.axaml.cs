@@ -52,4 +52,7 @@ public partial class ProfileEditWindow : DialogWindowBase
     private void CancelClick(object? sender, RoutedEventArgs e) => Close(false);
 
     protected override void Cancel() => Close(false);
+
+    /// <summary>Тестовый хук DevAudit: имитирует нажатие Esc/«Отмена».</summary>
+    public void OnCancelPressed() => Close(false);
 }

@@ -237,8 +237,6 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
             $"&localPath={Uri.EscapeDataString(localFilePath)}",
             ct);
         await EnsureSuccessAsync(resp, ct);
-    }
-
         progress?.Report(new FileInfo(localFilePath).Length);
     }
 

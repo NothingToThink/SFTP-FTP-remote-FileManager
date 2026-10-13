@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using FileManagerClient.Api;
 using FileManagerClient.Commands;
 using FileManagerClient.Controls;
+using FileManagerClient.Models;
 using FileManagerClient.Services;
 
 namespace FileManagerClient.ViewModels;
@@ -80,9 +81,19 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public CommandPaletteViewModel CommandPalette { get; }
 
-    public MainWindowViewModel(ClientSettings settings, IServerLauncher launcher, IDialogService dialogs)
+    private readonly UiHubClient? _hub;
+
+    /// <summary>Команды плагинов для подменю «Плагины» (кеш GET /commands, обновляется при (пере)подключении канала).</summary>
+    public ObservableCollection<PluginCommand> PluginCommands { get; } = new();
+
+    public bool HasPluginCommands => PluginCommands.Count > 0;
+
+    public MainWindowViewModel(ClientSettings settings, IServerLauncher launcher, IDialogService dialogs,
+        UiHubClient? hub = null)
     {
         _settings = settings;
+        _hub = hub;
+        PluginCommands.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasPluginCommands));
         _launcher = launcher;
         _dialogs = dialogs;
         _theme = new ThemeService(settings);

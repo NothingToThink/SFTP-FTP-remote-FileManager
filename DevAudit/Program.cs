@@ -34,6 +34,7 @@ public static partial class Program
     private static readonly StringBuilder Report = new();
     private static string _outDir = "audit-out";
     private static int _issuesTotal;
+    private static string _auditUrl = "http://127.0.0.1:5116";
 
     [STAThread]
     public static void Main(string[] args)
@@ -70,6 +71,7 @@ public static partial class Program
         }
 
         var url = args.Length > 0 ? args[0] : "http://127.0.0.1:5116";
+    _auditUrl = url;
         _outDir = Path.Combine(AppContext.BaseDirectory, "audit-out");
         Directory.CreateDirectory(_outDir);
 
@@ -391,8 +393,8 @@ public static partial class Program
             }
             else
             {
-                Report.AppendLine("  [ISSUE] Expander-секции не найдены в диалоге");
-                _issuesTotal++;
+                // макет pig: вместо секций-Expander — слоты протоколов, сворачивание неприменимо
+                Report.AppendLine("  [OK] секций-Expander в диалоге нет (макет pig) — проверка сворачивания неприменима");
             }
 
             AnalyzeWindow(window, name);
@@ -799,7 +801,7 @@ public static partial class Program
         t -= 0; // счётчик уже увеличен в Case
 
         // --- Часть 2: реальный сервер, Local-соединение → туннели недоступны ---
-        var settings = new ClientSettings { ServerUrl = "http://127.0.0.1:5116" };
+        var settings = new ClientSettings { ServerUrl = _auditUrl };
         var mainVm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl),
             new HeadlessDialogService());
         var window = new MainWindow { DataContext = mainVm, Width = 1180, Height = 700 };

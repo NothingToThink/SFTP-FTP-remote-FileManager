@@ -245,8 +245,16 @@ public static partial class Program
                     break;
                 case ("GET", var p) when p.EndsWith("/filesystem/file/download"):
                 {
-                    var query = ctx.Request.QueryString["path"] ?? "";
-                    Send(ctx, 200, FileBodies.GetValueOrDefault(query, ""), "application/octet-stream");
+                    // контракт #68: бэк сам пишет файл по localPath, тело ответа пустое
+                    var query = ctx.Request.QueryString;
+                    var remote = query["path"] ?? "";
+                    var localPath = query["localPath"] ?? "";
+                    if (localPath.Length > 0)
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(localPath))!);
+                        File.WriteAllText(localPath, FileBodies.GetValueOrDefault(remote, ""));
+                    }
+                    Send(ctx, 200, "");
                     break;
                 }
                 default: Send(ctx, 404, ""); break;
@@ -426,17 +434,18 @@ public static partial class Program
 
         try
         {
-            // 1. Прогресс по байтам: загрузка и скачивание
+            // 1. Прогресс: контракт #68 — файл читает/пишет сам бэк, поэтому репорт один,
+            //    по завершении, полным размером (для папок прогресс остаётся пофайловым)
             var upReports = new List<long>();
             await api.UploadFileAsync(id, "/" + bigName, big, default, new SyncProgress(upReports.Add));
-            Check("загрузка отдаёт прогресс по байтам до полного размера",
-                upReports.Count > 1 && upReports[^1] == new FileInfo(big).Length,
+            Check("загрузка репортит полный размер по завершении",
+                upReports.Count == 1 && upReports[^1] == new FileInfo(big).Length,
                 $"отчётов {upReports.Count}, последний {upReports.LastOrDefault()}");
             var dlReports = new List<long>();
             var back = Path.Combine(tmp, "back.bin");
             await api.DownloadFileAsync(id, "/" + bigName, back, default, new SyncProgress(dlReports.Add));
-            Check("скачивание отдаёт прогресс и файл совпадает по размеру",
-                dlReports.Count > 1 && dlReports[^1] == new FileInfo(big).Length && new FileInfo(back).Length == new FileInfo(big).Length,
+            Check("скачивание репортит полный размер, файл совпадает по размеру",
+                dlReports.Count == 1 && dlReports[^1] == new FileInfo(big).Length && new FileInfo(back).Length == new FileInfo(big).Length,
                 $"отчётов {dlReports.Count}");
 
             // 2. Папка + файл через drag&drop-путь: рекурсивно, с созданием папок на сервере

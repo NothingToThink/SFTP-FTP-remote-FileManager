@@ -1,5 +1,7 @@
 using System.Globalization;
 using Avalonia.Data.Converters;
+using FileManagerClient.Models;
+using FileManagerClient.ViewModels;
 
 namespace FileManagerClient.Converters;
 

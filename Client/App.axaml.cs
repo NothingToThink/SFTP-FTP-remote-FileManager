@@ -85,7 +85,7 @@ public class App : Application
         var dialogs = new DialogService();
         var main = new MainWindow
         {
-            DataContext = new MainWindowViewModel(settings, launcher, dialogs),
+            DataContext = new MainWindowViewModel(settings, launcher, dialogs, new UiHubClient(dialogs)),
         };
         main.Icon = AppIcon();
         main.Opened += (_, _) => dialogs.Owner = main;
