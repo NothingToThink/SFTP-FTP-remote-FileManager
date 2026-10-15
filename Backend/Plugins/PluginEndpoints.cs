@@ -24,7 +24,7 @@ public static class PluginEndpoints
     public static IEndpointRouteBuilder MapPluginCommands(this IEndpointRouteBuilder app)
     {
         app.MapGet("/commands", (CommandRegistry registry) =>
-            registry.List().Select(c => new { c.Id, c.Title, PluginId = c.Plugin.Id }));
+            registry.List().Select(c => new { c.Id, c.Title, PluginId = c.Plugin.Id, PluginName = c.Plugin.DisplayName }));
 
         app.MapPost("/commands/{id}/execute", async (string id, HttpRequest request, CommandRegistry registry,
             IUiSessionRegistry sessions, CommandRunner runner, CancellationToken ct) =>
