@@ -16,4 +16,8 @@ Write-Host "== Client -> $out"
 dotnet publish Client/FileManagerClient.csproj -c Release -r $Rid --self-contained true -o $out --nologo
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "Готово: $out"
+# Переименовываем apphost: он находит FileManagerClient.dll по встроенному имени, так что имя файла не важно
+$exeSuffix = if ($Rid -like "win-*") { ".exe" } else { "" }
+Move-Item -Force "$out/FileManagerClient$exeSuffix" "$out/SWINE$exeSuffix"
+
+Write-Host "Готово: $out/SWINE$exeSuffix"

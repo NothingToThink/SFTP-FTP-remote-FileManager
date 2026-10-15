@@ -9,6 +9,9 @@
     <AssemblyName>FileManagerClient</AssemblyName>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Product>SWINE</Product>
+    <AssemblyTitle>SWINE</AssemblyTitle>
+    <Description>Secure Workspace Interface for Network Endpoints</Description>
     <ApplicationIcon>Assets\AppIcon\app-icon.ico</ApplicationIcon>
   </PropertyGroup>
 

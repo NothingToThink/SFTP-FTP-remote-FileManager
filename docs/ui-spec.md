@@ -1,4 +1,4 @@
-# Спека UI: FileManager к защите
+# Спека UI: SWINE к защите
 
 Oct 12, 2026 · @Kirill
 

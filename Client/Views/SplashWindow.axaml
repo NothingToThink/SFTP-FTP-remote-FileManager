@@ -3,7 +3,7 @@
         xmlns:dlg="clr-namespace:FileManagerClient.Views.Dialogs"
         xmlns:pig="using:FileManagerClient.Controls"
         x:Class="FileManagerClient.Views.SplashWindow"
-        Title="FileManager"
+        Title="SWINE"
         Icon="avares://FileManagerClient/Assets/AppIcon/app-icon.png">
     <dlg:DialogWindowBase.Styles>
         <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
@@ -25,9 +25,12 @@
             <StackPanel x:Name="LoadingPanel" Spacing="14" HorizontalAlignment="Center">
                 <pig:PigIcon Kind="LogoMark" Size="72" Foreground="{DynamicResource Brush.Accent}"
                              HorizontalAlignment="Center"/>
-                <TextBlock Text="FileManager" FontFamily="{DynamicResource Font.Display}" FontSize="28"
+                <TextBlock Text="SWINE" FontFamily="{DynamicResource Font.Display}" FontSize="28"
                            FontWeight="Bold" HorizontalAlignment="Center"
                            Foreground="{DynamicResource Brush.Text}"/>
+                <TextBlock Text="Secure Workspace Interface for Network Endpoints" FontSize="12"
+                           HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,-8,0,0"
+                           Foreground="{DynamicResource Brush.TextMuted}"/>
                 <pig:PigMascot State="Connecting" Width="120" Height="90" HorizontalAlignment="Center"/>
                 <TextBlock x:Name="StatusText" Text="Поднимаем сервер…" FontSize="15" HorizontalAlignment="Center"
                            Foreground="{DynamicResource Brush.TextMuted}"
