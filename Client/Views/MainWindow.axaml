@@ -7,7 +7,7 @@
         xmlns:views="using:FileManagerClient.Views"
         x:Class="FileManagerClient.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="FileManager"
+        Title="SWINE"
         Width="1180" Height="740"
         MinWidth="1024" MinHeight="700"
         WindowStartupLocation="CenterScreen">
@@ -66,7 +66,8 @@
             <Grid ColumnDefinitions="272,*,Auto,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                     <ctl:PigIcon Kind="LogoMark" Size="32" Foreground="{DynamicResource Brush.Accent}"/>
-                    <TextBlock Classes="h2" FontSize="17" Text="FileManager" VerticalAlignment="Center"/>
+                    <TextBlock Classes="h2" FontFamily="{DynamicResource Font.Display}" FontSize="17" Text="SWINE" VerticalAlignment="Center"
+                               ToolTip.Tip="Secure Workspace Interface for Network Endpoints"/>
                 </StackPanel>
                 <TextBox Grid.Column="1" Name="GlobalSearchBox" MaxWidth="520" HorizontalAlignment="Stretch"
                          AutomationProperties.AutomationId="GlobalSearchBox"

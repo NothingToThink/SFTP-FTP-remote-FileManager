@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Собирает демо-бандл: клиент + сервер, self-contained, в dist/<rid>/ (сервер в dist/<rid>/server/).
 # Использование: tools/publish-demo.sh [osx-arm64|osx-x64|linux-x64|win-x64]
-# Без аргумента RID определяется по текущей машине. Запуск: dist/<rid>/FileManagerClient[.exe]
+# Без аргумента RID определяется по текущей машине. Запуск: dist/<rid>/SWINE[.exe]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -26,4 +26,8 @@ dotnet publish Backend/Backend.csproj -c Release -r "$rid" --self-contained true
 echo "== Client -> $out"
 dotnet publish Client/FileManagerClient.csproj -c Release -r "$rid" --self-contained true -o "$out" --nologo
 
-echo "Готово: $out"
+# Переименовываем apphost: он находит FileManagerClient.dll по встроенному имени, так что имя файла не важно
+ext=""; case "$rid" in win-*) ext=".exe" ;; esac
+mv "$out/FileManagerClient$ext" "$out/SWINE$ext"
+
+echo "Готово: $out/SWINE$ext"
