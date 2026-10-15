@@ -109,7 +109,10 @@ public static class ErrorPresenter
     {
         var message = api.ServerMessage;
 
-        if (api.StatusCode == 401 || api.Kind is "auth_failed" or "authentication_failed" || LooksLikeAuthFailure(message))
+        // Текстовая эвристика — только при подключении: SFTP пишет «Permission denied» и когда на файл нет прав,
+        // и такая ошибка при работе с файлами — «Нет доступа», а не неверный логин или пароль.
+        if (api.StatusCode == 401 || api.Kind is "auth_failed" or "authentication_failed"
+            || (ctx.IsConnecting && LooksLikeAuthFailure(message)))
             return Auth(server, details);
 
         switch (api.StatusCode)
