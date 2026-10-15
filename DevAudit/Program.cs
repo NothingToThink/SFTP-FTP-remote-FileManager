@@ -55,6 +55,11 @@ public static partial class Program
         if (args.Length >= 2 && args[0] == "--props-shots")
         {
             RunPropsShots(args[1]);
+            return; 
+        }
+        if (args.Length >= 2 && args[0] == "--tunnel-shots")
+        {
+            TunnelShots.Run(args[1]);
             return;
         }
 

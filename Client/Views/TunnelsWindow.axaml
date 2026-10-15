@@ -1,90 +1,201 @@
-<Window xmlns="https://github.com/avaloniaui"
+<dlg:DialogWindowBase xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:FileManagerClient.ViewModels;assembly=FileManagerClient"
-        xmlns:conv="clr-namespace:FileManagerClient.Converters"
+        xmlns:dlg="clr-namespace:FileManagerClient.Views.Dialogs"
+        xmlns:pig="using:FileManagerClient.Controls"
         x:Class="FileManagerClient.Views.TunnelsWindow"
         x:DataType="vm:TunnelsViewModel"
-        Title="Туннели"
-        Width="820" Height="480"
-        MinWidth="640" MinHeight="360"
-        WindowStartupLocation="CenterOwner">
+        Title="Туннели">
 
-    <Window.Resources>
-        <conv:EnumEqualsConverter x:Key="EnumEq"/>
-    </Window.Resources>
-
-    <Window.Styles>
-        <!-- Точка состояния туннеля: цвета из токенов темы -->
-        <Style Selector="Ellipse.stateDot">
+    <dlg:DialogWindowBase.Styles>
+        <!-- Чип статуса: рамка и текст цветом темы, рядом всегда слово -->
+        <Style Selector="Border.state">
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="11"/>
+            <Setter Property="Padding" Value="9,3"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.state.active">
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Success}"/>
+        </Style>
+        <Style Selector="Border.state.failed">
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Error}"/>
+            <Setter Property="Background" Value="{DynamicResource Brush.ErrorSoft}"/>
+        </Style>
+        <Style Selector="Border.state Ellipse">
             <Setter Property="Fill" Value="{DynamicResource Brush.TextFaint}"/>
         </Style>
-        <Style Selector="Ellipse.stateDot.active">
+        <Style Selector="Border.state.active Ellipse">
             <Setter Property="Fill" Value="{DynamicResource Brush.Success}"/>
         </Style>
-        <Style Selector="Ellipse.stateDot.failed">
+        <Style Selector="Border.state.failed Ellipse">
             <Setter Property="Fill" Value="{DynamicResource Brush.Error}"/>
         </Style>
-    </Window.Styles>
+        <Style Selector="Border.state TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+        </Style>
+        <Style Selector="Border.state.active TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Success}"/>
+        </Style>
+        <Style Selector="Border.state.failed TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Error}"/>
+        </Style>
+        <Style Selector="Button.rowtool">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="MinWidth" Value="34"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.rowtool.danger">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Error}"/>
+        </Style>
+        <Style Selector="Button.rowtool.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.ErrorSoft}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Error}"/>
+        </Style>
+        <Style Selector="Button.rowtool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.RowHover}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+        </Style>
+    </dlg:DialogWindowBase.Styles>
 
-    <DockPanel Margin="12">
-        <!-- Ошибка / предупреждение -->
-        <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.ErrorSoft}" CornerRadius="6" Padding="10,7" Margin="0,10,0,0"
-                IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-            <TextBlock Name="TunnelErrorText" AutomationProperties.AutomationId="TunnelErrorText"
-                       Text="{Binding ErrorText}" Foreground="{DynamicResource Brush.Error}" FontSize="12.5" TextWrapping="Wrap"/>
-        </Border>
+    <Border Classes="dialog" Margin="20" Width="740" Padding="0" BoxShadow="0 8 32 0 #40000000">
+        <Grid RowDefinitions="Auto,*,Auto">
 
-        <!-- Кнопки -->
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
-            <Button Name="TunnelCreateButton" Classes="primary" Content="Создать туннель"
-                    AutomationProperties.AutomationId="TunnelCreateButton"
-                    Command="{Binding CreateCommand}"/>
-            <Button Name="TunnelStartButton" Classes="tool" Content="Запустить"
-                    AutomationProperties.AutomationId="TunnelStartButton"
-                    Command="{Binding StartCommand}" IsEnabled="{Binding SelectedItem.CanStart}"/>
-            <Button Name="TunnelStopButton" Classes="tool" Content="Остановить"
-                    AutomationProperties.AutomationId="TunnelStopButton"
-                    Command="{Binding StopCommand}" IsEnabled="{Binding SelectedItem.CanStop}"/>
-            <Button Name="TunnelDeleteButton" Classes="tool danger" Content="Удалить"
-                    AutomationProperties.AutomationId="TunnelDeleteButton"
-                    Command="{Binding DeleteCommand}"/>
-            <Button Name="TunnelRefreshButton" Classes="icon" ToolTip.Tip="Обновить"
-                    AutomationProperties.AutomationId="TunnelRefreshButton"
-                    Command="{Binding RefreshCommand}">
-                <PathIcon Data="{StaticResource IconSync}" Width="14" Height="14"/>
-            </Button>
-        </StackPanel>
+            <!-- Заголовок -->
+            <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" Margin="28,22,28,12">
+                <pig:PigIcon Grid.Column="0" Kind="ForwardTunnel" Size="32" Foreground="{DynamicResource Brush.Accent}"
+                             VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Classes="h2" Text="Туннели"/>
+                    <TextBlock Classes="mono caption" FontSize="13" Text="{Binding ConnectionName}"/>
+                </StackPanel>
+                <Button Grid.Column="2" Name="TunnelRefreshButton" Classes="rowtool" Margin="0,0,8,0"
+                        AutomationProperties.AutomationId="TunnelRefreshButton"
+                        AutomationProperties.Name="Обновить список"
+                        ToolTip.Tip="Обновить список"
+                        Command="{Binding RefreshCommand}">
+                    <pig:LineIcon Data="{StaticResource Line.Refresh}" Size="18"/>
+                </Button>
+                <Button Grid.Column="3" Name="TunnelCreateButton" Classes="primary" Content="Создать туннель"
+                        AutomationProperties.AutomationId="TunnelCreateButton"
+                        Command="{Binding CreateCommand}"/>
+            </Grid>
 
-        <!-- Заголовок -->
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="2,0,2,10">
-            <TextBlock Classes="h1" Text="Туннели"/>
-            <TextBlock Classes="mono secondary" VerticalAlignment="Center"
-                       Text="{Binding ConnectionName}"/>
-        </StackPanel>
+            <ScrollViewer Grid.Row="1" MaxHeight="420" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="28,4,28,12" Spacing="10">
 
-        <!-- Список правил -->
-        <DataGrid Name="TunnelsList" AutomationProperties.AutomationId="TunnelsList"
-                  ItemsSource="{Binding Items}"
-                  SelectedItem="{Binding SelectedItem}"
-                  IsReadOnly="True" AutoGenerateColumns="False" CanUserSortColumns="False"
-                  GridLinesVisibility="Horizontal">
-            <DataGrid.Columns>
-                <DataGridTemplateColumn Header="Правило" Width="240">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="vm:TunnelItemViewModel">
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Ellipse Classes="stateDot" Width="8" Height="8" VerticalAlignment="Center"
-                                         Classes.active="{Binding Status.State, Converter={StaticResource EnumEq}, ConverterParameter=Active}"
-                                         Classes.failed="{Binding Status.State, Converter={StaticResource EnumEq}, ConverterParameter=Failed}"/>
-                                <TextBlock Text="{Binding Name}" FontWeight="Medium"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTextColumn Header="Маршрут" Binding="{Binding Details}" Width="*"
-                                    FontFamily="{StaticResource FontMono}" FontSize="12"/>
-                <DataGridTextColumn Header="Состояние" Binding="{Binding StateText}" Width="170"/>
-            </DataGrid.Columns>
-        </DataGrid>
-    </DockPanel>
-</Window>
+                    <!-- Ошибка: сообщение из ErrorPresenter + повторить -->
+                    <Border Classes="card" Background="{DynamicResource Brush.ErrorSoft}"
+                            BorderBrush="{DynamicResource Brush.Error}"
+                            IsVisible="{Binding HasError}">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <pig:PigMascot Grid.Column="0" State="Error" Width="72" Height="54" Margin="0,0,14,0"/>
+                            <TextBlock Grid.Column="1" Name="TunnelErrorText" AutomationProperties.AutomationId="TunnelErrorText"
+                                       Text="{Binding ErrorText}" Foreground="{DynamicResource Brush.Error}"
+                                       FontSize="14" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            <Button Grid.Column="2" Classes="tool" Content="Повторить" VerticalAlignment="Center"
+                                    AutomationProperties.AutomationId="TunnelRetryButton"
+                                    Command="{Binding RefreshCommand}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Пусто -->
+                    <StackPanel Spacing="10" HorizontalAlignment="Center" Margin="0,16,0,16"
+                                AutomationProperties.AutomationId="TunnelsEmpty"
+                                IsVisible="{Binding IsEmpty}">
+                        <pig:PigMascot State="Empty" HorizontalAlignment="Center"/>
+                        <TextBlock Classes="h2" Text="Туннелей пока нет" HorizontalAlignment="Center"/>
+                        <TextBlock Classes="secondary" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+                                   Text="Пробросьте порт сервера на свой компьютер: свинка сама подскажет, какие порты там открыты."/>
+                        <Button Classes="primary" Content="Создать туннель" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                AutomationProperties.AutomationId="TunnelEmptyCreateButton"
+                                Command="{Binding CreateCommand}"/>
+                    </StackPanel>
+
+                    <!-- Список правил -->
+                    <ItemsControl Name="TunnelsList" AutomationProperties.AutomationId="TunnelsList"
+                                  ItemsSource="{Binding Items}" IsVisible="{Binding HasItems}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Spacing="8"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TunnelItemViewModel">
+                                <Border Classes="card" Padding="14,10">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+                                        <pig:PigIcon Grid.Column="0" Kind="{Binding TypeIcon}" Size="28"
+                                                     Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
+
+                                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Classes="caption" Text="{Binding TypeText}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Classes="mono" FontSize="13" Text="{Binding Details}"
+                                                       Foreground="{DynamicResource Brush.TextMuted}" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock FontSize="12.5" TextWrapping="Wrap" Foreground="{DynamicResource Brush.Error}"
+                                                       Text="{Binding ErrorDetail}" IsVisible="{Binding HasErrorDetail}"/>
+                                        </StackPanel>
+
+                                        <Border Grid.Column="2" Classes="state"
+                                                Classes.active="{Binding IsActive}" Classes.failed="{Binding IsFailed}">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <Ellipse Width="8" Height="8" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2">
+                                            <Button Classes="rowtool" Click="OpenInBrowserClick"
+                                                    IsVisible="{Binding CanOpenInBrowser}"
+                                                    AutomationProperties.AutomationId="TunnelOpenBrowserButton"
+                                                    AutomationProperties.Name="Открыть в браузере"
+                                                    ToolTip.Tip="Открыть в браузере">
+                                                <pig:LineIcon Data="{StaticResource Line.External}" Size="18"/>
+                                            </Button>
+                                            <Button Classes="rowtool" IsVisible="{Binding CanStart}"
+                                                    AutomationProperties.AutomationId="TunnelStartButton"
+                                                    AutomationProperties.Name="Запустить"
+                                                    ToolTip.Tip="Запустить"
+                                                    Command="{Binding $parent[ItemsControl].((vm:TunnelsViewModel)DataContext).StartItemCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <pig:LineIcon Data="{StaticResource Line.Play}" Size="18"/>
+                                            </Button>
+                                            <Button Classes="rowtool" IsVisible="{Binding CanStop}"
+                                                    AutomationProperties.AutomationId="TunnelStopButton"
+                                                    AutomationProperties.Name="Остановить"
+                                                    ToolTip.Tip="Остановить"
+                                                    Command="{Binding $parent[ItemsControl].((vm:TunnelsViewModel)DataContext).StopItemCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <pig:LineIcon Data="{StaticResource Line.Stop}" Size="18"/>
+                                            </Button>
+                                            <Button Classes="rowtool danger"
+                                                    AutomationProperties.AutomationId="TunnelDeleteButton"
+                                                    AutomationProperties.Name="Удалить"
+                                                    ToolTip.Tip="Удалить"
+                                                    Command="{Binding $parent[ItemsControl].((vm:TunnelsViewModel)DataContext).DeleteItemCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <pig:LineIcon Data="{StaticResource Line.Trash}" Size="18"/>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="28,8,28,22">
+                <Button Name="CloseButton" Classes="tool" Content="Закрыть" MinWidth="120"
+                        AutomationProperties.AutomationId="TunnelsCloseButton"
+                        IsCancel="True" Click="CloseClick"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</dlg:DialogWindowBase>

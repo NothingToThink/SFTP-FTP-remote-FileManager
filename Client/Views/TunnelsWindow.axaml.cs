@@ -2,10 +2,11 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using FileManagerClient.ViewModels;
+using FileManagerClient.Views.Dialogs;
 
 namespace FileManagerClient.Views;
 
-public partial class TunnelsWindow : Window
+public partial class TunnelsWindow : DialogWindowBase
 {
     private DispatcherTimer? _timer;
 
@@ -29,5 +30,19 @@ public partial class TunnelsWindow : Window
         Closed += (_, _) => _timer?.Stop();
     }
 
-    private void OnUnloaded(object? sender, RoutedEventArgs e) => _timer?.Stop();
+    protected override Control? InitialFocus() => this.FindControl<Button>("CloseButton");
+
+    protected override void Cancel() => Close();
+
+    private void CloseClick(object? sender, RoutedEventArgs e) => Close();
+
+    private async void OpenInBrowserClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: TunnelItemViewModel { BrowserUrl: { } url } }
+            && Launcher is { } launcher)
+        {
+            try { await launcher.LaunchUriAsync(new Uri(url)); }
+            catch { /* нет браузера по умолчанию — не критично */ }
+        }
+    }
 }

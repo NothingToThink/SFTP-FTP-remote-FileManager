@@ -9,11 +9,22 @@ public static class Crypto
   public static bool Verify(string key, string hash) =>
     hasher.VerifyHashedPassword(null!, hash, key) != PasswordVerificationResult.Failed;
 
+  /// <summary>Папка данных сервера (app.db, app.key, jwt.key): SWINE_DATA_DIR, по умолчанию рабочая папка.</summary>
+  public static string DataDir { get; } = ResolveDataDir();
+
+  static string ResolveDataDir()
+  {
+    var dir = Environment.GetEnvironmentVariable("SWINE_DATA_DIR");
+    if (string.IsNullOrWhiteSpace(dir)) return Directory.GetCurrentDirectory();
+    Directory.CreateDirectory(dir);
+    return dir;
+  }
+
   static readonly byte[] Key = LoadKey();
 
   static byte[] LoadKey()
   {
-    const string path = "app.key";
+    var path = Path.Combine(DataDir, "app.key");
     if (!File.Exists(path))
       File.WriteAllBytes(path, RandomNumberGenerator.GetBytes(32));
     return File.ReadAllBytes(path);

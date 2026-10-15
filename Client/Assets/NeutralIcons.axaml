@@ -19,4 +19,7 @@
     <StreamGeometry x:Key="Line.Image">M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z M9 8a1 1 0 1 0 0.01 0 M21 15l-5-5L5 21</StreamGeometry>
     <StreamGeometry x:Key="Line.Archive">M3 4h18v4H3z M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8 M10 12h4</StreamGeometry>
     <StreamGeometry x:Key="Line.Code">M16 18l6-6-6-6 M8 6l-6 6 6 6</StreamGeometry>
+    <StreamGeometry x:Key="Line.Play">M6 4l14 8-14 8z</StreamGeometry>
+    <StreamGeometry x:Key="Line.Stop">M6 6h12v12H6z</StreamGeometry>
+    <StreamGeometry x:Key="Line.External">M15 3h6v6 M10 14 21 3 M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6</StreamGeometry>
 </ResourceDictionary>

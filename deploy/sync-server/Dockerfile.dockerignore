@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+.git/
+dist/
+Client/
+Backend/
+Tests*/
+plugins/

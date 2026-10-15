@@ -1,81 +1,200 @@
-<Window xmlns="https://github.com/avaloniaui"
+<dlg:DialogWindowBase xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:FileManagerClient.ViewModels;assembly=FileManagerClient"
         xmlns:models="clr-namespace:FileManagerClient.Models;assembly=FileManagerClient"
+        xmlns:dlg="clr-namespace:FileManagerClient.Views.Dialogs"
+        xmlns:pig="using:FileManagerClient.Controls"
         x:Class="FileManagerClient.Views.CreateForwardWindow"
         x:DataType="vm:CreateForwardViewModel"
-        Title="Новый туннель"
-        Width="520" SizeToContent="Height"
-        CanResize="False"
-        WindowStartupLocation="CenterOwner"
-        ShowInTaskbar="False"
-        Background="{DynamicResource BgBaseBrush}">
+        Title="Новый туннель">
 
-    <StackPanel Margin="20" Spacing="10">
-        <TextBlock Classes="h1" Text="Новый туннель"/>
+    <dlg:DialogWindowBase.Styles>
+        <!-- Плитка выбора типа (как прорези протокола в профиле) -->
+        <Style Selector="Button.slot">
+            <Setter Property="Width" Value="168"/>
+            <Setter Property="Height" Value="92"/>
+            <Setter Property="Padding" Value="6"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.slot:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.RowHover}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+        </Style>
+        <Style Selector="Button.slot.selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+        </Style>
 
-        <TextBlock Classes="secondary" Text="Название (необязательно)" Margin="0,6,0,-4"/>
-        <TextBox Name="ForwardNameBox" AutomationProperties.AutomationId="ForwardNameBox"
-                 Text="{Binding Name}" PlaceholderText="Postgres с сервера"/>
+        <!-- Чип подсказки порта -->
+        <Style Selector="ListBox.chips ListBoxItem">
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="Margin" Value="0,0,8,8"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style Selector="ListBox.chips ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.RowHover}"/>
+        </Style>
+        <Style Selector="ListBox.chips ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+        </Style>
+        <Style Selector="ListBox.chips ListBoxItem:selected TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
 
-        <TextBlock Classes="secondary" Text="Тип" Margin="0,8,0,-4"/>
-        <ComboBox Name="ForwardTypeCombo" AutomationProperties.AutomationId="ForwardTypeCombo"
-                  ItemsSource="{Binding Types}" SelectedItem="{Binding Type}"
-                  HorizontalAlignment="Left" MinWidth="220"/>
+        <!-- Поле с ошибкой -->
+        <Style Selector="TextBox.invalid /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Error}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+    </dlg:DialogWindowBase.Styles>
 
-        <TextBlock Classes="secondary" Text="Порт на этой машине (0 — выбрать свободный)" Margin="0,8,0,-4"/>
-        <TextBox Name="ForwardBindPortBox" AutomationProperties.AutomationId="ForwardBindPortBox"
-                 Text="{Binding BindPort}" FontFamily="{StaticResource FontMono}"/>
+    <Border Classes="dialog" Margin="20" Width="620" Padding="0" BoxShadow="0 8 32 0 #40000000">
+        <Grid RowDefinitions="Auto,*,Auto">
 
-        <Panel IsVisible="{Binding NeedsTarget}">
-            <StackPanel Spacing="10">
-                <TextBlock Classes="secondary" Text="Целевой хост (как он виден с сервера)" Margin="0,8,0,-4"/>
-                <TextBox Name="ForwardTargetHostBox" AutomationProperties.AutomationId="ForwardTargetHostBox"
-                         Text="{Binding TargetHost}" FontFamily="{StaticResource FontMono}"/>
-                <TextBlock Classes="secondary" Text="Целевой порт" Margin="0,4,0,-4"/>
-                <TextBox Name="ForwardTargetPortBox" AutomationProperties.AutomationId="ForwardTargetPortBox"
-                         Text="{Binding TargetPort}" FontFamily="{StaticResource FontMono}"/>
+            <!-- Заголовок -->
+            <StackPanel Grid.Row="0" Margin="28,22,28,8" Spacing="2">
+                <TextBlock Classes="h2" Text="Новый туннель"/>
+                <TextBlock Classes="mono caption" FontSize="13" Text="{Binding ConnectionName}"
+                           IsVisible="{Binding ConnectionName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
             </StackPanel>
-        </Panel>
 
-        <!-- Подсказки: что слушает сервер -->
-        <Panel IsVisible="{Binding NeedsTarget}">
-            <StackPanel Spacing="6" Margin="0,10,0,0">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Classes="secondary" Text="Слушающие порты на сервере" VerticalAlignment="Center"/>
-                    <Button Name="ScanButton" Classes="tool" Content="Найти"
-                            AutomationProperties.AutomationId="ForwardScanButton"
-                            IsEnabled="{Binding !IsScanning}" Click="ScanClick"/>
-                    <ProgressBar IsIndeterminate="True" Width="90" Height="12" VerticalAlignment="Center"
-                                 IsVisible="{Binding IsScanning}"/>
+            <ScrollViewer Grid.Row="1" MaxHeight="500" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="28,4,28,12" Spacing="14">
+
+                    <!-- Название -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="secondary" Text="Название (необязательно)"/>
+                        <TextBox Name="ForwardNameBox" AutomationProperties.AutomationId="ForwardNameBox"
+                                 Text="{Binding Name}" PlaceholderText="Postgres с сервера"/>
+                    </StackPanel>
+
+                    <!-- Тип: три плитки -->
+                    <StackPanel Spacing="6" AutomationProperties.AutomationId="ForwardTypeCombo">
+                        <TextBlock Classes="secondary" Text="Тип"/>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Button Classes="slot" Classes.selected="{Binding IsLocalType}"
+                                    Command="{Binding SelectTypeCommand}"
+                                    CommandParameter="{x:Static models:ForwardType.Local}"
+                                    AutomationProperties.AutomationId="ForwardTypeLocal"
+                                    ToolTip.Tip="Порт сервера становится доступен на этом компьютере (-L)">
+                                <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                    <pig:PigIcon Kind="ForwardLocal" Size="34" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Локальный" FontSize="14" HorizontalAlignment="Center"/>
+                                    <TextBlock Classes="caption" FontSize="12" Text="сервер → к вам" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Classes="slot" Classes.selected="{Binding IsRemoteType}"
+                                    Command="{Binding SelectTypeCommand}"
+                                    CommandParameter="{x:Static models:ForwardType.Remote}"
+                                    AutomationProperties.AutomationId="ForwardTypeRemote"
+                                    ToolTip.Tip="Порт этого компьютера становится доступен на сервере (-R)">
+                                <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                    <pig:PigIcon Kind="ForwardRemote" Size="34" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Обратный" FontSize="14" HorizontalAlignment="Center"/>
+                                    <TextBlock Classes="caption" FontSize="12" Text="вы → на сервер" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Classes="slot" Classes.selected="{Binding IsDynamicType}"
+                                    Command="{Binding SelectTypeCommand}"
+                                    CommandParameter="{x:Static models:ForwardType.Dynamic}"
+                                    AutomationProperties.AutomationId="ForwardTypeDynamic"
+                                    ToolTip.Tip="SOCKS-прокси на этом компьютере, трафик идёт через сервер (-D)">
+                                <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                    <pig:PigIcon Kind="ForwardDynamic" Size="34" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="SOCKS-прокси" FontSize="14" HorizontalAlignment="Center"/>
+                                    <TextBlock Classes="caption" FontSize="12" Text="через сервер" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Подсказки: что слушает сервер -->
+                    <StackPanel Spacing="8" IsVisible="{Binding NeedsTarget}">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <pig:PigIcon Grid.Column="0" Kind="SniffPorts" Size="22" Margin="0,0,8,0"
+                                         Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Classes="secondary" Text="Открытые порты на сервере" VerticalAlignment="Center"/>
+                            <Button Grid.Column="2" Name="ScanButton" Classes="tool" Content="Найти снова"
+                                    AutomationProperties.AutomationId="ForwardScanButton"
+                                    IsEnabled="{Binding !IsScanning}" Click="ScanClick"/>
+                        </Grid>
+
+                        <!-- Поиск идёт -->
+                        <StackPanel Orientation="Horizontal" Spacing="12" IsVisible="{Binding IsScanning}"
+                                    AutomationProperties.AutomationId="ForwardScanning">
+                            <pig:PigMascot State="Sniff" Width="96" Height="72"/>
+                            <TextBlock Text="Свинка вынюхивает открытые порты…" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Brush.TextMuted}"/>
+                        </StackPanel>
+
+                        <ListBox Name="SuggestionsList" Classes="chips" AutomationProperties.AutomationId="ForwardSuggestionsList"
+                                 ItemsSource="{Binding Suggestions}" SelectedItem="{Binding SelectedSuggestion}"
+                                 Background="Transparent" BorderThickness="0" Padding="0"
+                                 IsVisible="{Binding HasSuggestions}">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="models:PortSuggestion">
+                                    <TextBlock Classes="mono" FontSize="13" Text="{Binding ChipLabel}"
+                                               ToolTip.Tip="{Binding Label}"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Name="SuggestionStatusText" Classes="muted" TextWrapping="Wrap"
+                                   Text="{Binding SuggestionStatus}"
+                                   IsVisible="{Binding SuggestionStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+
+                    <!-- Порты -->
+                    <Grid ColumnDefinitions="*,12,*,12,150" RowDefinitions="Auto,Auto">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="secondary" TextWrapping="Wrap" Text="{Binding BindLabel}"/>
+                        <TextBox Grid.Row="1" Grid.Column="0" Name="ForwardBindPortBox" AutomationProperties.AutomationId="ForwardBindPortBox"
+                                 Text="{Binding BindPort}" Classes="mono" Classes.invalid="{Binding BindPortInvalid}"
+                                 Margin="0,6,0,0"/>
+
+                        <TextBlock Grid.Row="0" Grid.Column="2" Classes="secondary" TextWrapping="Wrap"
+                                   Text="{Binding TargetHostLabel}" IsVisible="{Binding NeedsTarget}"/>
+                        <TextBox Grid.Row="1" Grid.Column="2" Name="ForwardTargetHostBox" AutomationProperties.AutomationId="ForwardTargetHostBox"
+                                 Text="{Binding TargetHost}" Classes="mono" Classes.invalid="{Binding TargetHostInvalid}"
+                                 IsVisible="{Binding NeedsTarget}" Margin="0,6,0,0"/>
+
+                        <TextBlock Grid.Row="0" Grid.Column="4" Classes="secondary" Text="Целевой порт" IsVisible="{Binding NeedsTarget}"/>
+                        <TextBox Grid.Row="1" Grid.Column="4" Name="ForwardTargetPortBox" AutomationProperties.AutomationId="ForwardTargetPortBox"
+                                 Text="{Binding TargetPort}" Classes="mono" Classes.invalid="{Binding TargetPortInvalid}"
+                                 IsVisible="{Binding NeedsTarget}" Margin="0,6,0,0"/>
+                    </Grid>
+
+                    <!-- Ошибка валидации рядом с полями -->
+                    <TextBlock Name="ForwardErrorText" AutomationProperties.AutomationId="ForwardErrorText"
+                               Text="{Binding ErrorMessage}" Foreground="{DynamicResource Brush.Error}"
+                               FontSize="13" TextWrapping="Wrap"
+                               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                 </StackPanel>
-                <ListBox Name="SuggestionsList" AutomationProperties.AutomationId="ForwardSuggestionsList"
-                         ItemsSource="{Binding Suggestions}" SelectedItem="{Binding SelectedSuggestion}"
-                         MaxHeight="140">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="models:PortSuggestion">
-                            <TextBlock Classes="mono" FontSize="12" Text="{Binding Label}"/>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-                <TextBlock Name="SuggestionStatusText" Classes="muted" FontSize="11.5"
-                           Text="{Binding SuggestionStatus}"/>
+            </ScrollViewer>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="28,8,28,22">
+                <Button Name="CancelButton" Classes="tool" Content="Отмена" MinWidth="120"
+                        AutomationProperties.AutomationId="ForwardCancelButton"
+                        IsCancel="True" Click="CancelClick"/>
+                <Button Name="OkButton" Classes="primary" Content="Создать туннель" MinWidth="160"
+                        AutomationProperties.AutomationId="ForwardOkButton"
+                        IsDefault="True" Click="OkClick"/>
             </StackPanel>
-        </Panel>
-
-        <Border Background="{DynamicResource Brush.ErrorSoft}" CornerRadius="6" Padding="10,7" Margin="0,6,0,0"
-                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-            <TextBlock Name="ForwardErrorText" AutomationProperties.AutomationId="ForwardErrorText"
-                       Text="{Binding ErrorMessage}" Foreground="{DynamicResource Brush.Error}" FontSize="12.5" TextWrapping="Wrap"/>
-        </Border>
-
-        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,10,0,0">
-            <Button Name="CancelButton" Classes="tool" Content="Отмена" Width="104"
-                    AutomationProperties.AutomationId="ForwardCancelButton"
-                    IsCancel="True" Click="CancelClick"/>
-            <Button Name="OkButton" Classes="primary" Content="Создать" Width="104"
-                    AutomationProperties.AutomationId="ForwardOkButton"
-                    IsDefault="True" Click="OkClick"/>
-        </StackPanel>
-    </StackPanel>
-</Window>
+        </Grid>
+    </Border>
+</dlg:DialogWindowBase>
