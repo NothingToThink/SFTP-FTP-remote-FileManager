@@ -14,7 +14,7 @@ using Microsoft.Data.Sqlite;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ServerDbContext>(opt =>
-    opt.UseSqlite("Data Source=app.db"));
+    opt.UseSqlite($"Data Source={Path.Combine(Crypto.DataDir, "app.db")}"));
 
 
 
@@ -27,8 +27,15 @@ var jwtIssuer = builder.Configuration["Jwt:Issuer"]
 var jwtAudience = builder.Configuration["Jwt:Audience"]
     ?? throw new InvalidOperationException("Не задан Jwt:Audience.");
 
-var jwtKeyBase64 = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("Не задан Jwt:Key. Запусти init-server.sh.");
+// Ключ: из конфигурации/окружения (Jwt__Key); иначе создаётся при первом старте и хранится в jwt.key в папке данных
+var jwtKeyBase64 = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKeyBase64))
+{
+    var jwtKeyPath = Path.Combine(Crypto.DataDir, "jwt.key");
+    if (!File.Exists(jwtKeyPath))
+        File.WriteAllText(jwtKeyPath, Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+    jwtKeyBase64 = File.ReadAllText(jwtKeyPath).Trim();
+}
 
 var jwtLifetimeMinutes =
     builder.Configuration.GetValue<int>("Jwt:LifetimeMinutes");
@@ -276,4 +283,7 @@ app.MapDelete("/profiles", async (ClaimsPrincipal user, Guid profileId, ServerDb
     return Results.Ok(profile);
 }).RequireAuthorization();
 
-app.Run("https://localhost:5227");
+// Адрес: --urls или ASPNETCORE_URLS (в контейнере), иначе прежний dev-адрес
+var urlsGiven = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
+                || args.Any(a => a == "--urls" || a.StartsWith("--urls=", StringComparison.Ordinal));
+app.Run(urlsGiven ? null : "https://localhost:5227");
