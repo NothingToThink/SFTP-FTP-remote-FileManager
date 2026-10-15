@@ -1,46 +1,21 @@
-using System.Security.Cryptography;
 using CommunityToolkit.Mvvm.Input;
 using FileManagerClient.Controls;
 using FileManagerClient.Models;
 using FileManagerClient.Services;
 using FileManagerClient.ViewModels;
-using FileManagerClient.Views.Dialogs;
 
 namespace FileManagerClient.Commands;
-
-/// <summary>
-/// ЗАГЛУШКА источника плагинных команд. Сейчас команды в него кладёт клиентская демо-установка
-/// («Посчитать SHA-256»). Когда появится бэкенд плагинов (фаза 1: PluginManager, GET /commands,
-/// POST /commands/{id}/execute), этот класс заменяется источником, который загружает контрибуции
-/// с сервера и строит AppCommand с Handler = вызов /commands/{id}/execute; остальной код не меняется.
-/// </summary>
-public sealed class PluginStubCommandSource : ICommandSource
-{
-    private readonly List<AppCommand> _commands = new();
-
-    public IEnumerable<AppCommand> GetCommands() => _commands.ToList();
-
-    public void Add(AppCommand command)
-    {
-        _commands.RemoveAll(c => c.Id == command.Id);
-        _commands.Add(command);
-    }
-
-    public bool Contains(string id) => _commands.Any(c => c.Id == id);
-}
 
 /// <summary>Встроенные команды, привязанные к существующим командам MainWindowViewModel и FileBrowserViewModel.</summary>
 public static class BuiltInCommands
 {
     public const string ConnectPrefix = "Подключиться: ";
-    public const string Sha256Id = "plugin.checksum.sha256";
 
     private const string NotBound = "Сначала подключитесь к серверу";
 
     public static void Register(CommandRegistry registry, MainWindowViewModel vm, IDialogService dialogs)
     {
         var b = vm.Browser;
-        var pluginSource = new PluginStubCommandSource();
 
         string? NeedConnection(CommandContext? _) => b.IsBound ? null : NotBound;
         string? NeedSelection(CommandContext? _) =>
@@ -100,83 +75,40 @@ public static class BuiltInCommands
         // --- Приложение ---
         registry.Register(Make("app.theme", "Переключить тему", "Приложение", _ => Run(vm.ToggleThemeCommand), "Line.Image",
             null, null, "тёмная", "светлая", "dark", "light", "оформление"));
+        registry.Register(Make("app.sync", "Синхронизация профилей…", "Приложение", _ => Run(vm.OpenSyncCommand),
+            "Line.Refresh", null, null, "sync", "облако", "сервер синхронизации", "отправить профили", "забрать профили", "войти"));
         registry.Register(Make("app.tunnels", "Туннели", "Приложение", _ => Run(vm.OpenTunnelsCommand), "Line.ChevronRight",
             null, _ => !b.IsBound ? NotBound : vm.IsTunnelsAvailable ? null : "Туннели доступны только для SFTP",
             "проброс", "порты", "ssh", "tunnel", "forward"));
 
         // --- Плагины ---
-        registry.Register(new AppCommand
+        // Установки плагина нет ни в Backend, ни в API: плагин кладут в папку плагинов и перезапускают сервер.
+        registry.Register(Make("plugin.openfolder", "Открыть папку плагинов", "Плагины", _ =>
         {
-            Id = "plugin.install",
-            Title = "Установить плагин…",
-            Category = "Плагины",
-            Keywords = new[] { "plugin", "расширение", "checksum" },
-            PigIcon = PigIconKind.Snout,
-            Handler = async _ =>
-            {
-                var owner = (dialogs as DialogService)?.Owner;
-                if (owner is null || pluginSource.Contains(Sha256Id))
-                {
-                    if (pluginSource.Contains(Sha256Id))
-                        vm.StatusText = "Плагин «Checksum» уже установлен";
-                    return;
-                }
-                if (!await PluginDialogs.ShowInstallAsync(owner, "Checksum"))
-                    return;
-                // КЛИЕНТСКАЯ ДЕМО-ЗАМЕНА: пока нет бэкенда плагинов (фаза 1), «установка» просто
-                // регистрирует встроенную демо-команду. С PluginManager здесь будет запрос на сервер.
-                pluginSource.Add(CreateSha256Command(vm, dialogs));
-                registry.NotifyChanged();
-                vm.StatusText = "Плагин «Checksum» установлен — команда «Посчитать SHA-256» в меню файла";
-            },
-        });
+            var folder = PluginsFolder();
+            try { Directory.CreateDirectory(folder); } catch { /* ошибку покажет FolderOpener */ }
+            vm.StatusText = FolderOpener.Open(folder) ? "Открыта папка плагинов: " + folder : "Не удалось открыть папку: " + folder;
+            return Task.CompletedTask;
+        }, "Line.Archive", null, null, "plugin", "плагин", "расширение", "папка"));
+        registry.Register(Make("plugin.refresh", "Обновить список плагинов", "Плагины", async _ =>
+        {
+            var changed = await vm.PluginSource.RefreshAsync();
+            vm.StatusText = changed ? $"Команд плагинов: {vm.PluginSource.Commands.Count}" : "Список плагинов не изменился";
+        }, "Line.Refresh", null, null, "plugin", "плагин", "перечитать", "refresh"));
 
-        registry.AddSource(pluginSource);
         registry.AddSource(new ProfileConnectSource(vm));
     }
 
-    /// <summary>
-    /// КЛИЕНТСКАЯ ДЕМО-ЗАМЕНА плагинной команды (до бэкенда плагинов, фаза 1): скачивает файл во временный файл
-    /// через API-клиент, считает SHA-256 и показывает хеш. Настоящий плагин сделает это на сервере.
-    /// </summary>
-    public static AppCommand CreateSha256Command(MainWindowViewModel vm, IDialogService dialogs) => new()
+    /// <summary>Папка плагинов Backend: &lt;данные сервера&gt;/RemoteFileManager/plugins (правило Core.Utils.AppPaths).</summary>
+    public static string PluginsFolder()
     {
-        Id = Sha256Id,
-        Title = "Посчитать SHA-256",
-        Category = "Плагин: Checksum",
-        Keywords = new[] { "sha256", "хеш", "hash", "контрольная сумма", "checksum" },
-        Context = AppCommand.FileContext,
-        Source = "Checksum (демо, клиент)",
-        IconKey = "Line.Code",
-        DisabledReason = ctx =>
-            !vm.Browser.IsBound ? NotBound
-            : (ctx?.Target ?? vm.Browser.SelectedItem) is FileItem { IsDirectory: false } ? null
-            : "Выберите файл",
-        Handler = async ctx =>
-        {
-            if ((ctx.Target ?? vm.Browser.SelectedItem) is not FileItem { IsDirectory: false } file)
-                return;
-            var tmp = Path.GetTempFileName();
-            try
-            {
-                vm.StatusText = $"Считаем SHA-256: {file.Name}…";
-                await vm.ApiClient.DownloadFileAsync(vm.Browser.ConnectionId, file.FullPath, tmp);
-                await using var stream = File.OpenRead(tmp);
-                var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream)).ToLowerInvariant();
-                vm.StatusText = $"SHA-256 {file.Name}: {hash[..12]}…";
-                if ((dialogs as DialogService)?.Owner is { } owner)
-                    await PluginDialogs.ShowHashAsync(owner, file.Name, hash);
-            }
-            catch (Exception ex)
-            {
-                vm.StatusText = "Не удалось посчитать SHA-256: " + ex.Message;
-            }
-            finally
-            {
-                try { File.Delete(tmp); } catch { /* временный файл — лучшее усилие */ }
-            }
-        },
-    };
+        var basePath = Environment.GetEnvironmentVariable("REMOTE_FILE_MANAGER_DATA_DIR") is { Length: > 0 } custom
+            ? custom
+            : Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        if (string.IsNullOrWhiteSpace(basePath))
+            basePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Path.Combine(basePath, "RemoteFileManager", "plugins");
+    }
 
     private static Task Run(IRelayCommand command, object? parameter = null)
     {

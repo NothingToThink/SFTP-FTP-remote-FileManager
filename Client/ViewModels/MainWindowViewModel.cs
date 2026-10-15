@@ -83,17 +83,20 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private readonly UiHubClient? _hub;
 
-    /// <summary>Команды плагинов для подменю «Плагины» (кеш GET /commands, обновляется при (пере)подключении канала).</summary>
-    public ObservableCollection<PluginCommand> PluginCommands { get; } = new();
-
-    public bool HasPluginCommands => PluginCommands.Count > 0;
+    /// <summary>Команды плагинов с сервера (GET /commands): в палитре и в контекстном меню файла.</summary>
+    public PluginCommandSource PluginSource { get; }
 
     public MainWindowViewModel(ClientSettings settings, IServerLauncher launcher, IDialogService dialogs,
         UiHubClient? hub = null)
     {
         _settings = settings;
         _hub = hub;
-        PluginCommands.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasPluginCommands));
+        PluginSource = new PluginCommandSource(
+            async ct => await Api.GetCommandsAsync(ct),
+            ExecutePluginCommand,
+            () => Commands.NotifyChanged());
+        if (hub is not null)
+            hub.Connected += () => Dispatcher.UIThread.Post(() => _ = PluginSource.RefreshAsync());
         _launcher = launcher;
         _dialogs = dialogs;
         _theme = new ThemeService(settings);
@@ -122,7 +125,8 @@ public partial class MainWindowViewModel : ViewModelBase
             NotifyPanel();
         };
         _clock.Tick += (_, _) => UpdateClock();
-        CommandPalette = new CommandPaletteViewModel(Commands);
+        CommandPalette = new CommandPaletteViewModel(Commands) { Opening = () => _ = PluginSource.RefreshAsync() };
+        Commands.AddSource(PluginSource);
         BuiltInCommands.Register(Commands, this, dialogs);
 
         _ = InitializeAsync();
@@ -340,7 +344,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
             if (_hub is not null)
                 await _hub.StopAsync();
-            PluginCommands.Clear();
+            PluginSource.Clear();
 
             Browser.Reset();
             _activeConnections.Clear();
@@ -352,6 +356,14 @@ public partial class MainWindowViewModel : ViewModelBase
             if (ServerStatus == ServerStatus.Reachable)
                 await RefreshProfilesCommand.ExecuteAsync(null);
         });
+    }
+
+    /// <summary>«Синхронизация»: вход на свой сервер и обмен профилями. После «Забрать» список хостов обновляется сразу.</summary>
+    [RelayCommand]
+    private async Task OpenSync()
+    {
+        var sync = new SyncViewModel(Api, _settings, () => RefreshProfilesCommand.ExecuteAsync(null));
+        await _dialogs.ShowSyncAsync(sync);
     }
 
     /// <summary>Туннели доступны только для SFTP/SSH-подключений.</summary>
@@ -380,35 +392,9 @@ public partial class MainWindowViewModel : ViewModelBase
         await ApplyServerUrlCommand.ExecuteAsync(null);
     }
 
-    /// <summary>
-    /// Обновляет кеш команд из GET /commands. Список заменяется, только если он изменился: пункты
-    /// открытого подменю не должны пересоздаваться зря. Привязан к пункту «Плагины» (родитель подменю).
-    /// </summary>
-    [RelayCommand]
-    private async Task LoadPluginCommands()
-    {
-        try
-        {
-            var commands = await Api.GetCommandsAsync();
-            if (commands.Select(c => (c.Id, c.Title)).SequenceEqual(PluginCommands.Select(c => (c.Id, c.Title))))
-                return;
-
-            PluginCommands.Clear();
-            foreach (var command in commands)
-                PluginCommands.Add(command);
-        }
-        catch
-        {
-            // подменю «Плагины» — необязательная часть: при ошибке остаётся прежний кеш
-        }
-    }
-
     /// <summary>Запускает команду плагина над активной панелью. Результат не ждём: плагин сам откроет диалоги.</summary>
-    [RelayCommand]
-    private async Task ExecutePluginCommand(PluginCommand? command)
+    private async Task ExecutePluginCommand(PluginCommand command, CommandContext ctx)
     {
-        if (command is null)
-            return;
         var sessionId = _hub?.ConnectionId;
         if (_hub is null || sessionId is null)
         {
@@ -418,7 +404,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var connectionId = Browser.IsBound ? Browser.ConnectionId : (Guid?)null;
         var currentPath = Browser.IsBound ? Browser.CurrentPath : null;
-        var selected = Browser.SelectedItem is { } item ? new[] { item.FullPath } : [];
+        var selected = Browser.SelectedItems.Count > 0 ? Browser.SelectedItems.Select(i => i.FullPath).ToArray()
+            : (ctx.Target ?? Browser.SelectedItem) is FileItem item ? new[] { item.FullPath } : [];
 
         try
         {

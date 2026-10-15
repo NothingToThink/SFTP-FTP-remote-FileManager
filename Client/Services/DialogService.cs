@@ -67,6 +67,9 @@ public interface IDialogService
     /// <summary>«Заменить файл?» — на сервере уже есть элемент с таким именем.</summary>
     Task<bool> ConfirmOverwriteAsync(string name) => Task.FromResult(false);
 
+    /// <summary>Окно «Синхронизация» (вход на свой сервер, обмен профилями). Реализация по умолчанию — ничего не показывает.</summary>
+    Task ShowSyncAsync(SyncViewModel viewModel) => Task.CompletedTask;
+
     /// <summary>Немодальное окно туннелей (живёт рядом с главным окном).</summary>
     void ShowTunnelsWindow(TunnelsViewModel viewModel);
 
@@ -377,6 +380,14 @@ public class DialogService : IDialogService
         n = Math.Abs(n);
         if (n % 100 is >= 11 and <= 14) return many;
         return (n % 10) switch { 1 => one, 2 or 3 or 4 => few, _ => many };
+    }
+
+    public async Task ShowSyncAsync(SyncViewModel viewModel)
+    {
+        if (Owner is null)
+            return;
+
+        await new Views.SyncWindow { DataContext = viewModel }.ShowDialog<object?>(Owner);
     }
 
     public void ShowTunnelsWindow(TunnelsViewModel viewModel)

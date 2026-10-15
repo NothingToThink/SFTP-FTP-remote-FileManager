@@ -70,18 +70,6 @@ public static class PaletteShots
             Save(win, dir, $"F-palette-nothing-{name}");
             vm.CommandPalette.Close();
             win.Close();
-
-            var dlg = new PluginInstallDialog("Checksum") { RequestedThemeVariant = theme };
-            dlg.Show();
-            Pump(300);
-            Save(dlg, dir, $"F-plugin-install-{name}");
-            dlg.Close();
-
-            var hash = new HashResultDialog("index.html", "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08") { RequestedThemeVariant = theme };
-            hash.Show();
-            Pump(300);
-            Save(hash, dir, $"F-plugin-hash-{name}");
-            hash.Close();
         }
         Console.WriteLine("Готово: " + dir);
     }

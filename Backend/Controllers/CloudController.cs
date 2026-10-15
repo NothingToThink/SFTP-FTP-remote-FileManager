@@ -1,8 +1,12 @@
 using Core.Interfaces.Manager;
 using Microsoft.AspNetCore.Mvc;
 using Core.Interfaces.ServerClient;
+using Core.Models.Credentials;
 
 namespace Backend.Controllers;
+
+/// <summary>Credentials plus the address of the user's own sync server (optional: keeps the current one).</summary>
+public record CloudAuthRequest(string Username, string Password, string? ServerUrl = null);
 
 /// <summary>
 /// API controller handling cloud synchronization operations, including authentication,
@@ -37,48 +41,124 @@ public class CloudProfilesController : ControllerBase
     }
 
     /// <summary>
-    /// Authenticates a user against the cloud service and establishes an active cloud session.
+    /// Reports the current cloud session: sync server address, whether a user is signed in and who.
+    /// The token itself is never returned.
     /// </summary>
-    /// <param name="request">The authentication payload containing user credentials.</param>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns>An <see cref="IActionResult"/> indicating authentication success or failure.</returns>
-    [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] ServerAuthRequest request, CancellationToken ct)
+    [HttpGet("session")]
+    public IActionResult GetSession()
+        => Ok(new { serverUrl = _sessionService.ServerUrl, loggedIn = _sessionService.IsLoggedIn, username = _sessionService.Username });
+
+    /// <summary>Drops the cloud session (token and user); the chosen server address is kept.</summary>
+    [HttpPost("logout")]
+    public IActionResult Logout()
     {
-        _logger.LogInformation("Logging in to the cloud.");
-
-        var token = await _client.LoginAsync(request.Username, request.Password, ct);
-        if (string.IsNullOrEmpty(token))
-        {
-            _logger.LogWarning("Cloud login failed for username {Username}.", request.Username);
-            return Unauthorized("Invalid cloud username or password.");
-        }
-
-        _sessionService.AccessToken = token;
-        _logger.LogInformation("Cloud login successful for user {Username}.", request.Username);
-        return Ok(new { Message = "Cloud login successful" });
+        _sessionService.AccessToken = null;
+        _sessionService.Username = null;
+        return NoContent();
     }
 
     /// <summary>
-    /// Registers a new user account on the cloud service.
+    /// Authenticates a user against the user's own sync server and establishes an active cloud session.
     /// </summary>
-    /// <param name="request">The registration payload containing credentials.</param>
+    /// <param name="request">Credentials and, optionally, the sync server address.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns>An <see cref="IActionResult"/> indicating whether the account was registered successfully.</returns>
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] CloudAuthRequest request, CancellationToken ct)
+    {
+        _logger.LogInformation("Logging in to the cloud.");
+
+        if (!TryApplyServer(request.ServerUrl, out var error))
+            return BadRequest(new { error });
+
+        try
+        {
+            var token = await _client.LoginAsync(request.Username, request.Password, ct);
+            if (string.IsNullOrEmpty(token))
+            {
+                _logger.LogWarning("Cloud login failed for username {Username}.", request.Username);
+                return Unauthorized("Invalid cloud username or password.");
+            }
+
+            _sessionService.AccessToken = token;
+            _sessionService.Username = request.Username;
+            _logger.LogInformation("Cloud login successful for user {Username}.", request.Username);
+            return Ok(new { Message = "Cloud login successful", serverUrl = _sessionService.ServerUrl, username = request.Username });
+        }
+        catch (Exception e) when (IsSyncFailure(e, ct))
+        {
+            return SyncFailure(e);
+        }
+    }
+
+    /// <summary>
+    /// Registers a new user account on the user's own sync server.
+    /// </summary>
+    /// <param name="request">Credentials and, optionally, the sync server address.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] ServerAuthRequest request, CancellationToken ct)
+    public async Task<IActionResult> Register([FromBody] CloudAuthRequest request, CancellationToken ct)
     {
         _logger.LogInformation("Registering a user in the cloud.");
 
-        var success = await _client.RegisterAsync(request.Username, request.Password, ct);
-        if (!success)
+        if (!TryApplyServer(request.ServerUrl, out var error))
+            return BadRequest(new { error });
+
+        try
         {
-            _logger.LogWarning("Failed to register user {Username} in the cloud.", request.Username);
-            return BadRequest("Failed to register in the cloud (possibly because the username is already taken).");
+            var success = await _client.RegisterAsync(request.Username, request.Password, ct);
+            if (!success)
+            {
+                _logger.LogWarning("Failed to register user {Username} in the cloud.", request.Username);
+                return BadRequest("Failed to register in the cloud (possibly because the username is already taken).");
+            }
+
+            _logger.LogInformation("User {Username} registered successfully in the cloud.", request.Username);
+            return Ok("User registered successfully.");
+        }
+        catch (Exception e) when (IsSyncFailure(e, ct))
+        {
+            return SyncFailure(e);
+        }
+    }
+
+    // A new address means a different server: the old token is worthless there.
+    private bool TryApplyServer(string? serverUrl, out string error)
+    {
+        error = string.Empty;
+        if (string.IsNullOrWhiteSpace(serverUrl))
+            return true;
+
+        if (!Uri.TryCreate(serverUrl.Trim(), UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("http" or "https"))
+        {
+            error = "Sync server address must start with http:// or https://.";
+            return false;
         }
 
-        _logger.LogInformation("User {Username} registered successfully in the cloud.", request.Username);
-        return Ok("User registered successfully.");
+        var normalized = uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        if (!string.Equals(normalized, _sessionService.ServerUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            _sessionService.AccessToken = null;
+            _sessionService.Username = null;
+            _sessionService.ServerUrl = normalized;
+        }
+        return true;
+    }
+
+    private static bool IsSyncFailure(Exception e, CancellationToken ct)
+        => e is HttpRequestException or UnauthorizedAccessException || (e is TaskCanceledException && !ct.IsCancellationRequested);
+
+    private ObjectResult SyncFailure(Exception e)
+    {
+        if (e is UnauthorizedAccessException)
+        {
+            // Token expired or revoked on the sync server: the next call must ask to sign in again.
+            _sessionService.AccessToken = null;
+            return StatusCode(StatusCodes.Status401Unauthorized, new { error = "Cloud session expired." });
+        }
+
+        _logger.LogWarning(e, "Sync server is unreachable.");
+        return StatusCode(StatusCodes.Status502BadGateway, new { error = "Sync server is unreachable." });
     }
 
     /// <summary>
@@ -97,7 +177,15 @@ public class CloudProfilesController : ControllerBase
             return Unauthorized("Please sign in to the cloud first.");
         }
 
-        var remoteProfiles = await _client.GetProfilesAsync(_sessionService.AccessToken!, ct);
+        List<SavedProfile> remoteProfiles;
+        try
+        {
+            remoteProfiles = await _client.GetProfilesAsync(_sessionService.AccessToken!, ct);
+        }
+        catch (Exception e) when (IsSyncFailure(e, ct))
+        {
+            return SyncFailure(e);
+        }
         var savedIds = new List<Guid>();
 
         foreach (var profile in remoteProfiles)
@@ -107,7 +195,7 @@ public class CloudProfilesController : ControllerBase
         }
 
         _logger.LogInformation("Downloaded and saved {ProfileCount} profiles locally.", savedIds.Count);
-        return Ok(new { Message = $"Downloaded and saved {savedIds.Count} profiles locally." });
+        return Ok(new { Message = $"Downloaded and saved {savedIds.Count} profiles locally.", count = savedIds.Count });
     }
 
     /// <summary>
@@ -132,8 +220,15 @@ public class CloudProfilesController : ControllerBase
         var localProfile = _profileManager.GetProfile(id);
         if (localProfile != null)
         {
-            var uploaded = await _client.UploadProfileAsync(_sessionService.AccessToken!, localProfile, ct);
-            if (uploaded != null) isUploaded = true;
+            try
+            {
+                var uploaded = await _client.UploadProfileAsync(_sessionService.AccessToken!, localProfile, ct);
+                if (uploaded != null) isUploaded = true;
+            }
+            catch (Exception e) when (IsSyncFailure(e, ct))
+            {
+                return SyncFailure(e);
+            }
         }
 
         if (!isUploaded)
