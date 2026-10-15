@@ -1,0 +1,162 @@
+<dlg:DialogWindowBase xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FileManagerClient.ViewModels;assembly=FileManagerClient"
+        xmlns:dlg="clr-namespace:FileManagerClient.Views.Dialogs"
+        xmlns:pig="using:FileManagerClient.Controls"
+        x:Class="FileManagerClient.Views.SyncWindow"
+        x:DataType="vm:SyncViewModel"
+        Title="Синхронизация">
+
+    <dlg:DialogWindowBase.Styles>
+        <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0,4"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.AccentStrong}"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style Selector="Expander /template/ Border#ToggleContentBorder">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="TextBlock.fielderr">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Error}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </dlg:DialogWindowBase.Styles>
+
+    <Border Classes="dialog" Margin="20" Width="600" Padding="0" BoxShadow="0 8 32 0 #40000000">
+        <StackPanel Margin="28,22,28,24" Spacing="16">
+
+            <!-- Заголовок -->
+            <StackPanel Spacing="2">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <PathIcon Data="{StaticResource IconSync}" Width="20" Height="20" Foreground="{DynamicResource Brush.Accent}"/>
+                    <TextBlock Classes="h2" Text="Синхронизация"/>
+                </StackPanel>
+                <TextBlock Classes="secondary" Text="Ваш сервер, ваши доступы" Margin="30,0,0,0"/>
+            </StackPanel>
+
+            <!-- Не вошли: адрес, логин, пароль -->
+            <StackPanel Spacing="14" IsVisible="{Binding IsSignedOut}">
+                <StackPanel Spacing="6">
+                    <TextBlock Classes="secondary" Text="Адрес вашего сервера"/>
+                    <TextBox Name="ServerBox" AutomationProperties.AutomationId="SyncServerBox"
+                             Text="{Binding ServerUrl}" PlaceholderText="https://sync.example.org:5227"
+                             FontFamily="{StaticResource Font.Mono}" FontSize="17" Padding="12,10"/>
+                </StackPanel>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <StackPanel Grid.Column="0" Spacing="6">
+                        <TextBlock Classes="secondary" Text="Логин"/>
+                        <TextBox Name="LoginBox" AutomationProperties.AutomationId="SyncLoginBox"
+                                 Text="{Binding Username}" FontFamily="{StaticResource Font.Mono}" FontSize="14"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="6">
+                        <TextBlock Classes="secondary" Text="Пароль"/>
+                        <TextBox Name="PasswordBox" AutomationProperties.AutomationId="SyncPasswordBox"
+                                 Text="{Binding Password}" PasswordChar="•"/>
+                    </StackPanel>
+                </Grid>
+                <TextBlock Classes="fielderr" Text="{Binding FieldError}" IsVisible="{Binding HasFieldError}"
+                           AutomationProperties.AutomationId="SyncFieldError"/>
+            </StackPanel>
+
+            <!-- Вошли: где и под кем -->
+            <Border Classes="card" Padding="16,14" Background="{DynamicResource Brush.SurfaceAlt}" IsVisible="{Binding IsSignedIn}">
+                <StackPanel Spacing="6">
+                    <TextBlock FontSize="15" Text="Вы вошли на" Foreground="{DynamicResource Brush.TextMuted}"/>
+                    <SelectableTextBlock Name="SignedInServerText" AutomationProperties.AutomationId="SyncSignedInServer"
+                                         Text="{Binding SignedInServerLabel}" FontFamily="{StaticResource Font.Mono}"
+                                         FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock FontSize="15" Text="как" Foreground="{DynamicResource Brush.TextMuted}"/>
+                        <TextBlock Name="SignedInUserText" AutomationProperties.AutomationId="SyncSignedInUser"
+                                   Text="{Binding SignedInUser}" FontFamily="{StaticResource Font.Mono}" FontSize="15"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Предупреждение про http -->
+            <Border Name="InsecureWarning" Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="8" Padding="12,9"
+                    BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="1"
+                    IsVisible="{Binding IsInsecure}" AutomationProperties.AutomationId="SyncInsecureWarning">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Border Width="20" Height="20" CornerRadius="10" Background="{DynamicResource Brush.Warning}" VerticalAlignment="Center">
+                        <TextBlock Text="!" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.Surface}"/>
+                    </Border>
+                    <TextBlock Text="Соединение не зашифровано — используйте https на своём сервере"
+                               FontSize="14" TextWrapping="Wrap" MaxWidth="500" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Brush.Text}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Состояния: загрузка / ошибка / готово / пусто -->
+            <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="12" Padding="14,12"
+                    IsVisible="{Binding HasPanel}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                    <Panel Grid.Column="0" Width="84" Height="64" VerticalAlignment="Top">
+                        <pig:PigMascot State="Connecting" Width="84" Height="64" IsVisible="{Binding IsBusy}"/>
+                        <pig:PigMascot State="Error" Width="84" Height="64" IsVisible="{Binding IsErrorPanel}"/>
+                        <pig:PigMascot State="TransferDone" Width="84" Height="64" IsVisible="{Binding IsDonePanel}"/>
+                        <pig:PigMascot State="Empty" Width="84" Height="64" IsVisible="{Binding IsEmptyPanel}"/>
+                    </Panel>
+                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                        <!-- загрузка -->
+                        <StackPanel Spacing="8" IsVisible="{Binding IsBusy}">
+                            <TextBlock Name="SyncBusyText" Text="{Binding BusyText}" FontSize="15" TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="SyncBusyText"/>
+                            <ProgressBar Minimum="0" Maximum="{Binding ProgressMax}" Value="{Binding ProgressValue}"
+                                         IsVisible="{Binding ShowProgress}"/>
+                        </StackPanel>
+                        <!-- ошибка / готово / пусто -->
+                        <StackPanel Spacing="4" IsVisible="{Binding IsIdle}">
+                            <TextBlock Name="SyncTitleText" Text="{Binding Title}" FontWeight="SemiBold" FontSize="16" TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="SyncTitle"/>
+                            <TextBlock Name="SyncBodyText" Text="{Binding Text}" FontSize="15" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Brush.TextMuted}"
+                                       AutomationProperties.AutomationId="SyncText"/>
+                            <Expander Header="Подробнее" IsVisible="{Binding HasDetails}" Padding="0,4,0,0">
+                                <SelectableTextBlock Text="{Binding Details}" Classes="mono" FontSize="13" TextWrapping="Wrap"
+                                                     Foreground="{DynamicResource Brush.TextMuted}"/>
+                            </Expander>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Кнопки: не вошли -->
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" IsVisible="{Binding IsSignedOut}">
+                <Button Name="CreateAccountButton" Classes="tool" Content="Создать аккаунт" MinWidth="150"
+                        HorizontalContentAlignment="Center" IsEnabled="{Binding IsIdle}"
+                        AutomationProperties.AutomationId="SyncCreateAccountButton"
+                        Command="{Binding CreateAccountCommand}"/>
+                <Button Name="SignInButton" Classes="primary" Content="Войти" MinWidth="130" IsDefault="True"
+                        HorizontalContentAlignment="Center" IsEnabled="{Binding IsIdle}"
+                        AutomationProperties.AutomationId="SyncSignInButton"
+                        Command="{Binding SignInCommand}"/>
+            </StackPanel>
+
+            <!-- Кнопки: вошли -->
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsSignedIn}">
+                <Button Name="UploadButton" Classes="primary" Content="Отправить профили на сервер"
+                        IsEnabled="{Binding IsIdle}" AutomationProperties.AutomationId="SyncUploadButton"
+                        Command="{Binding UploadCommand}"/>
+                <Button Name="DownloadButton" Classes="tool" Content="Забрать профили с сервера"
+                        IsEnabled="{Binding IsIdle}" AutomationProperties.AutomationId="SyncDownloadButton"
+                        Command="{Binding DownloadCommand}"/>
+            </StackPanel>
+
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="0" Name="SignOutButton" Classes="tool" Content="Выйти" MinWidth="110"
+                        HorizontalContentAlignment="Center" IsVisible="{Binding IsSignedIn}"
+                        IsEnabled="{Binding IsIdle}" AutomationProperties.AutomationId="SyncSignOutButton"
+                        Command="{Binding SignOutCommand}"/>
+                <Button Grid.Column="2" Name="CloseButton" Classes="tool" Content="Закрыть" IsCancel="True"
+                        MinWidth="110" HorizontalContentAlignment="Center"
+                        AutomationProperties.AutomationId="SyncCloseButton" Click="CloseClick"/>
+            </Grid>
+        </StackPanel>
+    </Border>
+</dlg:DialogWindowBase>

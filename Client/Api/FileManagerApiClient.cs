@@ -23,6 +23,18 @@ public interface IForwardingApi
         CancellationToken ct = default);
 }
 
+/// <summary>Операции синхронизации; выделены интерфейсом, чтобы DevAudit и тесты подменяли транспорт.</summary>
+public interface ISyncApi
+{
+    Task<CloudSession> GetCloudSessionAsync(CancellationToken ct = default);
+    Task CloudLoginAsync(string serverUrl, string username, string password, CancellationToken ct = default);
+    Task CloudRegisterAsync(string serverUrl, string username, string password, CancellationToken ct = default);
+    Task CloudLogoutAsync(CancellationToken ct = default);
+    Task CloudUploadProfileAsync(Guid profileId, CancellationToken ct = default);
+    Task<int> CloudDownloadProfilesAsync(CancellationToken ct = default);
+    Task<List<Guid>> GetProfileIdsAsync(CancellationToken ct = default);
+}
+
 /// <summary>
 /// Типизированный клиент Backend API.
 ///
@@ -33,7 +45,7 @@ public interface IForwardingApi
 ///  - ответы — camelCase, кроме HostProfile внутри профиля (PascalCase + "$type");
 ///  - ошибки приходят как {"error": "..."} с кодами 400/404/500.
 /// </summary>
-public class FileManagerApiClient : IForwardingApi, IDisposable
+public class FileManagerApiClient : IForwardingApi, ISyncApi, IDisposable
 {
     private readonly HttpClient _http;
 
@@ -239,6 +251,29 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
         await EnsureSuccessAsync(resp, ct);
         progress?.Report(new FileInfo(localFilePath).Length);
     }
+
+    // --- Синхронизация профилей (сервер синхронизации — свой у пользователя) ---
+
+    public Task<CloudSession> GetCloudSessionAsync(CancellationToken ct = default)
+        => GetAsync<CloudSession>("cloud/session", ct);
+
+    /// <summary>Вход на сервер синхронизации; <paramref name="serverUrl"/> запоминается на Backend. Пароль не логируется.</summary>
+    public Task CloudLoginAsync(string serverUrl, string username, string password, CancellationToken ct = default)
+        => PostAsync("cloud/login", new { username, password, serverUrl }, ct);
+
+    public Task CloudRegisterAsync(string serverUrl, string username, string password, CancellationToken ct = default)
+        => PostAsync("cloud/register", new { username, password, serverUrl }, ct);
+
+    public Task CloudLogoutAsync(CancellationToken ct = default)
+        => PostAsync("cloud/logout", ct);
+
+    /// <summary>Отправляет один локальный профиль на сервер синхронизации.</summary>
+    public Task CloudUploadProfileAsync(Guid profileId, CancellationToken ct = default)
+        => PostAsync($"cloud/upload/{profileId}", ct);
+
+    /// <summary>Забирает все профили с сервера в локальное хранилище; возвращает их число.</summary>
+    public async Task<int> CloudDownloadProfilesAsync(CancellationToken ct = default)
+        => (await GetAsync<CloudDownloadResult>("cloud/download", ct)).Count;
 
     // --- Команды плагинов ---
 

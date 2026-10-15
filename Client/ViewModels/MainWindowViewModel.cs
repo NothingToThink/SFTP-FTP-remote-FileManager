@@ -354,6 +354,14 @@ public partial class MainWindowViewModel : ViewModelBase
         });
     }
 
+    /// <summary>«Синхронизация»: вход на свой сервер и обмен профилями. После «Забрать» список хостов обновляется сразу.</summary>
+    [RelayCommand]
+    private async Task OpenSync()
+    {
+        var sync = new SyncViewModel(Api, _settings, () => RefreshProfilesCommand.ExecuteAsync(null));
+        await _dialogs.ShowSyncAsync(sync);
+    }
+
     /// <summary>Туннели доступны только для SFTP/SSH-подключений.</summary>
     public bool IsTunnelsAvailable => Browser.IsBound && Browser.BoundProtocol == Models.Protocol.Sftp;
 

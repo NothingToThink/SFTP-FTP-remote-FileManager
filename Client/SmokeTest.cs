@@ -76,6 +76,22 @@ public static class SmokeTest
         // Профили
         Step("GET /profiles (список id)", () => api.GetProfileIdsAsync().Wait());
 
+        // Синхронизация: без входа сессия пуста, а скачивание отвечает 401 (сервер синхронизации не нужен)
+        Step("GET /cloud/session (читается без сервера синхронизации)", () => api.GetCloudSessionAsync().Wait());
+        Step("GET /cloud/download без входа → 401", () =>
+        {
+            api.CloudLogoutAsync().Wait();
+            try
+            {
+                api.CloudDownloadProfilesAsync().Wait();
+            }
+            catch (AggregateException ae) when (ae.InnerException is ApiException { StatusCode: 401 })
+            {
+                return;
+            }
+            throw new Exception("ожидали 401 без входа в облако");
+        });
+
         // Команды плагинов (список может быть пустым, если плагины не установлены)
         var commands = new List<PluginCommand>();
         Step("GET /commands (список команд плагинов)", () =>
