@@ -64,6 +64,12 @@ public static partial class Program
             return;
         }
 
+        if (args.Length >= 2 && args[0] is "--sync-shots" or "--sync-e2e")
+        {
+            SyncScenarios.Run(args);
+            return;
+        }
+
         if (args.Contains("--pig-gallery"))
         {
             PigGallery.Run(args.SkipWhile(a => a != "--out").Skip(1).FirstOrDefault());

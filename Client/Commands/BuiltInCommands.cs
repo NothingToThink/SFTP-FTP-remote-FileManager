@@ -100,6 +100,8 @@ public static class BuiltInCommands
         // --- Приложение ---
         registry.Register(Make("app.theme", "Переключить тему", "Приложение", _ => Run(vm.ToggleThemeCommand), "Line.Image",
             null, null, "тёмная", "светлая", "dark", "light", "оформление"));
+        registry.Register(Make("app.sync", "Синхронизация профилей…", "Приложение", _ => Run(vm.OpenSyncCommand),
+            "Line.Refresh", null, null, "sync", "облако", "сервер синхронизации", "отправить профили", "забрать профили", "войти"));
         registry.Register(Make("app.tunnels", "Туннели", "Приложение", _ => Run(vm.OpenTunnelsCommand), "Line.ChevronRight",
             null, _ => !b.IsBound ? NotBound : vm.IsTunnelsAvailable ? null : "Туннели доступны только для SFTP",
             "проброс", "порты", "ssh", "tunnel", "forward"));
