@@ -55,8 +55,12 @@ public partial class CommandPaletteViewModel : ViewModelBase
     public bool IsEmptyResult => Items.Count == 0;
     public string PlaceholderText => Placeholder;
 
+    /// <summary>Вызывается при открытии палитры (например, перечитать список плагинных команд).</summary>
+    public Action? Opening { get; init; }
+
     public void Open()
     {
+        Opening?.Invoke();
         Query = string.Empty;
         Rebuild();
         IsOpen = true;

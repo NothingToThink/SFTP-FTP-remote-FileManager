@@ -424,11 +424,6 @@
                                 <MenuItem Header="Свойства" Command="{Binding Browser.ShowInfoCommand}"/>
                                 <Separator/>
                                 <MenuItem Header="Удалить" InputGesture="Delete" Command="{Binding Browser.DeleteCommand}"/>
-                                <!-- Подменю плагинов: пункты строятся в коде (MainWindow.RebuildPluginsMenu) из кеша команд -->
-                                <Separator Name="PluginsSeparator" IsVisible="{Binding HasPluginCommands}"/>
-                                <MenuItem Name="PluginsMenuItem" Header="Плагины" Command="{Binding LoadPluginCommandsCommand}"
-                                          AutomationProperties.AutomationId="PluginsMenuItem"
-                                          IsVisible="{Binding HasPluginCommands}"/>
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>

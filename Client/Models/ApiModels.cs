@@ -221,6 +221,7 @@ public class PluginCommand
     [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
     [JsonPropertyName("title")] public string Title { get; set; } = string.Empty;
     [JsonPropertyName("pluginId")] public string PluginId { get; set; } = string.Empty;
+    [JsonPropertyName("pluginName")] public string? PluginName { get; set; }
 }
 
 /// <summary>Сессия синхронизации на локальном Backend: адрес своего сервера и кто вошёл (токен наружу не отдаётся).</summary>
