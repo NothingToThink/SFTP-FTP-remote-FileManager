@@ -1,0 +1,4 @@
+# Автоматический HTTPS (Let's Encrypt) для домена из SWINE_DOMAIN
+{$SWINE_DOMAIN} {
+	reverse_proxy server:8080
+}
