@@ -84,9 +84,9 @@ public class CloudProfilesController : ControllerBase
             _logger.LogInformation("Cloud login successful for user {Username}.", request.Username);
             return Ok(new { Message = "Cloud login successful", serverUrl = _sessionService.ServerUrl, username = request.Username });
         }
-        catch (Exception e) when (IsUnreachable(e, ct))
+        catch (Exception e) when (IsSyncFailure(e, ct))
         {
-            return Unreachable(e);
+            return SyncFailure(e);
         }
     }
 
@@ -115,9 +115,9 @@ public class CloudProfilesController : ControllerBase
             _logger.LogInformation("User {Username} registered successfully in the cloud.", request.Username);
             return Ok("User registered successfully.");
         }
-        catch (Exception e) when (IsUnreachable(e, ct))
+        catch (Exception e) when (IsSyncFailure(e, ct))
         {
-            return Unreachable(e);
+            return SyncFailure(e);
         }
     }
 
@@ -145,11 +145,18 @@ public class CloudProfilesController : ControllerBase
         return true;
     }
 
-    private static bool IsUnreachable(Exception e, CancellationToken ct)
-        => e is HttpRequestException || (e is TaskCanceledException && !ct.IsCancellationRequested);
+    private static bool IsSyncFailure(Exception e, CancellationToken ct)
+        => e is HttpRequestException or UnauthorizedAccessException || (e is TaskCanceledException && !ct.IsCancellationRequested);
 
-    private ObjectResult Unreachable(Exception e)
+    private ObjectResult SyncFailure(Exception e)
     {
+        if (e is UnauthorizedAccessException)
+        {
+            // Token expired or revoked on the sync server: the next call must ask to sign in again.
+            _sessionService.AccessToken = null;
+            return StatusCode(StatusCodes.Status401Unauthorized, new { error = "Cloud session expired." });
+        }
+
         _logger.LogWarning(e, "Sync server is unreachable.");
         return StatusCode(StatusCodes.Status502BadGateway, new { error = "Sync server is unreachable." });
     }
@@ -175,9 +182,9 @@ public class CloudProfilesController : ControllerBase
         {
             remoteProfiles = await _client.GetProfilesAsync(_sessionService.AccessToken!, ct);
         }
-        catch (Exception e) when (IsUnreachable(e, ct))
+        catch (Exception e) when (IsSyncFailure(e, ct))
         {
-            return Unreachable(e);
+            return SyncFailure(e);
         }
         var savedIds = new List<Guid>();
 
@@ -218,9 +225,9 @@ public class CloudProfilesController : ControllerBase
                 var uploaded = await _client.UploadProfileAsync(_sessionService.AccessToken!, localProfile, ct);
                 if (uploaded != null) isUploaded = true;
             }
-            catch (Exception e) when (IsUnreachable(e, ct))
+            catch (Exception e) when (IsSyncFailure(e, ct))
             {
-                return Unreachable(e);
+                return SyncFailure(e);
             }
         }
 

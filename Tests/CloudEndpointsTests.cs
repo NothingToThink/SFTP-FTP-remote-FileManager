@@ -68,6 +68,18 @@ public class CloudEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Download_ExpiredToken_Returns401AndDropsSession()
+    {
+        var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/cloud/login",
+            new { username = "u", password = "p", serverUrl = "http://127.0.0.1:9" });
+        _server.Expired = true;
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/cloud/download")).StatusCode);
+        var session = await Json(await client.GetAsync("/cloud/session"));
+        Assert.False(session.GetProperty("loggedIn").GetBoolean());
+    }
+
+    [Fact]
     public async Task Logout_ClearsSession()
     {
         var client = _factory.CreateClient();
@@ -97,6 +109,7 @@ public class CloudEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     {
         private readonly List<SavedProfile> _profiles = new();
         public bool Down { get; set; }
+        public bool Expired { get; set; }
 
         private void Check()
         {
@@ -118,6 +131,7 @@ public class CloudEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
         public Task<List<SavedProfile>> GetProfilesAsync(string token, CancellationToken ct = default)
         {
             Check();
+            if (Expired) throw new UnauthorizedAccessException();
             return Task.FromResult(_profiles.ToList());
         }
 

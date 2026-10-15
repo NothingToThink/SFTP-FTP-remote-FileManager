@@ -27,6 +27,13 @@ public class ProfileServerClient : IProfileServerClient
         return new Uri(baseUri, path.TrimStart('/'));
     }
 
+    // An expired JWT must not look like "no profiles on the server".
+    private static void ThrowIfExpired(HttpResponseMessage response)
+    {
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            throw new UnauthorizedAccessException("Sync server rejected the session token.");
+    }
+
     public async Task<bool> RegisterAsync(string username, string password, CancellationToken ct = default)
     {
         var response = await _httpClient.PostAsJsonAsync(Url("/auth/register"), new ServerAuthRequest(username, password), ct);
@@ -48,6 +55,7 @@ public class ProfileServerClient : IProfileServerClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var response = await _httpClient.SendAsync(request, ct);
+        ThrowIfExpired(response);
         if (!response.IsSuccessStatusCode) return new List<SavedProfile>();
 
         var profiles = await response.Content.ReadFromJsonAsync<List<SavedProfile>>(cancellationToken: ct);
@@ -63,6 +71,7 @@ public class ProfileServerClient : IProfileServerClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var response = await _httpClient.SendAsync(request, ct);
+        ThrowIfExpired(response);
         if (!response.IsSuccessStatusCode) return null;
 
         return await response.Content.ReadFromJsonAsync<SavedProfile>(cancellationToken: ct);
