@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using FileManagerClient.Api;
 using FileManagerClient.ViewModels;
+using FileManagerClient.Views.Dialogs;
 
 namespace FileManagerClient.Services;
 
@@ -46,6 +47,26 @@ public interface IDialogService
     Task<string?> ShowInputBoxAsync(string prompt, string? value, string? placeholder, bool password)
         => Task.FromResult<string?>(null);
 
+    /// <summary>Выбор папки (куда скачать). Реализация по умолчанию — для заглушек: ничего не выбирает.</summary>
+    Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
+
+    // --- Диалоги волны 2D. Реализации по умолчанию — для заглушек в тестах/DevAudit (ничего не показывают). ---
+
+    /// <summary>Показать ошибку (свинка, текст, «Подробнее», кнопки). Результат — нажатое действие или null (Esc).</summary>
+    Task<UserErrorAction?> ShowErrorAsync(UserError error) => Task.FromResult<UserErrorAction?>(null);
+
+    /// <summary>«Знакомимся с сервером»: true — пользователь доверяет отпечатку.</summary>
+    Task<bool> ShowUnknownHostKeyAsync(string host, int port, string fingerprint) => Task.FromResult(false);
+
+    /// <summary>«Чужой запах!»: true — пользователь осознанно доверяет новому ключу (по умолчанию — отказ).</summary>
+    Task<bool> ShowHostKeyMismatchAsync(string host, int port, string? expected, string? presented) => Task.FromResult(false);
+
+    /// <summary>«Удалить 3 файла с сервера?» / «Это нельзя отменить.» Для одного элемента передайте его имя.</summary>
+    Task<bool> ConfirmDeleteAsync(int count, string? singleName = null, bool hasFolders = false) => Task.FromResult(false);
+
+    /// <summary>«Заменить файл?» — на сервере уже есть элемент с таким именем.</summary>
+    Task<bool> ConfirmOverwriteAsync(string name) => Task.FromResult(false);
+
     /// <summary>Немодальное окно туннелей (живёт рядом с главным окном).</summary>
     void ShowTunnelsWindow(TunnelsViewModel viewModel);
 
@@ -59,6 +80,12 @@ public class DialogService : IDialogService
 {
     public Window? Owner { get; set; }
 
+    /// <summary>
+    /// Адрес бэкенда для кнопки «Проверить подключение» в редакторе профиля.
+    /// Если не задан — берётся из сохранённых настроек клиента.
+    /// </summary>
+    public Func<string>? ServerUrlProvider { get; set; }
+
     public async Task<string?> PromptAsync(string title, string label, string defaultValue = "")
     {
         if (Owner is null)
@@ -71,7 +98,12 @@ public class DialogService : IDialogService
             MinWidth = 360,
         };
 
-        var (dialog, buttons) = BuildDialog(title, label, input);
+        // диалог «Настройки» (шестерёнка): рядом с адресом - глобальная «Уменьшить анимацию»
+        var reduce = title == "Настройки"
+            ? new CheckBox { Content = "Уменьшить анимацию", IsChecked = MotionSettings.ReduceMotion }
+            : null;
+        Control content = reduce is null ? input : new StackPanel { Spacing = 12, Children = { input, reduce } };
+        var (dialog, buttons) = BuildDialog(title, label, content);
         string? result = null;
 
         var ok = new Button { Content = "OK", Width = 90, IsDefault = true };
@@ -79,6 +111,7 @@ public class DialogService : IDialogService
         ok.Click += (_, _) =>
         {
             result = input.Text;
+            if (reduce is not null) MotionSettings.ReduceMotion = reduce.IsChecked == true;
             dialog.Close();
         };
         cancel.Click += (_, _) => dialog.Close();
@@ -249,6 +282,20 @@ public class DialogService : IDialogService
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
+    public async Task<string?> PickFolderAsync(string title)
+    {
+        if (Owner is null)
+            return null;
+
+        var folders = await Owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            SuggestedStartLocation = await Owner.StorageProvider.TryGetWellKnownFolderAsync(WellKnownFolder.Downloads),
+        });
+        return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+    }
+
     public async Task<string?> PickSaveFileAsync(string suggestedName)
     {
         if (Owner is null)
@@ -266,11 +313,70 @@ public class DialogService : IDialogService
         if (Owner is null)
             return false;
 
+        viewModel.Tester ??= new ApiConnectionTester(ServerUrlProvider ?? (() => ClientSettings.Load().ServerUrl));
         var window = new Views.ProfileEditWindow
         {
             DataContext = viewModel,
         };
         return await window.ShowDialog<bool>(Owner);
+    }
+
+    public async Task<UserErrorAction?> ShowErrorAsync(UserError error)
+    {
+        if (Owner is null)
+            return null;
+        return await new ErrorDialog(error).ShowDialog<UserErrorAction?>(Owner);
+    }
+
+    public async Task<bool> ShowUnknownHostKeyAsync(string host, int port, string fingerprint)
+    {
+        if (Owner is null)
+            return false;
+        return await HostKeyDialog.FirstMeet(host, port, fingerprint).ShowDialog<bool>(Owner);
+    }
+
+    public async Task<bool> ShowHostKeyMismatchAsync(string host, int port, string? expected, string? presented)
+    {
+        if (Owner is null)
+            return false;
+        return await HostKeyDialog.Mismatch(host, port, expected, presented).ShowDialog<bool>(Owner);
+    }
+
+    public async Task<bool> ConfirmDeleteAsync(int count, string? singleName = null, bool hasFolders = false)
+    {
+        if (Owner is null)
+            return false;
+        var (title, text) = DeleteTexts(count, singleName, hasFolders);
+        return await new ConfirmDialog(title, text, "Удалить", danger: true).ShowDialog<bool>(Owner);
+    }
+
+    public async Task<bool> ConfirmOverwriteAsync(string name)
+    {
+        if (Owner is null)
+            return false;
+        var (title, text) = OverwriteTexts(name);
+        return await new ConfirmDialog(title, text, "Заменить", danger: true).ShowDialog<bool>(Owner);
+    }
+
+    /// <summary>Тексты подтверждения удаления (без шуток, по таблице спеки). Публично для тестов и скриншотов.</summary>
+    public static (string Title, string Text) DeleteTexts(int count, string? singleName, bool hasFolders = false)
+    {
+        var title = count == 1 && !string.IsNullOrEmpty(singleName)
+            ? $"Удалить «{singleName}» с сервера?"
+            : $"Удалить {count} {RuPlural(count, "файл", "файла", "файлов")} с сервера?";
+        var text = hasFolders ? "Папки будут удалены вместе с содержимым. Это нельзя отменить." : "Это нельзя отменить.";
+        return (title, text);
+    }
+
+    public static (string Title, string Text) OverwriteTexts(string name)
+        => ($"Заменить «{name}»?", "На сервере уже есть элемент с таким именем. Старое содержимое будет потеряно.");
+
+    /// <summary>Склонение по числу: 1 файл, 2 файла, 5 файлов, 21 файл.</summary>
+    public static string RuPlural(int n, string one, string few, string many)
+    {
+        n = Math.Abs(n);
+        if (n % 100 is >= 11 and <= 14) return many;
+        return (n % 10) switch { 1 => one, 2 or 3 or 4 => few, _ => many };
     }
 
     public void ShowTunnelsWindow(TunnelsViewModel viewModel)

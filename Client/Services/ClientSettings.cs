@@ -13,6 +13,32 @@ public class ClientSettings
 
     public string ServerUrl { get; set; } = "http://127.0.0.1:5116";
 
+    /// <summary>Тема интерфейса: "light" или "dark". По умолчанию светлая.</summary>
+    public string Theme { get; set; } = "light";
+
+    /// <summary>Режим сервера: "auto" (по умолчанию), "bundled" (свой дочерний процесс) или "external".</summary>
+    public string ServerMode { get; set; } = "auto";
+
+    /// <summary>«Уменьшить анимацию»: остаётся только смена позы свинки, без движения.</summary>
+    public bool ReduceMotion { get; set; }
+
+    /// <summary>Папка данных клиента (логи сервера и т.п.).</summary>
+    public static string DataDirectory => SettingsDir;
+
+    /// <summary>
+    /// Адрес встроенного сервера на случайном порту. Живёт только в памяти: в файл
+    /// уходит прежний <see cref="ServerUrl"/>, чтобы порт не «залипал» между запусками.
+    /// </summary>
+    public void UseRuntimeServerUrl(string url)
+    {
+        _persistedServerUrl = ServerUrl;
+        _runtimeServerUrl = url;
+        ServerUrl = url;
+    }
+
+    private string? _runtimeServerUrl;
+    private string? _persistedServerUrl;
+
     private static string SettingsDir =>
         Path.Combine(
             Environment.GetEnvironmentVariable(DataDirEnvironmentVariable) is { Length: > 0 } custom
@@ -36,6 +62,21 @@ public class ClientSettings
             {
                 settings.ServerUrl = value;
             }
+            if (doc.RootElement.TryGetProperty("theme", out var theme)
+                && theme.GetString() is "light" or "dark")
+            {
+                settings.Theme = theme.GetString()!;
+            }
+            if (doc.RootElement.TryGetProperty("serverMode", out var mode)
+                && mode.GetString() is "auto" or "bundled" or "external")
+            {
+                settings.ServerMode = mode.GetString()!;
+            }
+            if (doc.RootElement.TryGetProperty("reduceMotion", out var rm)
+                && rm.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                settings.ReduceMotion = rm.GetBoolean();
+            }
             return settings;
         }
         catch
@@ -47,6 +88,12 @@ public class ClientSettings
     public void Save()
     {
         Directory.CreateDirectory(SettingsDir);
-        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(new { serverUrl = ServerUrl }));
+        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(new
+        {
+            serverUrl = _runtimeServerUrl is not null && ServerUrl == _runtimeServerUrl ? _persistedServerUrl : ServerUrl,
+            theme = Theme,
+            serverMode = ServerMode,
+            reduceMotion = ReduceMotion,
+        }));
     }
 }

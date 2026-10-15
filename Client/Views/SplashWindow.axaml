@@ -1,0 +1,59 @@
+<dlg:DialogWindowBase xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dlg="clr-namespace:FileManagerClient.Views.Dialogs"
+        xmlns:pig="using:FileManagerClient.Controls"
+        x:Class="FileManagerClient.Views.SplashWindow"
+        Title="FileManager"
+        Icon="avares://FileManagerClient/Assets/AppIcon/app-icon.png">
+    <dlg:DialogWindowBase.Styles>
+        <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0,4"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.AccentStrong}"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style Selector="Expander /template/ Border#ToggleContentBorder">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </dlg:DialogWindowBase.Styles>
+    <Border Classes="dialog" Margin="20" Width="440" Padding="32,28"
+            BoxShadow="0 8 32 0 #40000000">
+        <StackPanel Spacing="16" HorizontalAlignment="Stretch">
+            <!-- Загрузка -->
+            <StackPanel x:Name="LoadingPanel" Spacing="14" HorizontalAlignment="Center">
+                <pig:PigIcon Kind="LogoMark" Size="72" Foreground="{DynamicResource Brush.Accent}"
+                             HorizontalAlignment="Center"/>
+                <TextBlock Text="FileManager" FontFamily="{DynamicResource Font.Display}" FontSize="28"
+                           FontWeight="Bold" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource Brush.Text}"/>
+                <pig:PigMascot State="Connecting" Width="120" Height="90" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="StatusText" Text="Поднимаем сервер…" FontSize="15" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource Brush.TextMuted}"
+                           AutomationProperties.AutomationId="SplashStatus"/>
+            </StackPanel>
+            <!-- Ошибка -->
+            <StackPanel x:Name="ErrorPanel" Spacing="16" IsVisible="False">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="20">
+                    <pig:PigMascot Grid.Column="0" State="Error" Width="120" Height="90" VerticalAlignment="Top"/>
+                    <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock x:Name="TitleText" Classes="h2" TextWrapping="Wrap" Text="Сервер не запустился"
+                                   AutomationProperties.AutomationId="SplashErrorTitle"/>
+                        <TextBlock x:Name="BodyText" TextWrapping="Wrap" FontSize="15"
+                                   AutomationProperties.AutomationId="SplashErrorText"/>
+                    </StackPanel>
+                </Grid>
+                <Expander x:Name="DetailsExpander" Header="Подробнее" IsVisible="False" HorizontalAlignment="Stretch">
+                    <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="8" Padding="12,8" MaxHeight="160">
+                        <ScrollViewer>
+                            <SelectableTextBlock x:Name="DetailsText" Classes="mono" FontSize="12"
+                                                 TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextMuted}"/>
+                        </ScrollViewer>
+                    </Border>
+                </Expander>
+                <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</dlg:DialogWindowBase>

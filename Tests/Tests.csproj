@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.csproj" />
     <ProjectReference Include="..\Backend\Backend.csproj" />
+    <ProjectReference Include="..\Client\FileManagerClient.csproj" />
   </ItemGroup>
 
   <!-- Plugins for the host tests: built before the tests and published next to them (testplugins/<name>). -->

@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="using:FileManagerClient.Controls"
+             x:Class="FileManagerClient.Controls.Pig.PigEmptyScene"
+             IsHitTestVisible="False">
+    <!-- Сгенерировано tools/svg2xaml.py из pig-empty.svg (Свинка дремлет: копилка пустая). Не править руками. -->
+    <Viewbox Stretch="Uniform">
+        <Canvas Width="320" Height="240">
+        <Canvas x:Name="Root" Width="320" Height="240" RenderTransformOrigin="150,218">
+            <Canvas x:Name="Shadow" Width="320" Height="240" RenderTransformOrigin="150,222">
+                <Path Data="M50,222 A100,7 0 1 0 250,222 A100,7 0 1 0 50,222 Z" Fill="{DynamicResource Pig.Ink}" Opacity="0.12"/>
+            </Canvas>
+            <Canvas x:Name="Pig" Width="320" Height="240" RenderTransformOrigin="150,218">
+                <Canvas x:Name="Legs" Width="320" Height="240" RenderTransformOrigin="150,218">
+                    <Canvas Width="320" Height="240">
+                        <Path Data="M93,176 H99 A9,9 0 0 1 108,185 V209 A9,9 0 0 1 99,218 H93 A9,9 0 0 1 84,209 V185 A9,9 0 0 1 93,176 Z" Fill="{DynamicResource Pig.BodyShade}" Stroke="{DynamicResource Pig.Ink}" StrokeThickness="6"/>
+                        <Path Data="M193,176 H199 A9,9 0 0 1 208,185 V209 A9,9 0 0 1 199,218 H193 A9,9 0 0 1 184,209 V185 A9,9 0 0 1 193,176 Z" Fill="{DynamicResource Pig.BodyShade}" Stroke="{DynamicResource Pig.Ink}" StrokeThickness="6"/>
+                        <Path Data="M113,176 H119 A9,9 0 0 1 128,185 V209 A9,9 0 0 1 119,218 H113 A9,9 0 0 1 104,209 V185 A9,9 0 0 1 113,176 Z" Fill="{DynamicResource Pig.Body}" Stroke="{DynamicResource Pig.Ink}" StrokeThickness="6"/>
+                        <Path Data="M213,176 H219 A9,9 0 0 1 228,185 V209 A9,9 0 0 1 219,218 H213 A9,9 0 0 1 204,209 V185 A9,9 0 0 1 213,176 Z" Fill="{DynamicResource Pig.Body}" Stroke="{DynamicResource Pig.Ink}" StrokeThickness="6"/>
+                    </Canvas>
+                </Canvas>
+                <ctl:PigTail x:Name="Tail" Canvas.Left="57" Canvas.Top="120" Width="1" Height="1" Direction="180" Length="92" Curl="1.0" Stroke="{DynamicResource Pig.Line}" StrokeThickness="6"/>
+                <Canvas x:Name="Body" Width="320" Height="240" RenderTransformOrigin="150,200">
+                    <Canvas Width="320" Height="240">
+                        <Path Data="M55,130 A95,70 0 1 0 245,130 A95,70 0 1 0 55,130 Z" Fill="{DynamicResource Pig.Body}" Stroke="{DynamicResource Pig.Ink}" StrokeThickness="6"/>
+                        <Path Data="M102.5,80 A5.5,5.5 0 1 0 113.5,80 A5.5,5.5 0 1 0 102.5,80 Z" Fill="{DynamicResource Pig.Slot}"/>
+                        <Path Data="M128.5,70 H149.5 A4.5,4.5 0 0 1 154,74.5 V74.5 A4.5,4.5 0 0 1 149.5,79 H128.5 A4.5,4.5 0 0 1 124,74.5 V74.5 A4.5,4.5 0 0 1 128.5,70 Z" Fill="{DynamicResource Pig.Slot}"/>
+                        <Path Data="M168.5,71 H172.5 A4.5,4.5 0 0 1 177,75.5 V75.5 A4.5,4.5 0 0 1 172.5,80 H168.5 A4.5,4.5 0 0 1 164,75.5 V75.5 A4.5,4.5 0 0 1 168.5,71 Z" Fill="{DynamicResource Pig.Slot}"/>
+                        <Path Data="M205,146 A11,6.5 0 1 0 227,146 A11,6.5 0 1 0 205,146 Z" Fill="{DynamicResource Pig.BodyShade}"/>
+                    </Canvas>
+                </Canvas>
+                <Canvas x:Name="Cork" Width="320" Height="240" RenderTransformOrigin="150,199">
+                    <Path Data="M143,193 H157 A3,3 0 0 1 160,196 V202 A3,3 0 0 1 157,205 H143 A3,3 0 0 1 140,202 V196 A3,3 0 0 1 143,193 Z" Fill="{DynamicResource Pig.Cork}" Stroke="{DynamicResource Pig.Ink}" StrokeThickness="4"/>
+                </Canvas>
+                <Canvas x:Name="Ears" Width="320" Height="240" RenderTransformOrigin="190,75">
+                    <Path Data="M180 70 Q186 36 204 28 Q215 50 213 78" Fill="{DynamicResource Pig.Body}" Stroke="{DynamicResource Pig.Ink}" StrokeThickness="6" StrokeJoin="Round"/>
+                </Canvas>
+                <Canvas x:Name="Snout" Width="320" Height="240" RenderTransformOrigin="232,134">
+                    <Canvas Width="320" Height="240">
+                        <Path Data="M228,134 A18,25 0 1 0 264,134 A18,25 0 1 0 228,134 Z" Fill="{DynamicResource Pig.BodyShade}" Stroke="{DynamicResource Pig.Ink}" StrokeThickness="6"/>
+                        <Path Data="M239.4,125 A3.6,5.5 0 1 0 246.6,125 A3.6,5.5 0 1 0 239.4,125 Z" Fill="{DynamicResource Pig.Slot}"/>
+                        <Path Data="M239.4,143 A3.6,5.5 0 1 0 246.6,143 A3.6,5.5 0 1 0 239.4,143 Z" Fill="{DynamicResource Pig.Slot}"/>
+                    </Canvas>
+                </Canvas>
+                <Canvas x:Name="Mouth" Width="320" Height="240" RenderTransformOrigin="228,167">
+                    <Path Data="M222 166 Q229 171 235 165" Stroke="{DynamicResource Pig.Ink}" StrokeThickness="4" StrokeLineCap="Round"/>
+                </Canvas>
+                <Canvas x:Name="Eyes" Width="320" Height="240" RenderTransformOrigin="205,108">
+                    <Path Data="M197 109 Q205 115 213 109" Stroke="{DynamicResource Pig.Ink}" StrokeThickness="4.5" StrokeLineCap="Round"/>
+                </Canvas>
+            </Canvas>
+            <Canvas x:Name="Zzz" Width="320" Height="240" RenderTransformOrigin="245,60">
+                <Canvas Width="320" Height="240">
+                    <Path Data="M232 66 h14 l-14 16 h14" Stroke="{DynamicResource Pig.Detail}" StrokeThickness="4" StrokeLineCap="Round" StrokeJoin="Round"/>
+                    <Path Data="M258 38 h10 l-10 12 h10" Stroke="{DynamicResource Pig.Detail}" StrokeThickness="4" StrokeLineCap="Round" StrokeJoin="Round"/>
+                </Canvas>
+            </Canvas>
+        </Canvas>
+        </Canvas>
+    </Viewbox>
+</UserControl>

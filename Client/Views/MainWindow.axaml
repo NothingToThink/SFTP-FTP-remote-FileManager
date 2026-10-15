@@ -3,35 +3,126 @@
         xmlns:vm="clr-namespace:FileManagerClient.ViewModels;assembly=FileManagerClient"
         xmlns:models="clr-namespace:FileManagerClient.Models;assembly=FileManagerClient"
         xmlns:conv="clr-namespace:FileManagerClient.Converters"
+        xmlns:ctl="using:FileManagerClient.Controls"
+        xmlns:views="using:FileManagerClient.Views"
         x:Class="FileManagerClient.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="Файловый менеджер — SFTP/FTP"
+        Title="FileManager"
         Width="1180" Height="740"
-        MinWidth="860" MinHeight="560"
+        MinWidth="1024" MinHeight="700"
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
-        <conv:ServerStatusToBrushConverter x:Key="StatusBrush"/>
-        <conv:ChannelStateToBrushConverter x:Key="ChannelBrush"/>
+        <conv:EnumEqualsConverter x:Key="EnumEq"/>
+        <conv:FileItemToIconConverter x:Key="FileIcon"/>
     </Window.Resources>
 
+    <Window.Styles>
+        <!-- Хлебные крошки: моно 14, без рамок -->
+        <Style Selector="Button.crumb">
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="FontFamily" Value="{StaticResource FontMono}"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style Selector="Button.crumb.last">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <!-- Точка статуса сервера: цвет из токенов темы через классы (меняется при смене темы) -->
+        <Style Selector="Ellipse.statusDot">
+            <Setter Property="Fill" Value="{DynamicResource Brush.TextFaint}"/>
+        </Style>
+        <Style Selector="Ellipse.statusDot.reachable">
+            <Setter Property="Fill" Value="{DynamicResource Brush.Success}"/>
+        </Style>
+        <Style Selector="Ellipse.statusDot.unreachable">
+            <Setter Property="Fill" Value="{DynamicResource Brush.Error}"/>
+        </Style>
+        <Style Selector="Ellipse.statusDot.checking">
+            <Setter Property="Fill" Value="{DynamicResource Brush.Warning}"/>
+        </Style>
+        <Style Selector="Button.toolbar:disabled, Button.icon:disabled">
+            <Setter Property="Opacity" Value="0.4"/>
+        </Style>
+        <Style Selector="Button.icon:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.toolbar:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <!-- Ячейки таблицы: отступ 12 (как у текстовых колонок Fluent) совпадает с заголовками -->
+        <Style Selector="DataGridCell">
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+    </Window.Styles>
+
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding OpenCommandPaletteCommand}"/>
+    </Window.KeyBindings>
+
+    <Grid>
     <DockPanel>
-        <!-- Статус-бар: состояние сервера + настройки (шестерёнка) -->
-        <Border DockPanel.Dock="Bottom" Padding="16,6" Background="{StaticResource BgPanelBrush}"
-                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,0,1">
-            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
-                <Ellipse Grid.Column="0" Name="ServerStatusDot" Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,8,0"
-                         Fill="{Binding ServerStatus, Converter={StaticResource StatusBrush}}"/>
-                <!-- Канал диалогов Backend → клиент (хаб /hubs/ui) -->
-                <Ellipse Grid.Column="1" Name="ChannelStatusDot" Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,8,0"
-                         AutomationProperties.AutomationId="ChannelStatusDot"
-                         AutomationProperties.Name="{Binding ChannelText}"
-                         ToolTip.Tip="{Binding ChannelText}"
-                         Fill="{Binding ChannelState, Converter={StaticResource ChannelBrush}}"/>
+        <!-- 1. Заголовок: логотип, поиск, палитра команд, тема -->
+        <Border DockPanel.Dock="Top" Padding="16,10" Background="{DynamicResource BgPanelBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="272,*,Auto,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <ctl:PigIcon Kind="LogoMark" Size="32" Foreground="{DynamicResource Brush.Accent}"/>
+                    <TextBlock Classes="h2" FontSize="17" Text="FileManager" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBox Grid.Column="1" Name="GlobalSearchBox" MaxWidth="520" HorizontalAlignment="Stretch"
+                         AutomationProperties.AutomationId="GlobalSearchBox"
+                         AutomationProperties.Name="Поиск серверов и команд"
+                         PlaceholderText="Поиск серверов и команд"
+                         Text="{Binding SearchText}">
+                    <TextBox.InnerLeftContent>
+                        <ctl:LineIcon Data="{StaticResource Line.Search}" Size="18" Margin="12,0,0,0"
+                                      Foreground="{DynamicResource Brush.TextMuted}"/>
+                    </TextBox.InnerLeftContent>
+                </TextBox>
+                <Button Grid.Column="2" Name="CommandPaletteButton" Classes="tool" Margin="12,0,4,0"
+                        ToolTip.Tip="Палитра команд (Ctrl+Shift+P)"
+                        AutomationProperties.Name="Палитра команд"
+                        AutomationProperties.AutomationId="CommandPaletteButton"
+                        Command="{Binding OpenCommandPaletteCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ctl:LineIcon Data="{StaticResource Line.Command}" Size="16"/>
+                        <TextBlock Classes="caption mono" Text="Ctrl+Shift+P" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <!-- Переключатель темы: иконка показывает цель -->
+                <Button Grid.Column="3" Name="ThemeToggleButton" Classes="icon" ToolTip.Tip="Сменить тему"
+                        AutomationProperties.Name="Сменить тему"
+                        AutomationProperties.AutomationId="ThemeToggleButton"
+                        Command="{Binding ToggleThemeCommand}">
+                    <Panel>
+                        <PathIcon Data="{StaticResource IconMoon}" Width="16" Height="16" IsVisible="{Binding !IsDarkTheme}"/>
+                        <PathIcon Data="{StaticResource IconSun}" Width="16" Height="16" IsVisible="{Binding IsDarkTheme}"/>
+                    </Panel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- 6. Строка состояния -->
+        <Border DockPanel.Dock="Bottom" Padding="16,6" Background="{DynamicResource BgPanelBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" MinHeight="32">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" Margin="0,0,20,0"
+                            VerticalAlignment="Center" Name="ConnectionInfo"
+                            IsVisible="{Binding ActiveProfile, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <ctl:PigIcon Kind="{Binding ActiveProfile.SlotIcon}" Size="20"
+                                 Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center"/>
+                    <TextBlock Classes="mono" FontSize="13" Text="{Binding ActiveProfile.UserHost}" VerticalAlignment="Center"/>
+                    <TextBlock Classes="muted" Text="{Binding ConnectedFor, StringFormat='· в сети {0}'}" VerticalAlignment="Center"/>
+                    <ctl:PigTail Classes="small alive" VerticalAlignment="Center"/>
+                </StackPanel>
+                <Ellipse Grid.Column="1" Name="ServerStatusDot" Classes="statusDot" Width="8" Height="8"
+                         VerticalAlignment="Center" Margin="0,0,8,0"
+                         Classes.reachable="{Binding ServerStatus, Converter={StaticResource EnumEq}, ConverterParameter=Reachable}"
+                         Classes.unreachable="{Binding ServerStatus, Converter={StaticResource EnumEq}, ConverterParameter=Unreachable}"
+                         Classes.checking="{Binding ServerStatus, Converter={StaticResource EnumEq}, ConverterParameter=Checking}"/>
                 <TextBlock Grid.Column="2" Name="StatusTextBlock" Classes="muted" Text="{Binding StatusText}"
                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                 <ProgressBar Grid.Column="3" IsIndeterminate="True" Width="120" HorizontalAlignment="Right"
-                             IsVisible="{Binding IsBusy}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                             IsVisible="{Binding IsBusy}" VerticalAlignment="Center" Margin="10,0,10,0"/>
                 <Button Grid.Column="4" Name="ServerSettingsButton" Classes="icon" ToolTip.Tip="Настройки сервера"
                         AutomationProperties.Name="Настройки сервера"
                         AutomationProperties.AutomationId="ServerSettingsButton"
@@ -41,248 +132,460 @@
             </Grid>
         </Border>
 
-        <!-- Профили -->
-        <Border DockPanel.Dock="Left" Width="280" Background="{StaticResource BgPanelBrush}"
-                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,1,0" Padding="12">
-            <DockPanel>
-                <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="2,0,2,10">
-                    <TextBlock Grid.Column="0" Classes="secondary" FontWeight="Medium"
-                               Text="Подключения" VerticalAlignment="Center"/>
-                    <Button Grid.Column="1" Name="AddProfileButton" Classes="icon" ToolTip.Tip="Новый профиль"
-                            AutomationProperties.Name="Новый профиль"
-                            AutomationProperties.AutomationId="AddProfileButton"
-                            Command="{Binding AddProfileCommand}">
-                        <PathIcon Data="{StaticResource IconPlus}" Width="14" Height="14"/>
+        <!-- 5. Панель передач: свёрнутая полоска, по клику — список -->
+        <Border DockPanel.Dock="Bottom" Name="TransfersStrip" Background="{DynamicResource BgPanelBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0"
+                IsVisible="{Binding Transfers.HasItems}">
+            <StackPanel DataContext="{Binding Transfers}">
+                <Grid ColumnDefinitions="*,Auto" Margin="8,2">
+                    <Button Grid.Column="0" Name="TransfersToggleButton" Classes="ghost" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch" Padding="8,2" MinHeight="44"
+                            ToolTip.Tip="Показать или скрыть передачи"
+                            AutomationProperties.Name="Передачи"
+                            AutomationProperties.AutomationId="TransfersToggleButton"
+                            Command="{Binding ToggleCommand}">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <ctl:PigMascot Grid.Column="0" Width="56" Height="42" State="{Binding MascotState}"
+                                           VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Name="TransfersSummary" Margin="12,0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Brush.Text}" Text="{Binding SummaryText}"/>
+                            <Panel Grid.Column="2" VerticalAlignment="Center">
+                                <ctl:LineIcon Data="{StaticResource Line.ChevronUp}" Size="18" IsVisible="{Binding !IsExpanded}"/>
+                                <ctl:LineIcon Data="{StaticResource Line.ChevronDown}" Size="18" IsVisible="{Binding IsExpanded}"/>
+                            </Panel>
+                        </Grid>
                     </Button>
+                    <Button Grid.Column="1" Classes="tool" Content="Очистить" Margin="8,0,0,0"
+                            VerticalAlignment="Center" IsVisible="{Binding IsExpanded}"
+                            AutomationProperties.AutomationId="ClearTransfersButton"
+                            Command="{Binding ClearFinishedCommand}"/>
                 </Grid>
+                <ScrollViewer MaxHeight="168" IsVisible="{Binding IsExpanded}" Padding="0,0,0,6">
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TransferItemViewModel">
+                                <Grid ColumnDefinitions="*,200,110,Auto" MinHeight="36" Margin="16,0,16,0">
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock Classes="caption" Text="{Binding DirectionLabel}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <ProgressBar Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Progress}"
+                                                 IsIndeterminate="{Binding IsIndeterminate}" IsVisible="{Binding IsRunning}"
+                                                 VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                    <TextBlock Grid.Column="2" Classes="caption mono" Text="{Binding StatusText}"
+                                               Grid.ColumnSpan="1" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="3" Classes="icon" ToolTip.Tip="Отменить"
+                                            AutomationProperties.Name="Отменить передачу"
+                                            Command="{Binding CancelCommand}" IsVisible="{Binding IsRunning}">
+                                        <ctl:LineIcon Data="{StaticResource Line.Close}" Size="16"/>
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
 
-                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
+        <!-- 2. Список хостов -->
+        <Border DockPanel.Dock="Left" Width="288" Background="{DynamicResource BgPanelBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,1,0" Padding="12">
+            <DockPanel>
+                <TextBox DockPanel.Dock="Top" Name="HostFilterBox" Margin="0,0,0,10"
+                         AutomationProperties.AutomationId="HostFilterBox"
+                         AutomationProperties.Name="Найти сервер"
+                         PlaceholderText="Найти сервер" Text="{Binding HostFilter}">
+                    <TextBox.InnerLeftContent>
+                        <ctl:LineIcon Data="{StaticResource Line.Search}" Size="16" Margin="12,0,0,0"
+                                      Foreground="{DynamicResource Brush.TextMuted}"/>
+                    </TextBox.InnerLeftContent>
+                </TextBox>
+
+                <Button DockPanel.Dock="Bottom" Name="AddProfileButton" Classes="tool" Margin="0,10,0,0"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        ToolTip.Tip="Добавить сервер"
+                        AutomationProperties.Name="Добавить сервер"
+                        AutomationProperties.AutomationId="AddProfileButton"
+                        Command="{Binding AddProfileCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ctl:LineIcon Data="{StaticResource Line.Plus}" Size="16"/>
+                        <TextBlock Text="Добавить сервер"/>
+                    </StackPanel>
+                </Button>
+
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="6" Margin="0,10,0,0"
+                            IsVisible="{Binding SelectedProfile, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <Button Name="ConnectProfileButton" Classes="primary" Content="Подключить"
                             AutomationProperties.AutomationId="ConnectProfileButton"
                             Command="{Binding ConnectProfileCommand}"
                             CommandParameter="{Binding SelectedProfile}"/>
-                    <Button Name="DisconnectProfileButton" Classes="icon" ToolTip.Tip="Отключить профиль"
+                    <Button Name="DisconnectProfileButton" Classes="icon" ToolTip.Tip="Отключить"
                             AutomationProperties.Name="Отключить профиль"
                             AutomationProperties.AutomationId="DisconnectProfileButton"
                             Command="{Binding DisconnectProfileCommand}"
                             CommandParameter="{Binding SelectedProfile}">
-                        <PathIcon Data="{StaticResource IconDisconnect}" Width="14" Height="14"/>
+                        <PathIcon Data="{StaticResource IconDisconnect}" Width="16" Height="16"/>
                     </Button>
-                    <Button Name="EditProfileButton" Classes="icon" ToolTip.Tip="Изменить профиль"
+                    <Button Name="EditProfileButton" Classes="icon" ToolTip.Tip="Изменить"
                             AutomationProperties.Name="Изменить профиль"
                             AutomationProperties.AutomationId="EditProfileButton"
                             Command="{Binding EditProfileCommand}">
-                        <PathIcon Data="{StaticResource IconPencil}" Width="14" Height="14"/>
+                        <PathIcon Data="{StaticResource IconPencil}" Width="16" Height="16"/>
                     </Button>
-                    <Button Name="DeleteProfileButton" Classes="icon danger" ToolTip.Tip="Удалить профиль"
+                    <Button Name="DeleteProfileButton" Classes="icon danger" ToolTip.Tip="Удалить"
                             AutomationProperties.Name="Удалить профиль"
                             AutomationProperties.AutomationId="DeleteProfileButton"
                             Command="{Binding DeleteProfileCommand}">
-                        <PathIcon Data="{StaticResource IconTrash}" Width="14" Height="14"/>
+                        <ctl:LineIcon Data="{StaticResource Line.Trash}" Size="16"/>
                     </Button>
                 </StackPanel>
 
                 <ListBox Name="ProfilesList" AutomationProperties.AutomationId="ProfilesList"
-                         ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile}"
-                         DoubleTapped="ProfilesListDoubleTapped">
+                         ItemsSource="{Binding FilteredProfiles}" SelectedItem="{Binding SelectedProfile}"
+                         DoubleTapped="ProfilesListDoubleTapped" KeyDown="ProfilesListKeyDown">
+                    <ListBox.ContextMenu>
+                        <ContextMenu x:DataType="vm:MainWindowViewModel" DataContext="{Binding #ProfilesList.DataContext}">
+                            <MenuItem Header="Подключить" Command="{Binding ConnectProfileCommand}"
+                                      CommandParameter="{Binding SelectedProfile}"/>
+                            <MenuItem Header="Отключить" Command="{Binding DisconnectProfileCommand}"
+                                      CommandParameter="{Binding SelectedProfile}"/>
+                            <Separator/>
+                            <MenuItem Header="Изменить…" Command="{Binding EditProfileCommand}"/>
+                            <MenuItem Header="Удалить" Command="{Binding DeleteProfileCommand}"/>
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:ProfileViewModel">
-                            <StackPanel Margin="2,2" Spacing="3">
-                                <DockPanel>
-                                    <Ellipse DockPanel.Dock="Left" Width="7" Height="7" Margin="0,0,7,0"
-                                             VerticalAlignment="Center"
-                                             Fill="{StaticResource SuccessBrush}" IsVisible="{Binding IsConnected}"/>
-                                    <Ellipse DockPanel.Dock="Left" Width="7" Height="7" Margin="0,0,7,0"
-                                             VerticalAlignment="Center"
-                                             Fill="{StaticResource BorderStrongBrush}" IsVisible="{Binding !IsConnected}"/>
-                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium"
+                            <Grid ColumnDefinitions="Auto,*,Auto" MinHeight="44" Margin="0,2">
+                                <ctl:PigIcon Grid.Column="0" Kind="{Binding SlotIcon}" Size="26" Margin="0,0,12,0"
+                                             Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                    <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="Medium"
                                                TextTrimming="CharacterEllipsis"/>
-                                </DockPanel>
-                                <TextBlock Classes="mono muted" FontSize="11" Margin="14,0,0,0"
-                                           Text="{Binding DisplayHost}" TextTrimming="CharacterEllipsis"/>
-                            </StackPanel>
+                                    <TextBlock Classes="mono muted" FontSize="13" Text="{Binding UserHost}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                <!-- Индикатор состояния: хвостик -->
+                                <Panel Grid.Column="2" Width="18" Height="18" Margin="8,0,0,0" VerticalAlignment="Center">
+                                    <ctl:PigTail Classes="small" Opacity="0.35" IsVisible="{Binding IsDisconnectedState}"/>
+                                    <ctl:PigTail Classes="small connecting" IsVisible="{Binding IsConnectingState}"/>
+                                    <ctl:PigTail Classes="small connected" IsVisible="{Binding IsConnectedState}"/>
+                                    <ctl:PigTail Classes="small error" IsVisible="{Binding IsErrorState}"/>
+                                </Panel>
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
             </DockPanel>
         </Border>
 
-        <!-- Рабочая область -->
-        <Grid Margin="16,12,16,12">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+        <!-- 3. Панель файлов -->
+        <Border Classes="card" Margin="16" Padding="0" ClipToBounds="True">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
 
-            <!-- Стрип активного подключения -->
-            <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto" Margin="2,0,2,10"
-                  IsVisible="{Binding Browser.IsBound}">
-                <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{StaticResource SuccessBrush}"
-                         VerticalAlignment="Center" Margin="0,0,9,0"/>
-                <TextBlock Grid.Column="1" Classes="h1" FontSize="14.5"
-                           Text="{Binding Browser.ConnectionName}" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="2" Classes="mono secondary" FontSize="12" Margin="12,1,12,0"
-                           Text="{Binding Browser.CurrentPath}" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis"/>
-                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8">
-                    <Button Name="OpenTunnelsButton" Classes="tool" Content="Туннели"
-                            AutomationProperties.AutomationId="OpenTunnelsButton"
-                            Command="{Binding OpenTunnelsCommand}"
-                            IsVisible="{Binding IsTunnelsAvailable}"/>
-                    <TextBlock Classes="muted" VerticalAlignment="Center"
-                               Text="{Binding Browser.ItemCount, StringFormat='{}{0} объектов'}"/>
-                </StackPanel>
-            </Grid>
-            <TextBlock Grid.Row="0" Classes="muted" Margin="2,0,2,10" IsVisible="{Binding !Browser.IsBound}"
-                       Text="Подключение не выбрано"/>
-
-            <!-- Строка пути и строка действий разнесены: на узких окнах кнопки не толпятся -->
-            <StackPanel Grid.Row="1" DataContext="{Binding Browser}" Spacing="8" Margin="2,0,2,10">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Name="GoUpButton" Classes="icon" ToolTip.Tip="На уровень выше"
+                <!-- Навигация: назад / вверх / обновить + хлебные крошки -->
+                <Grid Grid.Row="0" DataContext="{Binding Browser}" ColumnDefinitions="Auto,Auto,Auto,*,Auto"
+                      Margin="8,8,12,0" IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ShowBrowser}">
+                    <Button Grid.Column="0" Name="GoBackButton" Classes="icon" ToolTip.Tip="Назад"
+                            AutomationProperties.Name="Назад"
+                            AutomationProperties.AutomationId="GoBackButton"
+                            Command="{Binding GoBackCommand}" IsEnabled="{Binding CanGoBack}">
+                        <ctl:LineIcon Data="{StaticResource Line.Back}" Size="18"/>
+                    </Button>
+                    <Button Grid.Column="1" Name="GoUpButton" Classes="icon" ToolTip.Tip="На уровень выше (Backspace)"
                             AutomationProperties.Name="На уровень выше"
                             AutomationProperties.AutomationId="GoUpButton"
                             Command="{Binding GoUpCommand}" IsEnabled="{Binding IsBound}">
-                        <PathIcon Data="{StaticResource IconUp}" Width="14" Height="14"/>
+                        <ctl:LineIcon Data="{StaticResource Line.Up}" Size="18"/>
                     </Button>
-                    <TextBox Name="PathTextBox" AutomationProperties.AutomationId="PathTextBox"
-                             Width="360" Text="{Binding CurrentPath}" FontFamily="{StaticResource FontMono}"
-                             PlaceholderText="Путь" KeyDown="PathBoxKeyDown" IsReadOnly="{Binding !IsBound}"/>
-                    <Button Name="GoButton" Classes="tool" Content="Перейти"
-                            AutomationProperties.AutomationId="GoButton"
-                            Command="{Binding NavigateCommand}"
-                            CommandParameter="{Binding CurrentPath}" IsEnabled="{Binding IsBound}"/>
-                    <Button Name="RefreshButton" Classes="icon" ToolTip.Tip="Обновить"
+                    <Button Grid.Column="2" Name="RefreshButton" Classes="icon" ToolTip.Tip="Обновить"
                             AutomationProperties.Name="Обновить список"
                             AutomationProperties.AutomationId="RefreshBrowserButton"
                             Command="{Binding RefreshCommand}" IsEnabled="{Binding IsBound}">
-                        <PathIcon Data="{StaticResource IconSync}" Width="14" Height="14"/>
+                        <ctl:LineIcon Data="{StaticResource Line.Refresh}" Size="18"/>
                     </Button>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Name="NewFileButton" Classes="tool" ToolTip.Tip="Новый файл"
-                            AutomationProperties.AutomationId="NewFileButton"
-                            Command="{Binding NewFileCommand}" IsEnabled="{Binding IsBound}">
-                        <StackPanel Orientation="Horizontal" Spacing="7">
-                            <PathIcon Data="{StaticResource IconPlus}" Width="11" Height="11"/>
-                            <TextBlock Text="Файл"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Name="NewFolderButton" Classes="tool" ToolTip.Tip="Новая папка"
-                            AutomationProperties.AutomationId="NewFolderButton"
-                            Command="{Binding NewFolderCommand}" IsEnabled="{Binding IsBound}">
-                        <StackPanel Orientation="Horizontal" Spacing="7">
-                            <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14"/>
-                            <TextBlock Text="Папка"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Name="UploadButton" Classes="tool" ToolTip.Tip="Загрузить файл на сервер"
-                            AutomationProperties.AutomationId="UploadButton"
-                            Command="{Binding UploadCommand}" IsEnabled="{Binding IsBound}">
-                        <StackPanel Orientation="Horizontal" Spacing="7">
-                            <PathIcon Data="{StaticResource IconUpload}" Width="13" Height="13"/>
-                            <TextBlock Text="Загрузить"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Name="DownloadButton" Classes="tool" ToolTip.Tip="Скачать выбранный файл"
-                            AutomationProperties.AutomationId="DownloadButton"
-                            Command="{Binding DownloadCommand}" IsEnabled="{Binding IsBound}">
-                        <StackPanel Orientation="Horizontal" Spacing="7">
-                            <PathIcon Data="{StaticResource IconDownload}" Width="13" Height="13"/>
-                            <TextBlock Text="Скачать"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </StackPanel>
+                    <Border Grid.Column="3" Name="PathBar" Margin="8,0,0,0" MinHeight="36" CornerRadius="8"
+                            Background="{DynamicResource Brush.Bg}" Tapped="PathBarTapped">
+                        <Panel>
+                            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                                          IsVisible="{Binding !IsEditingPath}" Padding="4,0">
+                                <ItemsControl ItemsSource="{Binding Crumbs}" VerticalAlignment="Center">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PathCrumb">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Classes="ghost crumb" Content="{Binding Label}" Tag="{Binding Path}"
+                                                        Click="CrumbClick"/>
+                                                <ctl:LineIcon Data="{StaticResource Line.ChevronRight}" Size="14"
+                                                              Foreground="{DynamicResource Brush.TextFaint}"
+                                                              VerticalAlignment="Center" IsVisible="{Binding !IsLast}"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBox Name="PathTextBox" AutomationProperties.AutomationId="PathTextBox"
+                                     Text="{Binding CurrentPath}" FontFamily="{StaticResource FontMono}" FontSize="14"
+                                     PlaceholderText="Путь" KeyDown="PathBoxKeyDown" LostFocus="PathBoxLostFocus"
+                                     IsVisible="{Binding IsEditingPath}"/>
+                        </Panel>
+                    </Border>
+                    <Border Grid.Column="4" Padding="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Classes="muted" Text="{Binding ItemCount, StringFormat='{}{0} объектов'}"/>
+                    </Border>
+                </Grid>
 
-            <!-- Список файлов + зона drop для загрузки -->
-            <Grid Grid.Row="2" x:Name="DropArea" DragDrop.AllowDrop="True"
-                  AutomationProperties.AutomationId="FilesDropArea">
-                <DataGrid Name="FilesGrid" AutomationProperties.AutomationId="FilesGrid"
-                          ItemsSource="{Binding Browser.Items}"
-                          SelectedItem="{Binding Browser.SelectedItem}"
-                          IsReadOnly="True"
-                          AutoGenerateColumns="False"
-                          CanUserSortColumns="True"
-                          IsVisible="{Binding Browser.IsBound}"
-                          DoubleTapped="FilesGridDoubleTapped">
-                    <DataGrid.ContextMenu>
-                        <!-- ContextMenu не в визуальном дереве: DataContext в него не наследуется,
-                             задаем явно из грида; иначе пункты меню остаются без команд -->
-                        <ContextMenu x:DataType="vm:MainWindowViewModel"
-                                     DataContext="{Binding #FilesGrid.DataContext}">
-                            <MenuItem Header="Открыть" Command="{Binding Browser.OpenItemCommand}"/>
-                            <MenuItem Header="Переименовать…" Command="{Binding Browser.RenameCommand}"/>
-                            <MenuItem Header="Копировать в…" Command="{Binding Browser.CopyToCommand}"/>
-                            <MenuItem Header="Переместить в…" Command="{Binding Browser.MoveToCommand}"/>
-                            <MenuItem Header="Скачать…" Command="{Binding Browser.DownloadCommand}"/>
-                            <MenuItem Header="Свойства" Command="{Binding Browser.ShowInfoCommand}"/>
-                            <Separator/>
-                            <MenuItem Header="Удалить" Command="{Binding Browser.DeleteCommand}"/>
-                            <!-- Подменю плагинов: пункты строятся в коде (MainWindow.RebuildPluginsMenu) из кеша команд -->
-                            <Separator Name="PluginsSeparator" IsVisible="{Binding HasPluginCommands}"/>
-                            <MenuItem Name="PluginsMenuItem" Header="Плагины" Command="{Binding LoadPluginCommandsCommand}"
-                                      AutomationProperties.AutomationId="PluginsMenuItem"
-                                      IsVisible="{Binding HasPluginCommands}"/>
-                        </ContextMenu>
-                    </DataGrid.ContextMenu>
-                    <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Имя" SortMemberPath="Name" Width="*">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="models:FileItem">
-                                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,4,0" VerticalAlignment="Center">
-                                        <PathIcon Grid.Column="0" Data="{StaticResource IconFolder}" Width="15" Height="15"
-                                                  Margin="0,0,9,0"
-                                                  Foreground="{StaticResource AccentBrush}"
-                                                  IsVisible="{Binding IsDirectory}"/>
-                                        <PathIcon Grid.Column="0" Data="{StaticResource IconDoc}" Width="14" Height="14"
-                                                  Margin="0,0,10,0"
-                                                  Foreground="{StaticResource TextSecondaryBrush}"
-                                                  IsVisible="{Binding !IsDirectory}"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
-                                    </Grid>
+                <!-- Тулбар 44x44 -->
+                <Grid Grid.Row="1" DataContext="{Binding Browser}" ColumnDefinitions="Auto,*,Auto" Margin="8,4,12,4"
+                      IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ShowBrowser}">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+                        <Button Name="UploadButton" Classes="toolbar" ToolTip.Tip="Загрузить на сервер"
+                                AutomationProperties.Name="Загрузить"
+                                AutomationProperties.AutomationId="UploadButton"
+                                Command="{Binding UploadCommand}" IsEnabled="{Binding IsBound}">
+                            <ctl:PigIcon Kind="UploadCoin" Size="20"/>
+                        </Button>
+                        <Button Name="DownloadButton" Classes="toolbar" ToolTip.Tip="Скачать выбранное"
+                                AutomationProperties.Name="Скачать"
+                                AutomationProperties.AutomationId="DownloadButton"
+                                Command="{Binding DownloadCommand}" IsEnabled="{Binding IsBound}">
+                            <ctl:PigIcon Kind="DownloadCork" Size="20"/>
+                        </Button>
+                        <Button Name="NewFolderButton" Classes="toolbar" ToolTip.Tip="Новая папка"
+                                AutomationProperties.Name="Новая папка"
+                                AutomationProperties.AutomationId="NewFolderButton"
+                                Command="{Binding NewFolderCommand}" IsEnabled="{Binding IsBound}">
+                            <ctl:LineIcon Data="{StaticResource Line.NewFolder}" Size="20"/>
+                        </Button>
+                        <Button Name="NewFileButton" Classes="toolbar" ToolTip.Tip="Новый файл"
+                                AutomationProperties.Name="Новый файл"
+                                AutomationProperties.AutomationId="NewFileButton"
+                                Command="{Binding NewFileCommand}" IsEnabled="{Binding IsBound}">
+                            <ctl:LineIcon Data="{StaticResource Line.FileText}" Size="20"/>
+                        </Button>
+                        <Button Name="DeleteButton" Classes="toolbar danger" ToolTip.Tip="Удалить (Del)"
+                                AutomationProperties.Name="Удалить"
+                                AutomationProperties.AutomationId="DeleteButton"
+                                Command="{Binding DeleteCommand}" IsEnabled="{Binding HasSelection}">
+                            <ctl:LineIcon Data="{StaticResource Line.Trash}" Size="20"/>
+                        </Button>
+                    </StackPanel>
+                    <Button Grid.Column="2" Name="OpenTunnelsButton" Classes="tool" Content="Туннели"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="OpenTunnelsButton"
+                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).OpenTunnelsCommand}"
+                            IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsTunnelsAvailable}"/>
+                </Grid>
+
+                <Border Grid.Row="1" Height="1" VerticalAlignment="Bottom" Background="{DynamicResource Brush.Border}"
+                        IsVisible="{Binding ShowBrowser}"/>
+
+                <!-- Область содержимого + drop-зона для загрузки -->
+                <Grid Grid.Row="2" x:Name="DropArea" DragDrop.AllowDrop="True"
+                      AutomationProperties.AutomationId="FilesDropArea">
+                    <DataGrid Name="FilesGrid" AutomationProperties.AutomationId="FilesGrid"
+                              ItemsSource="{Binding Browser.Items}"
+                              SelectedItem="{Binding Browser.SelectedItem}"
+                              SelectionMode="Extended"
+                              IsReadOnly="True"
+                              AutoGenerateColumns="False"
+                              CanUserSortColumns="True"
+                              IsVisible="{Binding ShowBrowser}"
+                              SelectionChanged="FilesGridSelectionChanged"
+                              DoubleTapped="FilesGridDoubleTapped">
+                        <DataGrid.ContextMenu>
+                            <!-- ContextMenu не в визуальном дереве: DataContext в него не наследуется,
+                                 задаем явно из грида; иначе пункты меню остаются без команд -->
+                            <ContextMenu x:Name="FilesMenu" x:DataType="vm:MainWindowViewModel"
+                                         DataContext="{Binding #FilesGrid.DataContext}"
+                                         Opening="FilesMenuOpening">
+                                <MenuItem Header="Открыть" Command="{Binding Browser.OpenItemCommand}"/>
+                                <MenuItem Header="Переименовать…" InputGesture="F2" Command="{Binding Browser.RenameCommand}"/>
+                                <MenuItem Header="Копировать в…" Command="{Binding Browser.CopyToCommand}"/>
+                                <MenuItem Header="Переместить в…" Command="{Binding Browser.MoveToCommand}"/>
+                                <MenuItem Header="Скачать…" Command="{Binding Browser.DownloadCommand}"/>
+                                <MenuItem Header="Свойства" Command="{Binding Browser.ShowInfoCommand}"/>
+                                <Separator/>
+                                <MenuItem Header="Удалить" InputGesture="Delete" Command="{Binding Browser.DeleteCommand}"/>
+                                <!-- Подменю плагинов: пункты строятся в коде (MainWindow.RebuildPluginsMenu) из кеша команд -->
+                                <Separator Name="PluginsSeparator" IsVisible="{Binding HasPluginCommands}"/>
+                                <MenuItem Name="PluginsMenuItem" Header="Плагины" Command="{Binding LoadPluginCommandsCommand}"
+                                          AutomationProperties.AutomationId="PluginsMenuItem"
+                                          IsVisible="{Binding HasPluginCommands}"/>
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="Имя" SortMemberPath="Name" Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="models:FileItem">
+                                        <Grid ColumnDefinitions="Auto,*" Margin="12,0,4,0" VerticalAlignment="Center">
+                                            <ctl:LineIcon Grid.Column="0" Size="18" Margin="0,0,10,0"
+                                                          Data="{Binding ., Converter={StaticResource FileIcon}}"
+                                                          Foreground="{DynamicResource Brush.TextMuted}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Размер" Binding="{Binding SizeDisplay}" Width="110"
+                                                FontFamily="{StaticResource FontMono}" FontSize="14"/>
+                            <DataGridTextColumn Header="Изменён"
+                                                Binding="{Binding LastModified, StringFormat='dd.MM.yyyy HH:mm'}"
+                                                Width="170" FontFamily="{StaticResource FontMono}" FontSize="14"/>
+                            <DataGridTextColumn Header="Права" Binding="{Binding Permissions}" Width="120"
+                                                FontFamily="{StaticResource FontMono}" FontSize="14"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Состояние: пустая папка -->
+                    <StackPanel Name="EmptyFolderState" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Spacing="6" IsVisible="{Binding ShowEmptyFolder}">
+                        <ctl:PigMascot State="Empty" Width="140" Height="105"/>
+                        <TextBlock Classes="h2" HorizontalAlignment="Center" Text="Папка пустая"/>
+                        <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
+                                   Text="Перетащите сюда файлы или нажмите «Загрузить»."/>
+                    </StackPanel>
+
+                    <!-- Состояние: загрузка (подключение) -->
+                    <StackPanel Name="ConnectingState" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Spacing="12" IsVisible="{Binding ShowConnecting}">
+                        <ctl:PigMascot State="Connecting" Width="240" Height="180" HorizontalAlignment="Center"/>
+                        <TextBlock Name="ConnectingTextBlock" HorizontalAlignment="Center" FontSize="16"
+                                   Text="{Binding ConnectingText}"/>
+                        <Button Name="CancelConnectButton" Classes="tool" Content="Отмена" HorizontalAlignment="Center"
+                                AutomationProperties.AutomationId="CancelConnectButton"
+                                Command="{Binding CancelConnectCommand}"/>
+                    </StackPanel>
+
+                    <!-- Состояние: ошибка (текст из ErrorPresenter, детали под «Подробнее») -->
+                    <StackPanel Name="ErrorState" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Spacing="10" MaxWidth="460" IsVisible="{Binding ShowError}">
+                        <ctl:PigMascot Name="ErrorMascot" State="{Binding ErrorMascot}" Width="220" Height="165"
+                                       HorizontalAlignment="Center"/>
+                        <TextBlock Name="ErrorTitleText" Classes="h2" HorizontalAlignment="Center"
+                                   TextAlignment="Center" TextWrapping="Wrap" Text="{Binding ErrorTitle}"/>
+                        <TextBlock Name="ErrorBodyText" Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
+                                   TextWrapping="Wrap" Text="{Binding ErrorText}"/>
+                        <ItemsControl Name="ErrorActionsList" ItemsSource="{Binding ErrorActions}"
+                                      HorizontalAlignment="Center" Margin="0,6,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="8"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ErrorActionItem">
+                                    <Button Classes="tool" Classes.primary="{Binding IsPrimary}" Content="{Binding Label}"
+                                            AutomationProperties.AutomationId="{Binding Action, StringFormat=ErrorAction{0}}"
+                                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).RunErrorActionCommand}"
+                                            CommandParameter="{Binding}"/>
                                 </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Размер" Binding="{Binding SizeDisplay}" Width="100"
-                                            FontFamily="{StaticResource FontMono}" FontSize="12"/>
-                        <DataGridTextColumn Header="Изменён"
-                                            Binding="{Binding LastModified, StringFormat='yyyy-MM-dd HH:mm'}"
-                                            Width="160" FontFamily="{StaticResource FontMono}" FontSize="12"/>
-                        <DataGridTextColumn Header="Права" Binding="{Binding Permissions}" Width="120"
-                                            FontFamily="{StaticResource FontMono}" FontSize="12"/>
-                    </DataGrid.Columns>
-                </DataGrid>
-
-                <!-- Пустое состояние: приглашение к действию -->
-                <StackPanel Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Spacing="12" IsVisible="{Binding !Browser.IsBound}">
-                    <PathIcon Data="{StaticResource IconFolderBig}" Width="44" Height="44"
-                              Foreground="{StaticResource BorderStrongBrush}" HorizontalAlignment="Center"/>
-                    <TextBlock Classes="h1" HorizontalAlignment="Center" Text="Нет активного подключения"/>
-                    <StackPanel Spacing="2">
-                        <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
-                                   Text="Выберите профиль слева и нажмите «Подключить»,"/>
-                        <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
-                                   Text="либо создайте новый профиль со знаком «+»"/>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Name="ErrorDetailsButton" Classes="ghost" HorizontalAlignment="Center"
+                                IsVisible="{Binding HasErrorDetails}"
+                                AutomationProperties.AutomationId="ErrorDetailsButton"
+                                Command="{Binding ToggleErrorDetailsCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="Подробнее" VerticalAlignment="Center"/>
+                                <ctl:LineIcon Data="{StaticResource Line.ChevronDown}" Size="16"
+                                              IsVisible="{Binding !IsErrorDetailsExpanded}"/>
+                                <ctl:LineIcon Data="{StaticResource Line.ChevronUp}" Size="16"
+                                              IsVisible="{Binding IsErrorDetailsExpanded}"/>
+                            </StackPanel>
+                        </Button>
+                        <Border Name="ErrorDetailsBox" Background="{DynamicResource Brush.Bg}"
+                                BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="8"
+                                Padding="12,10" IsVisible="{Binding IsErrorDetailsExpanded}">
+                            <SelectableTextBlock Classes="mono" FontSize="13" TextWrapping="Wrap"
+                                                 Foreground="{DynamicResource Brush.TextMuted}" Text="{Binding ErrorDetails}"/>
+                        </Border>
                     </StackPanel>
-                </StackPanel>
 
-                <!-- Оверлей при перетаскивании файлов -->
-                <Border x:Name="DropOverlay" IsVisible="False"
-                        Background="#B314161B" Margin="4" CornerRadius="10"
-                        BorderBrush="{StaticResource AccentBrush}" BorderThickness="2"
-                        IsHitTestVisible="False">
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-                        <PathIcon Data="{StaticResource IconUpload}" Width="38" Height="38"
-                                  Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Classes="h1" HorizontalAlignment="Center" Text="Отпустите файлы"/>
-                        <TextBlock Classes="secondary" HorizontalAlignment="Center"
-                                   Text="Загрузятся в текущую папку"/>
+                    <!-- Состояние: нет профилей -->
+                    <StackPanel Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Spacing="10" MaxWidth="460" IsVisible="{Binding ShowNoProfiles}">
+                        <ctl:PigMascot State="Empty" Width="240" Height="180" HorizontalAlignment="Center"/>
+                        <TextBlock Classes="h2" HorizontalAlignment="Center" Text="Копилка пустая"/>
+                        <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Text="Положите в неё первый сервер: SFTP, FTP или локальную папку."/>
+                        <Button Name="EmptyAddProfileButton" Classes="primary" Content="Добавить сервер"
+                                HorizontalAlignment="Center" Margin="0,6,0,0"
+                                AutomationProperties.AutomationId="EmptyAddProfileButton"
+                                Command="{Binding AddProfileCommand}"/>
                     </StackPanel>
-                </Border>
+
+                    <!-- Состояние: профили есть, подключения нет -->
+                    <StackPanel Name="NotConnectedState" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Spacing="10" MaxWidth="460" IsVisible="{Binding ShowNotConnected}">
+                        <ctl:PigMascot State="Sniff" Width="200" Height="150" HorizontalAlignment="Center"/>
+                        <TextBlock Classes="h2" HorizontalAlignment="Center" Text="Выберите сервер"/>
+                        <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Text="Дважды щёлкните по серверу в списке слева, чтобы подключиться."/>
+                    </StackPanel>
+
+                    <!-- Итог передачи: «Положили в копилку» / «Достали, не разбивая» -->
+                    <Border Name="TransferResultBanner" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                            Margin="16" Padding="14,10" MaxWidth="560" CornerRadius="12"
+                            Background="{DynamicResource Brush.Surface}"
+                            BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                            BoxShadow="0 6 24 0 #33000000"
+                            IsVisible="{Binding Browser.HasResult}">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                            <ctl:PigMascot Grid.Column="0" State="TransferDone" Width="56" Height="42" Margin="0,0,12,0"
+                                           VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Name="TransferResultTitle" FontWeight="SemiBold" Text="{Binding Browser.LastResult.Title}"/>
+                                <TextBlock Name="TransferResultText" Classes="secondary" TextWrapping="Wrap"
+                                           Text="{Binding Browser.LastResult.Text}"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Name="TransferResultAction" Classes="tool" Margin="12,0,0,0"
+                                    VerticalAlignment="Center" Content="{Binding Browser.LastResult.ActionLabel}"
+                                    AutomationProperties.AutomationId="TransferResultAction"
+                                    Command="{Binding Browser.RunResultActionCommand}"/>
+                            <Button Grid.Column="3" Classes="icon" ToolTip.Tip="Закрыть" VerticalAlignment="Center"
+                                    AutomationProperties.Name="Закрыть сообщение"
+                                    Command="{Binding Browser.DismissResultCommand}">
+                                <ctl:LineIcon Data="{StaticResource Line.Close}" Size="16"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- Подсветка зоны при перетаскивании файлов и папок из проводника -->
+                    <Grid x:Name="DropOverlay" IsVisible="{Binding Browser.IsDropActive}" IsHitTestVisible="False"
+                          Margin="6">
+                        <Border Background="{DynamicResource Brush.Accent}" Opacity="0.10" CornerRadius="12"/>
+                        <Rectangle Stroke="{DynamicResource Brush.Accent}" StrokeThickness="2"
+                                   StrokeDashArray="6,5" RadiusX="12" RadiusY="12"/>
+                        <Border HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,16" CornerRadius="12"
+                                Background="{DynamicResource Brush.Surface}"
+                                BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="1">
+                            <StackPanel Spacing="8" HorizontalAlignment="Center">
+                                <ctl:PigIcon Kind="UploadCoin" Size="40" Foreground="{DynamicResource Brush.Accent}"
+                                             HorizontalAlignment="Center"/>
+                                <TextBlock Name="DropOverlayText" Classes="h2" HorizontalAlignment="Center"
+                                           Text="Отпустите, чтобы положить в копилку"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
             </Grid>
-        </Grid>
+        </Border>
     </DockPanel>
+
+    <!-- Палитра команд (Ctrl+Shift+P): оверлей поверх всего окна -->
+    <views:CommandPalette DataContext="{Binding CommandPalette}"/>
+    </Grid>
 </Window>

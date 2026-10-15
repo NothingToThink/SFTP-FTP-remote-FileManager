@@ -26,7 +26,7 @@ namespace DevAudit;
 /// Запуск: dotnet run --project DevAudit -- [url]
 /// Отчёт: DevAudit/bin/.../audit-report.txt (+ PNG-кадры в audit-out/ для контроля).
 /// </summary>
-public static class Program
+public static partial class Program
 {
     private static readonly int[] Widths = Environment.GetEnvironmentVariable("AUDIT_WIDTHS") is { } w ? w.Split(',').Select(int.Parse).ToArray() : new[] { 860, 1024, 1366, 1920 };
     private const int Height = 700;
@@ -34,11 +34,44 @@ public static class Program
     private static readonly StringBuilder Report = new();
     private static string _outDir = "audit-out";
     private static int _issuesTotal;
+    private static string _auditUrl = "http://127.0.0.1:5116";
 
     [STAThread]
     public static void Main(string[] args)
     {
+        // Режим скриншотов без сервера: DevAudit --shots <папка> <префикс>
+        if (args.Length >= 2 && args[0] == "--shots")
+        {
+            RunShots(args[1], args.Length > 2 ? args[2] : "shot");
+            return;
+        }
+
+        if (args.Length >= 2 && args[0] == "--dialog-shots")
+        {
+            DialogShots.Run(args[1]);
+            return;
+        }
+
+        if (args.Length >= 2 && args[0] == "--palette-shots")
+        {
+            PaletteShots.Run(args[1]);
+            return;
+        }
+
+        if (args.Length >= 2 && args[0] is "--splash-shots" or "--app-icon")
+        {
+            if (args[0] == "--splash-shots") SplashShots.RunSplash(args[1]); else SplashShots.RunAppIcon(args[1]);
+            return;
+        }
+
+        if (args.Contains("--pig-gallery"))
+        {
+            PigGallery.Run(args.SkipWhile(a => a != "--out").Skip(1).FirstOrDefault());
+            return;
+        }
+
         var url = args.Length > 0 ? args[0] : "http://127.0.0.1:5116";
+    _auditUrl = url;
         _outDir = Path.Combine(AppContext.BaseDirectory, "audit-out");
         Directory.CreateDirectory(_outDir);
 
@@ -64,6 +97,187 @@ public static class Program
             new UTF8Encoding(false));
         Console.Out.WriteLine($"ИТОГО ПРОБЛЕМ: {_issuesTotal}");
         Console.Out.WriteLine($"Отчёт: {Path.Combine(_outDir, "audit-report.txt")}");
+    }
+
+    /// <summary>
+    /// Headless-скриншоты главного окна и диалога профиля в обеих темах: &lt;префикс&gt;-light.png / -dark.png
+    /// (главное окно с фейковыми данными, без сервера) и &lt;префикс&gt;-dialog-*.png.
+    /// </summary>
+    private static void RunShots(string dir, string prefix)
+    {
+        Directory.CreateDirectory(dir);
+        AppBuilder.Configure<App>()
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            .LogToTrace(LogEventLevel.Error)
+            .SetupWithoutStarting();
+
+        var tmp = Path.Combine(Path.GetTempPath(), "devaudit-shots-" + Guid.NewGuid().ToString("N"));
+        Environment.SetEnvironmentVariable(ClientSettings.DataDirEnvironmentVariable, tmp);
+        foreach (var dark in new[] { false, true })
+        {
+            var name = dark ? "dark" : "light";
+            var settings = new ClientSettings { ServerUrl = "http://127.0.0.1:1", Theme = name };
+            new ThemeService(settings).Apply();
+            var vm = ShotVm(settings);
+            var prof = (string n, string host, Protocol pr) => new ProfileViewModel(
+                SavedProfile.Create(n, new HostProfile(host, pr, new PasswordAuth("deploy", "x"))));
+            vm.Profiles.Add(prof("prod-01", "10.0.0.5", Protocol.Sftp));
+            vm.Profiles.Add(prof("backup-ftp", "ftp.example.com", Protocol.Ftp));
+            vm.Profiles.Add(prof("Локальная папка", "/Users/demo", Protocol.Local));
+            vm.SelectedProfile = vm.Profiles[0];
+            vm.Profiles[0].IsConnected = true;
+            vm.Profiles[1].State = ConnectionState.Error;
+            ShotBind(vm);
+            vm.Browser.Transfers.IsExpanded = false;
+
+            Snap(vm, dir, $"{prefix}-{name}.png");
+
+            // Нормальный список + раскрытая панель передач
+            var up = vm.Browser.Transfers.Start("backup-2026-05-01.tar.gz", true, 73400320);
+            up.Report(33000000);
+            var dl = vm.Browser.Transfers.Start("index.html", false, 18432);
+            dl.Complete();
+            vm.Browser.Transfers.Start("deploy.sh", true, 1220);
+            vm.Browser.Transfers.IsExpanded = true;
+            Snap(vm, dir, $"{prefix}-transfers-{name}.png");
+            vm.Browser.Transfers.IsExpanded = false;
+            vm.Browser.Transfers.Items.Clear();
+
+            // Нет профилей
+            var empty = ShotVm(settings);
+            Snap(empty, dir, $"{prefix}-empty-{name}.png");
+
+            // Профили есть, подключения нет
+            var idle = ShotVm(settings);
+            idle.Profiles.Add(vm.Profiles[0]);
+            idle.Profiles.Add(vm.Profiles[1]);
+            Snap(idle, dir, $"{prefix}-idle-{name}.png");
+
+            // Подключение
+            vm.Browser.Reset();
+            vm.IsConnecting = true;
+            vm.ConnectingName = "prod-01";
+            Snap(vm, dir, $"{prefix}-connecting-{name}.png");
+            vm.IsConnecting = false;
+
+            // Ошибка
+            vm.ConnectErrorTitle = "Не удалось подключиться";
+            vm.ConnectErrorText = "Сервер prod-01 не принял логин или пароль. Проверьте их в профиле.";
+            vm.HasConnectError = true;
+            Snap(vm, dir, $"{prefix}-error-{name}.png");
+            vm.HasConnectError = false;
+
+            // 3E: ошибка из ErrorPresenter с раскрытым «Подробнее» и кнопками действий
+            vm.ShowConnectError(ErrorPresenter.Present(new ApiException(500, "Internal server error"),
+                new ErrorContext("prod-01", true)));
+            vm.IsErrorDetailsExpanded = true;
+            Snap(vm, dir, $"{prefix}-error-details-{name}.png");
+            vm.IsErrorDetailsExpanded = false;
+            // 3E: подмена ключа — свинка визжит, пока открыт диалог
+            vm.ShowConnectError(ErrorPresenter.Present(
+                new ApiException(409, "host key changed", ApiException.KindHostKeyMismatch, "prod-01", 22, "SHA256:old", "SHA256:new"),
+                new ErrorContext("prod-01", true)));
+            vm.IsHostKeyDialogOpen = true;
+            Snap(vm, dir, $"{prefix}-error-squeal-{name}.png");
+            vm.IsHostKeyDialogOpen = false;
+            vm.HasConnectError = false;
+
+            // Пустая папка
+            ShotBind(vm);
+            vm.Browser.Items.Clear();
+            vm.Browser.ItemCount = 0;
+            Snap(vm, dir, $"{prefix}-emptyfolder-{name}.png");
+
+            // 1280x720
+            ShotBind(vm);
+            Snap(vm, dir, $"{prefix}-1280-{name}.png", 1280, 720);
+
+            // 3E: передачи с реальным процентом и скоростью, затем итог «Положили в копилку»
+            ShotBind(vm);
+            vm.Browser.Transfers.Items.Clear();
+            var x1 = vm.Browser.Transfers.Start("backup-2026-05-01.tar.gz", true, 73400320);
+            var x2 = vm.Browser.Transfers.Start("logo.png", true, 48211);
+            x1.Begin();
+            Thread.Sleep(350);
+            x1.Report(33_000_000);
+            x2.Report(21_000);
+            Snap(vm, dir, $"{prefix}-xfer-active-{name}.png");
+            vm.Browser.Transfers.IsExpanded = true;
+            Snap(vm, dir, $"{prefix}-xfer-active-open-{name}.png");
+            x1.Complete();
+            x2.Complete();
+            vm.Browser.Transfers.IsExpanded = false;
+            vm.Browser.LastResult = new TransferResult(TransferResultKind.Upload,
+                TransferText.UploadDone(2, 73448531, "/var/www/site").Title,
+                TransferText.UploadDone(2, 73448531, "/var/www/site").Text, "Показать", "logo.png");
+            Snap(vm, dir, $"{prefix}-xfer-done-{name}.png");
+            vm.Browser.LastResult = new TransferResult(TransferResultKind.Download,
+                TransferText.DownloadDone(3, 12582912, "/Users/demo/Downloads").Title,
+                TransferText.DownloadDone(3, 12582912, "/Users/demo/Downloads").Text, "Открыть папку", "/tmp");
+            Snap(vm, dir, $"{prefix}-xfer-done-download-{name}.png");
+            vm.Browser.LastResult = null;
+            vm.Browser.Transfers.Items.Clear();
+
+            // 3E: подсветка зоны при перетаскивании файлов из проводника
+            vm.Browser.IsDropActive = true;
+            Snap(vm, dir, $"{prefix}-drop-{name}.png");
+            vm.Browser.IsDropActive = false;
+
+            var dlg = new ProfileEditWindow
+            {
+                DataContext = new ProfileEditViewModel(null) { Protocol = Protocol.Sftp, AuthKind = AuthKind.Key },
+            };
+            dlg.Show();
+            Pump();
+            dlg.CaptureRenderedFrame()?.Save(Path.Combine(dir, $"{prefix}-dialog-{name}.png"), PngBitmapEncoderOptions.Default);
+            dlg.Close();
+        }
+        Console.Out.WriteLine($"Скриншоты: {dir}");
+    }
+
+    /// <summary>VM для скриншотов: ждём окончания стартовой проверки сервера и считаем сервер доступным.</summary>
+    private static MainWindowViewModel ShotVm(ClientSettings settings)
+    {
+        var vm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl),
+            new HeadlessDialogService());
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (vm.ServerStatus is ServerStatus.Unknown or ServerStatus.Checking && DateTime.UtcNow < until)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(20);
+        }
+        vm.ServerStatus = ServerStatus.Reachable;
+        vm.StatusText = "Готов";
+        return vm;
+    }
+
+    private static void ShotBind(MainWindowViewModel vm)
+    {
+        vm.ActiveProfile = vm.Profiles[0];
+        vm.Browser.IsBound = true;
+        vm.Browser.BoundProtocol = Protocol.Sftp;
+        vm.Browser.ConnectionName = "prod-01";
+        vm.Browser.CurrentPath = "/var/www/site";
+        vm.Browser.Items.Clear();
+        vm.Browser.Items.Add(new FileItem { Name = "assets", IsDirectory = true, LastModified = new DateTime(2026, 5, 2, 10, 14, 0), Permissions = "drwxr-xr-x" });
+        vm.Browser.Items.Add(new FileItem { Name = "logs", IsDirectory = true, LastModified = new DateTime(2026, 5, 3, 8, 1, 0), Permissions = "drwxr-x---" });
+        vm.Browser.Items.Add(new FileItem { Name = "index.html", Size = 18432, LastModified = new DateTime(2026, 4, 28, 17, 40, 0), Permissions = "-rw-r--r--" });
+        vm.Browser.Items.Add(new FileItem { Name = "logo.png", Size = 48211, LastModified = new DateTime(2026, 4, 28, 17, 41, 0), Permissions = "-rw-r--r--" });
+        vm.Browser.Items.Add(new FileItem { Name = "deploy.sh", Size = 1220, LastModified = new DateTime(2026, 4, 21, 9, 5, 0), Permissions = "-rwxr-xr-x" });
+        vm.Browser.Items.Add(new FileItem { Name = "notes.txt", Size = 640, LastModified = new DateTime(2026, 4, 20, 9, 5, 0), Permissions = "-rw-r--r--" });
+        vm.Browser.Items.Add(new FileItem { Name = "backup-2026-05-01.tar.gz", Size = 73400320, LastModified = new DateTime(2026, 5, 1, 3, 0, 0), Permissions = "-rw-------" });
+        vm.Browser.ItemCount = vm.Browser.Items.Count;
+        vm.Browser.SelectedItem = vm.Browser.Items[2];
+    }
+
+    private static void Snap(MainWindowViewModel vm, string dir, string file, int w = 1180, int h = 740)
+    {
+        var window = new MainWindow { DataContext = vm, Width = w, Height = h };
+        window.Show();
+        Pump();
+        window.CaptureRenderedFrame()?.Save(Path.Combine(dir, file), PngBitmapEncoderOptions.Default);
+        window.Close();
     }
 
     private static async Task RunAsync(string url)
@@ -96,6 +310,13 @@ public static class Program
             await ScenarioManyProfiles(api!);
         if (serverUp && localProfileId is not null)
             await ScenarioFullFunctional(api!, url, localProfileId.Value);
+        ScenarioTransferTexts();
+        await ScenarioKeyboard();
+        await ScenarioConnectErrors();
+        if (serverUp && localProfileId is not null)
+            await ScenarioTransfers(api!, url, localProfileId.Value);
+        else
+            Report.AppendLine("  [SKIP] передачи на живом бэкенде: сервер недоступен");
         await ScenarioProfileValidation();
         await ScenarioTunnels();
         await ScenarioServerDown();
@@ -172,8 +393,8 @@ public static class Program
             }
             else
             {
-                Report.AppendLine("  [ISSUE] Expander-секции не найдены в диалоге");
-                _issuesTotal++;
+                // макет pig: вместо секций-Expander — слоты протоколов, сворачивание неприменимо
+                Report.AppendLine("  [OK] секций-Expander в диалоге нет (макет pig) — проверка сворачивания неприменима");
             }
 
             AnalyzeWindow(window, name);
@@ -580,7 +801,7 @@ public static class Program
         t -= 0; // счётчик уже увеличен в Case
 
         // --- Часть 2: реальный сервер, Local-соединение → туннели недоступны ---
-        var settings = new ClientSettings { ServerUrl = "http://127.0.0.1:5116" };
+        var settings = new ClientSettings { ServerUrl = _auditUrl };
         var mainVm = new MainWindowViewModel(settings, new ExternalServerLauncher(() => settings.ServerUrl),
             new HeadlessDialogService());
         var window = new MainWindow { DataContext = mainVm, Width = 1180, Height = 700 };
@@ -1061,6 +1282,55 @@ public sealed class HeadlessDialogService : IDialogService
     public Queue<bool> ConfirmResults { get; } = new();
     public Queue<string?> PickOpenResults { get; } = new();
     public Queue<string?> PickSaveResults { get; } = new();
+    public Queue<string?> PickFolderResults { get; } = new();
+    /// <summary>Ответы на ключи сервера (доверять / нет); по умолчанию — отказ.</summary>
+    public Queue<bool> HostKeyResults { get; } = new();
+    /// <summary>Ответы на «Заменить?»; по умолчанию — не заменять.</summary>
+    public Queue<bool> OverwriteResults { get; } = new();
+    /// <summary>Выбранное действие в диалоге ошибки; по умолчанию — закрыть.</summary>
+    public Queue<UserErrorAction?> ErrorActionResults { get; } = new();
+    /// <summary>Вызывается в момент показа диалога ключа (проверить состояние панели «пока диалог открыт»).</summary>
+    public Action<string>? OnHostKeyDialog { get; set; }
+    public List<UserError> Errors { get; } = new();
+
+    public Task<string?> PickFolderAsync(string title)
+    {
+        Calls.Add($"pickFolder:{title}");
+        return Task.FromResult(PickFolderResults.Count > 0 ? PickFolderResults.Dequeue() : null);
+    }
+
+    public Task<UserErrorAction?> ShowErrorAsync(UserError error)
+    {
+        Calls.Add($"error:{error.Title}");
+        Errors.Add(error);
+        return Task.FromResult(ErrorActionResults.Count > 0 ? ErrorActionResults.Dequeue() : null);
+    }
+
+    public Task<bool> ShowUnknownHostKeyAsync(string host, int port, string fingerprint)
+    {
+        Calls.Add($"unknownHostKey:{host}:{port}");
+        OnHostKeyDialog?.Invoke("unknown");
+        return Task.FromResult(HostKeyResults.Count > 0 && HostKeyResults.Dequeue());
+    }
+
+    public Task<bool> ShowHostKeyMismatchAsync(string host, int port, string? expected, string? presented)
+    {
+        Calls.Add($"hostKeyMismatch:{host}:{port}");
+        OnHostKeyDialog?.Invoke("mismatch");
+        return Task.FromResult(HostKeyResults.Count > 0 && HostKeyResults.Dequeue());
+    }
+
+    public Task<bool> ConfirmDeleteAsync(int count, string? singleName = null, bool hasFolders = false)
+    {
+        Calls.Add($"confirmDelete:{count}:{singleName}:{hasFolders}");
+        return Task.FromResult(ConfirmResults.Count > 0 ? ConfirmResults.Dequeue() : false);
+    }
+
+    public Task<bool> ConfirmOverwriteAsync(string name)
+    {
+        Calls.Add($"confirmOverwrite:{name}");
+        return Task.FromResult(OverwriteResults.Count > 0 && OverwriteResults.Dequeue());
+    }
 
     public Task<string?> PromptAsync(string title, string label, string defaultValue = "")
     {

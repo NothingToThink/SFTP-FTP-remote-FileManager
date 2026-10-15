@@ -65,6 +65,15 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
     public Task DeleteProfileAsync(Guid id, CancellationToken ct = default)
         => DeleteAsync($"profiles/{id}", ct);
 
+    // --- Ключи серверов ---
+
+    /// <summary>
+    /// Подтвердить отпечаток ключа сервера (первое знакомство или осознанная замена после подмены).
+    /// </summary>
+    // TODO(S7): эндпоинта ещё нет на бэкенде (POST hostkeys/{host}/{port}/trust { fingerprint })
+    public Task TrustHostKeyAsync(string host, int port, string fingerprint, CancellationToken ct = default)
+        => PostAsync($"hostkeys/{Uri.EscapeDataString(host)}/{port}/trust", new { fingerprint }, ct);
+
     // --- Соединения ---
 
     public Task<List<Guid>> GetConnectionIdsAsync(CancellationToken ct = default)
@@ -201,8 +210,12 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
     public Task ChangeDirectoryAsync(Guid id, string path, CancellationToken ct = default)
         => PatchStringAsync($"connections/{id}/filesystem/dir/current", path, ct);
 
-    /// <summary>Файл читает Backend сам по localPath (Backend локален — это путь пользователя).</summary>
-    public async Task UploadFileAsync(Guid id, string remotePath, string localFilePath, CancellationToken ct = default)
+    /// <summary>
+    /// Файл читает Backend сам по localPath (Backend локален — это путь пользователя), поэтому
+    /// байтовый прогресс недоступен; репортим полный размер после завершения передачи.
+    /// </summary>
+    public async Task UploadFileAsync(Guid id, string remotePath, string localFilePath,
+        CancellationToken ct = default, IProgress<long>? progress = null)
     {
         using var resp = await _http.PostAsync(
             $"connections/{id}/filesystem/file/upload" +
@@ -211,10 +224,12 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
             content: null,
             ct);
         await EnsureSuccessAsync(resp, ct);
+        progress?.Report(new FileInfo(localFilePath).Length);
     }
 
-    /// <summary>Файл пишет Backend сам по localPath; тело ответа пустое.</summary>
-    public async Task DownloadFileAsync(Guid id, string remotePath, string localFilePath, CancellationToken ct = default)
+    /// <summary>Файл пишет Backend сам по localPath; тело ответа пустое. Прогресс — по факту завершения.</summary>
+    public async Task DownloadFileAsync(Guid id, string remotePath, string localFilePath,
+        CancellationToken ct = default, IProgress<long>? progress = null)
     {
         using var resp = await _http.GetAsync(
             $"connections/{id}/filesystem/file/download" +
@@ -222,6 +237,7 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
             $"&localPath={Uri.EscapeDataString(localFilePath)}",
             ct);
         await EnsureSuccessAsync(resp, ct);
+        progress?.Report(new FileInfo(localFilePath).Length);
     }
 
     // --- Команды плагинов ---
@@ -324,15 +340,30 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
             return;
 
         string message;
+        string? kind = null, host = null, expected = null, presented = null;
+        int? port = null;
         try
         {
             var body = await resp.Content.ReadAsStringAsync(ct);
             try
             {
                 using var doc = JsonDocument.Parse(body);
-                message = doc.RootElement.TryGetProperty("error", out var err)
+                var root = doc.RootElement;
+                var isObject = root.ValueKind == JsonValueKind.Object;
+                message = isObject && root.TryGetProperty("error", out var err)
                     ? err.GetString() ?? body
                     : body;
+                if (isObject)
+                {
+                    string? Str(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
+                        ? v.GetString() : null;
+                    kind = Str("kind");
+                    host = Str("host");
+                    expected = Str("expected");
+                    presented = Str("presented");
+                    if (root.TryGetProperty("port", out var p) && p.ValueKind == JsonValueKind.Number)
+                        port = p.GetInt32();
+                }
             }
             catch (JsonException)
             {
@@ -344,6 +375,6 @@ public class FileManagerApiClient : IForwardingApi, IDisposable
             message = resp.ReasonPhrase ?? "нет описания";
         }
 
-        throw new ApiException((int)resp.StatusCode, message);
+        throw new ApiException((int)resp.StatusCode, message, kind, host, port, expected, presented);
     }
 }

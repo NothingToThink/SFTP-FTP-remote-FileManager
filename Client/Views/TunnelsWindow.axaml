@@ -10,15 +10,28 @@
         WindowStartupLocation="CenterOwner">
 
     <Window.Resources>
-        <conv:ForwardStateToBrushConverter x:Key="StateBrush"/>
+        <conv:EnumEqualsConverter x:Key="EnumEq"/>
     </Window.Resources>
+
+    <Window.Styles>
+        <!-- Точка состояния туннеля: цвета из токенов темы -->
+        <Style Selector="Ellipse.stateDot">
+            <Setter Property="Fill" Value="{DynamicResource Brush.TextFaint}"/>
+        </Style>
+        <Style Selector="Ellipse.stateDot.active">
+            <Setter Property="Fill" Value="{DynamicResource Brush.Success}"/>
+        </Style>
+        <Style Selector="Ellipse.stateDot.failed">
+            <Setter Property="Fill" Value="{DynamicResource Brush.Error}"/>
+        </Style>
+    </Window.Styles>
 
     <DockPanel Margin="12">
         <!-- Ошибка / предупреждение -->
-        <Border DockPanel.Dock="Bottom" Background="#2A1715" CornerRadius="6" Padding="10,7" Margin="0,10,0,0"
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.ErrorSoft}" CornerRadius="6" Padding="10,7" Margin="0,10,0,0"
                 IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
             <TextBlock Name="TunnelErrorText" AutomationProperties.AutomationId="TunnelErrorText"
-                       Text="{Binding ErrorText}" Foreground="#F09089" FontSize="12.5" TextWrapping="Wrap"/>
+                       Text="{Binding ErrorText}" Foreground="{DynamicResource Brush.Error}" FontSize="12.5" TextWrapping="Wrap"/>
         </Border>
 
         <!-- Кнопки -->
@@ -60,8 +73,9 @@
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="vm:TunnelItemViewModel">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Ellipse Width="8" Height="8" VerticalAlignment="Center"
-                                         Fill="{Binding Status.State, Converter={StaticResource StateBrush}}"/>
+                                <Ellipse Classes="stateDot" Width="8" Height="8" VerticalAlignment="Center"
+                                         Classes.active="{Binding Status.State, Converter={StaticResource EnumEq}, ConverterParameter=Active}"
+                                         Classes.failed="{Binding Status.State, Converter={StaticResource EnumEq}, ConverterParameter=Failed}"/>
                                 <TextBlock Text="{Binding Name}" FontWeight="Medium"/>
                             </StackPanel>
                         </DataTemplate>

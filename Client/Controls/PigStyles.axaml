@@ -1,0 +1,288 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:pig="using:FileManagerClient.Controls">
+    <!--
+        Стили и анимации свинки. Подключение (в Application.Styles):
+            <StyleInclude Source="avares://FileManagerClient/Controls/PigStyles.axaml"/>
+        Анимации привязаны к pseudo-classes PigMascot (:connecting, :alive ...) и к имени части сцены
+        (Canvas#Tail, #Body, #Ears ...). При PigMascot.ReduceMotion (:reduce) остаётся только поза.
+        Сгенерировано скриптом-заготовкой, дальше редактируется руками.
+    -->
+
+    <Styles.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="Pig.Ink" Color="#3A1420"/>
+                    <SolidColorBrush x:Key="Pig.Body" Color="#F7A8B8"/>
+                    <SolidColorBrush x:Key="Pig.BodyShade" Color="#F08AA0"/>
+                    <SolidColorBrush x:Key="Pig.Slot" Color="#7A2338"/>
+                    <SolidColorBrush x:Key="Pig.Cork" Color="#C8925A"/>
+                    <SolidColorBrush x:Key="Pig.Line" Color="#3A1420"/>
+                    <SolidColorBrush x:Key="Pig.Detail" Color="#7A2338"/>
+                    <SolidColorBrush x:Key="Brush.Error" Color="#C2410C"/>
+                    <SolidColorBrush x:Key="Brush.Text" Color="#3A1420"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="Pig.Ink" Color="#3A1420"/>
+                    <SolidColorBrush x:Key="Pig.Body" Color="#F7A8B8"/>
+                    <SolidColorBrush x:Key="Pig.BodyShade" Color="#F08AA0"/>
+                    <SolidColorBrush x:Key="Pig.Slot" Color="#7A2338"/>
+                    <SolidColorBrush x:Key="Pig.Cork" Color="#C8925A"/>
+                    <!-- в тёмной теме хвост и «zzz» светлеют (как в *-dark.svg): отдельные токены -->
+                    <SolidColorBrush x:Key="Pig.Line" Color="#F7A8B8"/>
+                    <SolidColorBrush x:Key="Pig.Detail" Color="#F08AA0"/>
+                    <SolidColorBrush x:Key="Brush.Error" Color="#FB923C"/>
+                    <SolidColorBrush x:Key="Brush.Text" Color="#F7E9EC"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Styles.Resources>
+
+    <!-- Пусто: дремлет, медленное «дыхание» (цикл - допустимое ожидание) -->
+    <Style Selector="pig|PigMascot:empty:not(:reduce) Canvas#Body">
+        <Style.Animations>
+            <Animation Duration="0:0:3.2" IterationCount="INFINITE" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleY" Value="1"/><Setter Property="ScaleTransform.ScaleX" Value="1"/></KeyFrame>
+                <KeyFrame Cue="50%"><Setter Property="ScaleTransform.ScaleY" Value="1.03"/><Setter Property="ScaleTransform.ScaleX" Value="1.008"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="ScaleTransform.ScaleY" Value="1"/><Setter Property="ScaleTransform.ScaleX" Value="1"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigMascot:empty:not(:reduce) Canvas#Zzz">
+        <Style.Animations>
+            <Animation Duration="0:0:3.2" IterationCount="INFINITE" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.45"/></KeyFrame>
+                <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.45"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <!-- Подключается: хвост раскручивается и скручивается, цикл 0.9 с.
+         Нижняя граница Curl 0.4: при меньшей хвост длиной 92 вылезает за левый край сцены 320x240 -->
+    <Style Selector="pig|PigMascot:connecting:not(:reduce) pig|PigTail#Tail">
+        <Style.Animations>
+            <Animation Duration="0:0:0.9" IterationCount="INFINITE" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%"><Setter Property="Curl" Value="0.4"/></KeyFrame>
+                <KeyFrame Cue="50%"><Setter Property="Curl" Value="1"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="Curl" Value="0.4"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigMascot:connecting:not(:reduce) Canvas#Motion">
+        <Style.Animations>
+            <Animation Duration="0:0:0.9" IterationCount="INFINITE">
+                <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+                <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.35"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <!-- Поза «подключается» (и при ReduceMotion) -->
+    <Style Selector="pig|PigMascot:connecting pig|PigTail#Tail">
+        <Setter Property="Curl" Value="0.6"/>
+    </Style>
+    <!-- Линии движения - только пока идёт подключение -->
+    <Style Selector="pig|PigMascot:connected Canvas#Motion, pig|PigMascot:alive Canvas#Motion, pig|PigMascot:download Canvas#Motion">
+        <Setter Property="IsVisible" Value="False"/>
+    </Style>
+    <!-- Подключено: хвост туго закручен -->
+    <Style Selector="pig|PigMascot:connected pig|PigTail#Tail, pig|PigMascot:alive pig|PigTail#Tail, pig|PigMascot:download pig|PigTail#Tail">
+        <Setter Property="Curl" Value="1"/>
+    </Style>
+    <!-- Подключено: один раз виляет -->
+    <Style Selector="pig|PigMascot:connected:not(:reduce) pig|PigTail#Tail">
+        <Style.Animations>
+            <Animation Duration="0:0:0.7" IterationCount="1" Easing="CubicEaseOut">
+                <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+                <KeyFrame Cue="25%"><Setter Property="RotateTransform.Angle" Value="-22"/></KeyFrame>
+                <KeyFrame Cue="55%"><Setter Property="RotateTransform.Angle" Value="16"/></KeyFrame>
+                <KeyFrame Cue="80%"><Setter Property="RotateTransform.Angle" Value="-8"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <!-- Живое соединение: медленное покачивание раз в 8 с -->
+    <Style Selector="pig|PigMascot:alive:not(:reduce) pig|PigTail#Tail">
+        <Style.Animations>
+            <Animation Duration="0:0:8" IterationCount="INFINITE" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+                <KeyFrame Cue="88%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+                <KeyFrame Cue="92%"><Setter Property="RotateTransform.Angle" Value="10"/></KeyFrame>
+                <KeyFrame Cue="96%"><Setter Property="RotateTransform.Angle" Value="-7"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <!-- Лишнее из сцены успеха -->
+    <Style Selector="pig|PigMascot:upload Canvas#Sparkle, pig|PigMascot:sniff Canvas#Sparkle, pig|PigMascot:sniff Canvas#Coin">
+        <Setter Property="IsVisible" Value="False"/>
+    </Style>
+    <!-- Загрузка: монетка падает в прорезь -->
+    <Style Selector="pig|PigMascot:upload:not(:reduce) Canvas#Coin">
+        <Style.Animations>
+            <Animation Duration="0:0:0.7" IterationCount="1" Easing="QuadraticEaseIn" FillMode="Forward">
+                <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="0"/><Setter Property="Opacity" Value="1"/></KeyFrame>
+                <KeyFrame Cue="70%"><Setter Property="TranslateTransform.Y" Value="27"/><Setter Property="Opacity" Value="1"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="TranslateTransform.Y" Value="31"/><Setter Property="Opacity" Value="0"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigMascot:upload:reduce Canvas#Coin">
+        <Setter Property="Opacity" Value="0"/>
+    </Style>
+    <!-- Скачивание: пробка выскакивает из брюха -->
+    <Style Selector="pig|PigMascot:download:not(:reduce) Canvas#Cork">
+        <Style.Animations>
+            <Animation Duration="0:0:0.8" IterationCount="1" Easing="CubicEaseOut" FillMode="Forward">
+                <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="0"/><Setter Property="Opacity" Value="1"/></KeyFrame>
+                <KeyFrame Cue="35%"><Setter Property="TranslateTransform.Y" Value="-16"/><Setter Property="Opacity" Value="1"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="TranslateTransform.Y" Value="16"/><Setter Property="Opacity" Value="0"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigMascot:download:reduce Canvas#Cork">
+        <Setter Property="Opacity" Value="0"/>
+    </Style>
+    <!-- Передача готова: короткий прыжок -->
+    <Style Selector="pig|PigMascot:transferdone:not(:reduce) Canvas#Pig">
+        <Style.Animations>
+            <Animation Duration="0:0:0.45" IterationCount="1" Easing="CubicEaseOut">
+                <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="-14"/></KeyFrame>
+                <KeyFrame Cue="40%"><Setter Property="TranslateTransform.Y" Value="-44"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="TranslateTransform.Y" Value="-14"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigMascot:transferdone:not(:reduce) Canvas#Shadow">
+        <Style.Animations>
+            <Animation Duration="0:0:0.45" IterationCount="1" Easing="CubicEaseOut">
+                <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleX" Value="1"/></KeyFrame>
+                <KeyFrame Cue="40%"><Setter Property="ScaleTransform.ScaleX" Value="0.75"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="ScaleTransform.ScaleX" Value="1"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <!-- Визг: тряска 300 мс и линии тревоги -->
+    <Style Selector="pig|PigMascot:squeal:not(:reduce) Canvas#Pig">
+        <Style.Animations>
+            <Animation Duration="0:0:0.3" IterationCount="1">
+                <KeyFrame Cue="0%"><Setter Property="TranslateTransform.X" Value="0"/></KeyFrame>
+                <KeyFrame Cue="12%"><Setter Property="TranslateTransform.X" Value="-7"/></KeyFrame>
+                <KeyFrame Cue="30%"><Setter Property="TranslateTransform.X" Value="7"/></KeyFrame>
+                <KeyFrame Cue="50%"><Setter Property="TranslateTransform.X" Value="-6"/></KeyFrame>
+                <KeyFrame Cue="70%"><Setter Property="TranslateTransform.X" Value="5"/></KeyFrame>
+                <KeyFrame Cue="88%"><Setter Property="TranslateTransform.X" Value="-3"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="TranslateTransform.X" Value="0"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigMascot:squeal:not(:reduce) Canvas#Alarm">
+        <Style.Animations>
+            <Animation Duration="0:0:0.25" IterationCount="1" Easing="CubicEaseOut" FillMode="Forward">
+                <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0"/><Setter Property="ScaleTransform.ScaleX" Value="0.5"/><Setter Property="ScaleTransform.ScaleY" Value="0.5"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1"/><Setter Property="ScaleTransform.ScaleX" Value="1"/><Setter Property="ScaleTransform.ScaleY" Value="1"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigMascot:squeal:not(:reduce) Canvas#Bang">
+        <Style.Animations>
+            <Animation Duration="0:0:0.35" IterationCount="1" Easing="CubicEaseOut" FillMode="Forward">
+                <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleY" Value="0.2"/><Setter Property="Opacity" Value="0"/></KeyFrame>
+                <KeyFrame Cue="60%"><Setter Property="ScaleTransform.ScaleY" Value="1.25"/><Setter Property="Opacity" Value="1"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="ScaleTransform.ScaleY" Value="1"/><Setter Property="Opacity" Value="1"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <!-- Туннели: запах-волны над пятачком -->
+    <Style Selector="pig|PigMascot:sniff pig|PigTail#Tail">
+        <Setter Property="Curl" Value="0.8"/>
+    </Style>
+    <Style Selector="pig|PigMascot:sniff:not(:reduce) Canvas#Snout">
+        <Style.Animations>
+            <Animation Duration="0:0:0.5" IterationCount="INFINITE" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%"><Setter Property="TranslateTransform.X" Value="0"/></KeyFrame>
+                <KeyFrame Cue="50%"><Setter Property="TranslateTransform.X" Value="-3"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="TranslateTransform.X" Value="0"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigMascot:sniff:not(:reduce) Path#Wave1">
+        <Style.Animations>
+            <Animation Duration="0:0:1.35" IterationCount="INFINITE" Easing="SineEaseOut" Delay="0:0:0">
+                <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0"/><Setter Property="TranslateTransform.Y" Value="8"/></KeyFrame>
+                <KeyFrame Cue="30%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0"/><Setter Property="TranslateTransform.Y" Value="-10"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigMascot:sniff:not(:reduce) Path#Wave2">
+        <Style.Animations>
+            <Animation Duration="0:0:1.35" IterationCount="INFINITE" Easing="SineEaseOut" Delay="0:0:0.45">
+                <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0"/><Setter Property="TranslateTransform.Y" Value="8"/></KeyFrame>
+                <KeyFrame Cue="30%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0"/><Setter Property="TranslateTransform.Y" Value="-10"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigMascot:sniff:not(:reduce) Path#Wave3">
+        <Style.Animations>
+            <Animation Duration="0:0:1.35" IterationCount="INFINITE" Easing="SineEaseOut" Delay="0:0:0.9">
+                <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0"/><Setter Property="TranslateTransform.Y" Value="8"/></KeyFrame>
+                <KeyFrame Cue="30%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0"/><Setter Property="TranslateTransform.Y" Value="-10"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <!-- Мелкий индикатор хвоста (строка хоста, статус-бар): <pig:PigTail Classes="small connecting"/> -->
+    <Style Selector="pig|PigTail.small">
+        <Setter Property="Width" Value="16"/>
+        <Setter Property="Height" Value="16"/>
+        <Setter Property="FitToBounds" Value="True"/><Setter Property="Length" Value="40"/>
+        <Setter Property="Stroke" Value="{DynamicResource Brush.Text}"/>
+        <Setter Property="Curl" Value="1"/>
+    </Style>
+    <Style Selector="pig|PigTail.small.error">
+        <!-- Ошибка: хвост обвис - свисает вниз и только на кончике слабо подгибается («J»),
+             вместо тугого завитка. Поза статична, поэтому масштаб считается по ней самой -->
+        <Setter Property="Direction" Value="98"/>
+        <Setter Property="Curl" Value="0.25"/>
+        <Setter Property="FitMinCurl" Value="0.25"/>
+        <Setter Property="FitMaxCurl" Value="0.25"/>
+        <Setter Property="Stroke" Value="{DynamicResource Brush.Error}"/>
+    </Style>
+    <Style Selector="pig|PigTail.small.connecting">
+        <Setter Property="Curl" Value="0.6"/>
+    </Style>
+    <Style Selector="pig|PigTail.small.connecting:not(.reduce)">
+        <Style.Animations>
+            <Animation Duration="0:0:0.9" IterationCount="INFINITE" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%"><Setter Property="Curl" Value="0.4"/></KeyFrame>
+                <KeyFrame Cue="50%"><Setter Property="Curl" Value="1"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="Curl" Value="0.4"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigTail.small.connected:not(.reduce)">
+        <Style.Animations>
+            <Animation Duration="0:0:0.7" IterationCount="1" Easing="CubicEaseOut">
+                <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+                <KeyFrame Cue="25%"><Setter Property="RotateTransform.Angle" Value="-22"/></KeyFrame>
+                <KeyFrame Cue="55%"><Setter Property="RotateTransform.Angle" Value="16"/></KeyFrame>
+                <KeyFrame Cue="80%"><Setter Property="RotateTransform.Angle" Value="-8"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector="pig|PigTail.small.alive:not(.reduce)">
+        <Style.Animations>
+            <Animation Duration="0:0:8" IterationCount="INFINITE" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+                <KeyFrame Cue="88%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+                <KeyFrame Cue="92%"><Setter Property="RotateTransform.Angle" Value="10"/></KeyFrame>
+                <KeyFrame Cue="96%"><Setter Property="RotateTransform.Angle" Value="-7"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+</Styles>
