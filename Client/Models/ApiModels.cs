@@ -212,6 +212,33 @@ public class PortSuggestion
             return name is null ? $"{Port}{scope}" : $"{Port} — {name}{scope}";
         }
     }
+
+    /// <summary>Короткая подпись для чипа: «5432 · PostgreSQL».</summary>
+    [JsonIgnore]
+    public string ChipLabel
+    {
+        get
+        {
+            var name = Service ?? Process;
+            if (string.IsNullOrWhiteSpace(name))
+                name = Port switch { 80 or 8080 or 8000 or 8888 => "HTTP", 443 or 8443 => "HTTPS", 22 => "SSH", _ => null };
+            if (name is null)
+                return Port.ToString();
+            var pretty = name.ToLowerInvariant() switch
+            {
+                "postgres" or "postgresql" => "PostgreSQL",
+                "mysql" or "mysqld" => "MySQL",
+                "mariadb" => "MariaDB",
+                "mongodb" or "mongod" => "MongoDB",
+                "redis" or "redis-server" => "Redis",
+                "http" or "http-alt" => "HTTP",
+                "https" => "HTTPS",
+                "ssh" or "sshd" => "SSH",
+                _ => name,
+            };
+            return $"{Port} · {pretty}";
+        }
+    }
 }
 
 // === Команды плагинов (GET /commands, POST /commands/{id}/execute) ===

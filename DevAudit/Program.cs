@@ -52,6 +52,12 @@ public static partial class Program
             return;
         }
 
+        if (args.Length >= 2 && args[0] == "--tunnel-shots")
+        {
+            TunnelShots.Run(args[1]);
+            return;
+        }
+
         if (args.Length >= 2 && args[0] == "--palette-shots")
         {
             PaletteShots.Run(args[1]);
