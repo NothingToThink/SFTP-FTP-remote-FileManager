@@ -1,0 +1,68 @@
+<dlg:DialogWindowBase xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dlg="clr-namespace:FileManagerClient.Views.Dialogs"
+        xmlns:ctl="using:FileManagerClient.Controls"
+        xmlns:vm="using:FileManagerClient.ViewModels"
+        x:Class="FileManagerClient.Views.Dialogs.PropertiesDialog"
+        x:DataType="vm:PropertiesViewModel"
+        Title="Свойства">
+    <Border Classes="dialog" Margin="20" Width="540"
+            BoxShadow="0 8 32 0 #40000000">
+        <StackPanel Spacing="16">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <Border Grid.Column="0" Width="48" Height="48" CornerRadius="12" VerticalAlignment="Top"
+                        Background="{DynamicResource Brush.SurfaceAlt}">
+                    <ctl:LineIcon x:Name="TypeIcon" Size="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Foreground="{DynamicResource Brush.TextMuted}"/>
+                </Border>
+                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Classes="caption" Text="Свойства"/>
+                    <SelectableTextBlock Text="{Binding Name}" Classes="h2" TextWrapping="Wrap"
+                                         AutomationProperties.AutomationId="PropertiesName"/>
+                </StackPanel>
+            </Grid>
+
+            <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="12">
+                <TextBlock Grid.Row="0" Classes="caption" Text="Путь" VerticalAlignment="Top"/>
+                <SelectableTextBlock Grid.Row="0" Grid.Column="1" Text="{Binding FullPath}" Classes="mono"
+                                     TextWrapping="Wrap" AutomationProperties.AutomationId="PropertiesPath"/>
+
+                <TextBlock Grid.Row="1" Classes="caption" Text="Тип"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TypeText}" FontSize="15"
+                           AutomationProperties.AutomationId="PropertiesType"/>
+
+                <TextBlock Grid.Row="2" Classes="caption" Text="Размер" VerticalAlignment="Top"/>
+                <StackPanel Grid.Row="2" Grid.Column="1" Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding SizeText}" FontSize="15"
+                                   AutomationProperties.AutomationId="PropertiesSize"/>
+                        <TextBlock Text="{Binding ExactSizeText, StringFormat='({0})'}" FontSize="13"
+                                   IsVisible="{Binding HasExactSize}" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextMuted}"
+                                   AutomationProperties.AutomationId="PropertiesExactSize"/>
+                    </StackPanel>
+                    <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding IsSizeLoading}"
+                                 Foreground="{DynamicResource Brush.Accent}"
+                                 AutomationProperties.AutomationId="PropertiesSizeLoading"/>
+                </StackPanel>
+
+                <TextBlock Grid.Row="3" Classes="caption" Text="Изменён"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ModifiedText}" FontSize="15"
+                           AutomationProperties.AutomationId="PropertiesModified"/>
+
+                <TextBlock Grid.Row="4" Classes="caption" Text="Права" IsVisible="{Binding HasPermissions}"/>
+                <SelectableTextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Permissions}" Classes="mono"
+                                     IsVisible="{Binding HasPermissions}"
+                                     AutomationProperties.AutomationId="PropertiesPermissions"/>
+            </Grid>
+
+            <Border IsVisible="{Binding HasError}" Background="{DynamicResource Brush.ErrorSoft}" CornerRadius="8"
+                    Padding="14,10" BorderBrush="{DynamicResource Brush.Error}" BorderThickness="1">
+                <TextBlock Text="{Binding SizeError}" TextWrapping="Wrap" FontSize="14"
+                           AutomationProperties.AutomationId="PropertiesError"/>
+            </Border>
+
+            <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"/>
+        </StackPanel>
+    </Border>
+</dlg:DialogWindowBase>

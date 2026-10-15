@@ -94,6 +94,15 @@ public static class BuiltInCommands
             null, NeedFileSelection, "download", "сохранить"));
         registry.Register(Make("file.delete", "Удалить выбранное", "Файлы", _ => Run(b.DeleteCommand), "Line.Trash",
             "Del", NeedSelection, "remove", "delete"));
+        registry.Register(Make("file.copy", "Копировать", "Файлы", _ => Run(b.CopyCommand), "Line.File",
+            "Ctrl+C", NeedSelection, "copy", "дублировать"));
+        registry.Register(Make("file.cut", "Вырезать", "Файлы", _ => Run(b.CutCommand), "Line.File",
+            "Ctrl+X", NeedSelection, "cut", "перенести", "переместить", "move"));
+        registry.Register(Make("file.paste", "Вставить", "Файлы", _ => Run(b.PasteCommand), "Line.File",
+            "Ctrl+V", c => !b.IsBound ? NotBound : b.HasClipboard ? null : "Сначала скопируйте или вырежьте файлы",
+            "paste", "вставка"));
+        registry.Register(Make("file.properties", "Свойства", "Файлы", _ => Run(b.ShowInfoCommand), "Line.FileText",
+            "Alt+Enter", NeedSelection, "размер", "info", "properties", "атрибуты"));
         registry.Register(Make("file.rename", "Переименовать", "Файлы", _ => Run(b.RenameCommand), "Line.FileText",
             "F2", NeedSelection, "имя", "rename"));
 

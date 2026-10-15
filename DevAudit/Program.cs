@@ -52,6 +52,12 @@ public static partial class Program
             return;
         }
 
+        if (args.Length >= 2 && args[0] == "--props-shots")
+        {
+            RunPropsShots(args[1]);
+            return;
+        }
+
         if (args.Length >= 2 && args[0] == "--palette-shots")
         {
             PaletteShots.Run(args[1]);
@@ -312,6 +318,8 @@ public static partial class Program
             await ScenarioFullFunctional(api!, url, localProfileId.Value);
         ScenarioTransferTexts();
         await ScenarioKeyboard();
+        if (serverUp && localProfileId is not null)
+            await ScenarioPropsCopyPaste(api!, url, localProfileId.Value);
         await ScenarioConnectErrors();
         if (serverUp && localProfileId is not null)
             await ScenarioTransfers(api!, url, localProfileId.Value);
@@ -508,8 +516,7 @@ public static partial class Program
             await api.FileExistsAsync(browser.ConnectionId, "renamed-via-ui.txt")
             && !await api.FileExistsAsync(browser.ConnectionId, "created-via-ui.txt"));
 
-        // TC06: копирование файла
-        dialogs.PromptResults.Enqueue("copied-via-ui.txt");
+        // TC06: копирование файла (Копировать → Вставить в той же папке даёт « (копия)»)
         var renamedItem = browser.Items.FirstOrDefault(i => i.Name == "renamed-via-ui.txt");
         if (renamedItem is null)
         {
@@ -518,12 +525,15 @@ public static partial class Program
             return;
         }
         browser.SelectedItem = renamedItem;
-        await browser.CopyToCommand.ExecuteAsync(null);
-        Case("копирование файла",
-            await api.FileExistsAsync(browser.ConnectionId, "copied-via-ui.txt"));
+        browser.CopyCommand.Execute(null);
+        await browser.PasteCommand.ExecuteAsync(null);
+        var copyOk = await api.FileExistsAsync(browser.ConnectionId, "renamed-via-ui (копия).txt");
+        await api.RenameFileAsync(browser.ConnectionId, "renamed-via-ui (копия).txt", "copied-via-ui.txt");
+        await browser.RefreshCommand.ExecuteAsync(null);
+        Case("копирование файла (Копировать/Вставить)",
+            copyOk && await api.FileExistsAsync(browser.ConnectionId, "copied-via-ui.txt"));
 
-        // TC07: перемещение файла
-        dialogs.PromptResults.Enqueue("moved-via-ui.txt");
+        // TC07: перемещение файла (Вырезать → Вставить в другую папку)
         var copiedItem = browser.Items.FirstOrDefault(i => i.Name == "copied-via-ui.txt");
         if (copiedItem is null)
         {
@@ -532,10 +542,13 @@ public static partial class Program
             return;
         }
         browser.SelectedItem = copiedItem;
-        await browser.MoveToCommand.ExecuteAsync(null);
-        Case("перемещение файла",
-            await api.FileExistsAsync(browser.ConnectionId, "moved-via-ui.txt")
-            && !await api.FileExistsAsync(browser.ConnectionId, "copied-via-ui.txt"));
+        browser.CutCommand.Execute(null);
+        await browser.PasteIntoAsync("func-dir");
+        var moveOk = await api.FileExistsAsync(browser.ConnectionId, "func-dir/copied-via-ui.txt")
+                     && !await api.FileExistsAsync(browser.ConnectionId, "copied-via-ui.txt");
+        await api.MoveFileAsync(browser.ConnectionId, "func-dir/copied-via-ui.txt", "moved-via-ui.txt");
+        await browser.RefreshCommand.ExecuteAsync(null);
+        Case("перемещение файла (Вырезать/Вставить)", moveOk && !browser.HasClipboard);
 
         // TC08: копирование и перемещение папки (новое в PR #29;
         // в актуальном dev эндпоинты откатились — BUG-3: сначала probe, при 404 SKIP)
@@ -556,11 +569,12 @@ public static partial class Program
                 window.Close();
                 return;
             }
-            dialogs.PromptResults.Enqueue("copied-dir");
             browser.SelectedItem = dirSource;
-            await browser.CopyToCommand.ExecuteAsync(null);
-            var copyDirOk = await api.DirExistsAsync(browser.ConnectionId, "copied-dir");
-            dialogs.PromptResults.Enqueue("moved-dir");
+            browser.CopyCommand.Execute(null);
+            await browser.PasteCommand.ExecuteAsync(null);
+            var copyDirOk = await api.DirExistsAsync(browser.ConnectionId, "created-dir (копия)");
+            await api.RenameDirAsync(browser.ConnectionId, "created-dir (копия)", "copied-dir");
+            await browser.RefreshCommand.ExecuteAsync(null);
             var copiedDirItem = browser.Items.FirstOrDefault(i => i.Name == "copied-dir");
             if (copiedDirItem is null)
             {
@@ -569,10 +583,13 @@ public static partial class Program
                 return;
             }
             browser.SelectedItem = copiedDirItem;
-            await browser.MoveToCommand.ExecuteAsync(null);
-            Case("копирование и перемещение папки",
-                copyDirOk && await api.DirExistsAsync(browser.ConnectionId, "moved-dir")
-                && !await api.DirExistsAsync(browser.ConnectionId, "copied-dir"));
+            browser.CutCommand.Execute(null);
+            await browser.PasteIntoAsync("func-dir");
+            var movedDirOk = await api.DirExistsAsync(browser.ConnectionId, "func-dir/copied-dir")
+                             && !await api.DirExistsAsync(browser.ConnectionId, "copied-dir");
+            try { await api.DeleteDirAsync(browser.ConnectionId, "func-dir/copied-dir"); } catch { }
+            await browser.RefreshCommand.ExecuteAsync(null);
+            Case("копирование и перемещение папки (буфер)", copyDirOk && movedDirOk);
         }
 
         // TC09: upload (localPath в query) + download с проверкой содержимого
@@ -613,7 +630,7 @@ public static partial class Program
             await api.FileExistsAsync(browser.ConnectionId, "func-drop-1.txt")
             && await api.FileExistsAsync(browser.ConnectionId, "func-drop-2.txt"));
 
-        // TC11: свойства папки — при BUG-3 размер недоступен, но свойства показываются
+        // TC11: свойства папки — диалог получает размер с сервера (при BUG-3 размер недоступен — ошибка внутри диалога)
         var funcDir = browser.Items.FirstOrDefault(i => i.Name == "func-dir");
         if (funcDir is null)
         {
@@ -625,8 +642,8 @@ public static partial class Program
         browser.SelectedItem = funcDir;
         await browser.ShowInfoCommand.ExecuteAsync(null);
         Case("свойства папки показываются (размер — если сервер умеет)",
-            dialogs.Calls.Any(c => c.StartsWith("message:")
-                && (c.Contains("с содержимым") || c.Contains("не поддерживает размер"))));
+            dialogs.Calls.Any(c => c.StartsWith("properties:func-dir:")
+                && (c.EndsWith(":size") || c.EndsWith(":error"))), string.Join(" | ", dialogs.Calls.TakeLast(3)));
 
         // TC12: навигация в папку — известный баг бэка (BACKEND-BUGS.md #1):
         // листинг подпапки Local валится, клиент обязан тихо откатить путь без модалки
@@ -1360,6 +1377,16 @@ public sealed class HeadlessDialogService : IDialogService
     {
         Calls.Add($"pickSave:{suggestedName}");
         return Task.FromResult(PickSaveResults.Count > 0 ? PickSaveResults.Dequeue() : null);
+    }
+
+    /// <summary>Последнее открытое «Свойства»: тесты читают итоговые поля.</summary>
+    public PropertiesViewModel? LastProperties { get; private set; }
+
+    public async Task ShowPropertiesAsync(PropertiesViewModel viewModel)
+    {
+        LastProperties = viewModel;
+        await viewModel.LoadAsync();
+        Calls.Add($"properties:{viewModel.Name}:{(viewModel.HasError ? "error" : "size")}");
     }
 
     public Task<bool> ShowProfileEditorAsync(ProfileEditViewModel viewModel)
