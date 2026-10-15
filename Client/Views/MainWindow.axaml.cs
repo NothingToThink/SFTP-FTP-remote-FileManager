@@ -111,6 +111,9 @@ public partial class MainWindow : Window
         var browser = vm.Browser;
         switch (e.Key)
         {
+            case Key.Enter when e.KeyModifiers.HasFlag(KeyModifiers.Alt):
+                browser.ShowInfoCommand.Execute(null);
+                break;
             case Key.Enter:
                 browser.OpenItemCommand.Execute(null);
                 break;
@@ -126,11 +129,24 @@ public partial class MainWindow : Window
             case Key.A when e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta):
                 FilesGrid.SelectAll();
                 break;
+            // Файловый буфер: Handled только здесь, в таблице; Ctrl+V без нашего буфера уходит окну
+            case Key.C when IsCommandKey(e):
+                browser.CopyCommand.Execute(null);
+                break;
+            case Key.X when IsCommandKey(e):
+                browser.CutCommand.Execute(null);
+                break;
+            case Key.V when IsCommandKey(e) && browser.HasClipboard:
+                browser.PasteCommand.Execute(null);
+                break;
             default:
                 return;
         }
         e.Handled = true;
     }
+
+    private static bool IsCommandKey(KeyEventArgs e)
+        => e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
 
     private void ProfilesListKeyDown(object? sender, KeyEventArgs e)
     {

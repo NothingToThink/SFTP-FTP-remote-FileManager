@@ -418,10 +418,11 @@
                                          Opening="FilesMenuOpening">
                                 <MenuItem Header="Открыть" Command="{Binding Browser.OpenItemCommand}"/>
                                 <MenuItem Header="Переименовать…" InputGesture="F2" Command="{Binding Browser.RenameCommand}"/>
-                                <MenuItem Header="Копировать в…" Command="{Binding Browser.CopyToCommand}"/>
-                                <MenuItem Header="Переместить в…" Command="{Binding Browser.MoveToCommand}"/>
+                                <MenuItem Header="Копировать" InputGesture="Ctrl+C" Command="{Binding Browser.CopyCommand}"/>
+                                <MenuItem Header="Вырезать" InputGesture="Ctrl+X" Command="{Binding Browser.CutCommand}"/>
+                                <MenuItem Header="Вставить" InputGesture="Ctrl+V" Command="{Binding Browser.PasteCommand}"/>
                                 <MenuItem Header="Скачать…" Command="{Binding Browser.DownloadCommand}"/>
-                                <MenuItem Header="Свойства" Command="{Binding Browser.ShowInfoCommand}"/>
+                                <MenuItem Header="Свойства" InputGesture="Alt+Enter" Command="{Binding Browser.ShowInfoCommand}"/>
                                 <Separator/>
                                 <MenuItem Header="Удалить" InputGesture="Delete" Command="{Binding Browser.DeleteCommand}"/>
                             </ContextMenu>

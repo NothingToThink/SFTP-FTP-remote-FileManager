@@ -67,6 +67,9 @@ public interface IDialogService
     /// <summary>«Заменить файл?» — на сервере уже есть элемент с таким именем.</summary>
     Task<bool> ConfirmOverwriteAsync(string name) => Task.FromResult(false);
 
+    /// <summary>Диалог «Свойства» файла или папки. Реализация по умолчанию (заглушки) ничего не показывает.</summary>
+    Task ShowPropertiesAsync(PropertiesViewModel viewModel) => Task.CompletedTask;
+
     /// <summary>Окно «Синхронизация» (вход на свой сервер, обмен профилями). Реализация по умолчанию — ничего не показывает.</summary>
     Task ShowSyncAsync(SyncViewModel viewModel) => Task.CompletedTask;
 
@@ -359,6 +362,16 @@ public class DialogService : IDialogService
             return false;
         var (title, text) = OverwriteTexts(name);
         return await new ConfirmDialog(title, text, "Заменить", danger: true).ShowDialog<bool>(Owner);
+    }
+
+    public async Task ShowPropertiesAsync(PropertiesViewModel viewModel)
+    {
+        if (Owner is null)
+        {
+            viewModel.Dispose();
+            return;
+        }
+        await new PropertiesDialog(viewModel).ShowDialog<object?>(Owner);
     }
 
     /// <summary>Тексты подтверждения удаления (без шуток, по таблице спеки). Публично для тестов и скриншотов.</summary>

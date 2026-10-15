@@ -337,43 +337,176 @@ public partial class FileBrowserViewModel : ViewModelBase
             errorPath: targets.Count == 1 ? targets[0].FullPath : null);
     }
 
-    [RelayCommand]
-    private async Task CopyTo()
+    // ===== Буфер обмена файлов внутри сервера: копировать / вырезать / вставить =====
+
+    /// <summary>Что лежит во внутреннем буфере: элементы одного соединения и режим (вырезать/копировать).</summary>
+    private sealed record FileClipboard(Guid ConnectionId, IReadOnlyList<FileItem> Items, bool IsCut);
+
+    private FileClipboard? _clipboard;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PasteCommand))]
+    private bool _hasClipboard;
+
+    /// <summary>Элементы в буфере вырезаны (после вставки будут перенесены).</summary>
+    public bool ClipboardIsCut => _clipboard?.IsCut == true;
+
+    /// <summary>Сколько элементов лежит в буфере.</summary>
+    public int ClipboardCount => _clipboard?.Items.Count ?? 0;
+
+    /// <summary>Очищает внутренний файловый буфер.</summary>
+    public void ClearClipboard()
     {
-        if (SelectedItem is not { } item)
-            return;
-        var what = item.IsDirectory ? "папку" : "файл";
-        var target = await _dialogs.PromptAsync($"Копировать {what}", "Путь назначения:", item.FullPath);
-        if (string.IsNullOrWhiteSpace(target) || target == item.FullPath)
-            return;
-        await RunAsync(async () =>
-        {
-            if (item.IsDirectory)
-                await _api().CopyDirAsync(_connectionId, item.FullPath, target);
-            else
-                await _api().CopyFileAsync(_connectionId, item.FullPath, target);
-            await LoadListAsync();
-        }, $"Скопировано в: {target}", errorPath: item.FullPath);
+        _clipboard = null;
+        HasClipboard = false;
+        OnPropertyChanged(nameof(ClipboardIsCut));
+        OnPropertyChanged(nameof(ClipboardCount));
     }
 
+    private List<FileItem> ActionTargets()
+        => _selected.Count > 0
+            ? _selected.ToList()
+            : (SelectedItem is { } one ? new List<FileItem> { one } : new List<FileItem>());
+
     [RelayCommand]
-    private async Task MoveTo()
+    private void Copy() => PutToClipboard(cut: false);
+
+    [RelayCommand]
+    private void Cut() => PutToClipboard(cut: true);
+
+    private void PutToClipboard(bool cut)
     {
-        if (SelectedItem is not { } item)
+        if (!IsBound)
             return;
-        var what = item.IsDirectory ? "папку" : "файл";
-        var target = await _dialogs.PromptAsync($"Переместить {what}", "Путь назначения:", item.FullPath);
-        if (string.IsNullOrWhiteSpace(target) || target == item.FullPath)
+        var targets = ActionTargets();
+        if (targets.Count == 0)
             return;
+        _clipboard = new FileClipboard(_connectionId, targets, cut);
+        HasClipboard = true;
+        OnPropertyChanged(nameof(ClipboardIsCut));
+        OnPropertyChanged(nameof(ClipboardCount));
+        var what = targets.Count == 1 ? $"«{targets[0].Name}»" : $"объектов: {targets.Count}";
+        _setStatus(cut
+            ? $"Вырезано: {what}. Откройте папку и нажмите Ctrl+V"
+            : $"Скопировано: {what}. Откройте папку и нажмите Ctrl+V");
+    }
+
+    /// <summary>Вставляет содержимое буфера в текущую папку.</summary>
+    [RelayCommand(CanExecute = nameof(HasClipboard))]
+    private Task Paste() => PasteIntoAsync(CurrentPath);
+
+    /// <summary>
+    /// Вставляет содержимое буфера в <paramref name="targetDir"/> того же соединения. Конфликт имён:
+    /// копия в ту же папку получает суффикс « (копия)», иначе — «Заменить?». Вырезанное после вставки уходит из буфера.
+    /// </summary>
+    public async Task PasteIntoAsync(string targetDir)
+    {
+        if (!IsBound || _clipboard is not { } clip)
+            return;
+        if (clip.ConnectionId != _connectionId)
+        {
+            await _dialogs.ShowMessageAsync("Вставить",
+                "Копировать и переносить можно только внутри одного сервера. " +
+                "Файлы в буфере взяты с другого подключения, поэтому здесь их не вставить. " +
+                "Скачайте их и загрузите на этот сервер.");
+            return;
+        }
+
+        var queue = new Queue<FileItem>(clip.Items);
+        var done = 0;
+        var verb = clip.IsCut ? "Переносим" : "Копируем";
         await RunAsync(async () =>
         {
-            if (item.IsDirectory)
-                await _api().MoveDirAsync(_connectionId, item.FullPath, target);
-            else
-                await _api().MoveFileAsync(_connectionId, item.FullPath, target);
+            while (queue.Count > 0)
+            {
+                var item = queue.Peek();
+                _setStatus($"{verb}: {item.Name}…");
+                if (await PasteOneAsync(item, targetDir, clip.IsCut))
+                    done++;
+                queue.Dequeue();
+            }
             await LoadListAsync();
-        }, $"Перемещено в: {target}", errorPath: item.FullPath);
+        }, errorPath: queue.Count == 1 ? queue.Peek().FullPath : null);
+
+        if (queue.Count > 0)
+            return;
+        if (clip.IsCut)
+            ClearClipboard();
+        var noun = done == 1 ? "1 объект" : $"{done} {DialogService.RuPlural(done, "объект", "объекта", "объектов")}";
+        _setStatus(done == 0
+            ? "Ничего не вставлено"
+            : clip.IsCut ? $"Перенесено: {noun}" : $"Скопировано: {noun}");
     }
+
+    /// <returns>true — элемент вставлен; false — пропущен (тот же каталог, отказ от замены, вставка в себя).</returns>
+    private async Task<bool> PasteOneAsync(FileItem item, string targetDir, bool cut)
+    {
+        var sameDir = SamePath(ParentOf(item.FullPath), targetDir);
+        if (cut && sameDir)
+            return false; // перенос в ту же папку ничего не меняет
+        if (item.IsDirectory && (SamePath(item.FullPath, targetDir) || IsInside(item.FullPath, targetDir)))
+        {
+            await _dialogs.ShowMessageAsync("Вставить", $"Папку «{item.Name}» нельзя вставить внутрь неё самой.");
+            return false;
+        }
+
+        var name = item.Name;
+        var target = CombinePath(targetDir, name);
+        if (await ExistsAsync(target))
+        {
+            if (sameDir)
+            {
+                name = await UniqueCopyNameAsync(item, targetDir);
+                target = CombinePath(targetDir, name);
+            }
+            else if (!await _dialogs.ConfirmOverwriteAsync(name))
+            {
+                return false;
+            }
+        }
+
+        if (item.IsDirectory)
+        {
+            if (cut) await _api().MoveDirAsync(_connectionId, item.FullPath, target);
+            else await _api().CopyDirAsync(_connectionId, item.FullPath, target);
+        }
+        else
+        {
+            if (cut) await _api().MoveFileAsync(_connectionId, item.FullPath, target);
+            else await _api().CopyFileAsync(_connectionId, item.FullPath, target);
+        }
+        return true;
+    }
+
+    private async Task<bool> ExistsAsync(string path)
+        => await _api().FileExistsAsync(_connectionId, path) || await _api().DirExistsAsync(_connectionId, path);
+
+    /// <summary>«имя (копия).txt», затем «имя (копия 2).txt» и так далее — первое свободное.</summary>
+    private async Task<string> UniqueCopyNameAsync(FileItem item, string targetDir)
+    {
+        var ext = item.IsDirectory ? string.Empty : Path.GetExtension(item.Name);
+        var stem = item.Name[..^ext.Length];
+        if (stem.Length == 0)
+        {
+            stem = item.Name;
+            ext = string.Empty;
+        }
+        for (var n = 1; n < 1000; n++)
+        {
+            var candidate = n == 1 ? $"{stem} (копия){ext}" : $"{stem} (копия {n}){ext}";
+            if (!await ExistsAsync(CombinePath(targetDir, candidate)))
+                return candidate;
+        }
+        return $"{stem} (копия {Guid.NewGuid():N}){ext}";
+    }
+
+    private static string NormalizePath(string path) => path.Replace('\\', '/').Trim('/');
+
+    private static bool SamePath(string a, string b) => NormalizePath(a) == NormalizePath(b);
+
+    /// <summary>Лежит ли <paramref name="path"/> внутри <paramref name="folder"/>.</summary>
+    private static bool IsInside(string folder, string path)
+        => NormalizePath(path).StartsWith(NormalizePath(folder) + "/", StringComparison.Ordinal);
 
     // ===== Передачи: загрузка и скачивание (файлы и папки рекурсивно) =====
 
@@ -729,34 +862,13 @@ public partial class FileBrowserViewModel : ViewModelBase
     [RelayCommand]
     private async Task ShowInfo()
     {
-        if (SelectedItem is not { } selected)
+        if (!IsBound || SelectedItem is not { } selected)
             return;
-        try
-        {
-            var info = await _api().GetFileInfoAsync(_connectionId, selected.FullPath);
-            string sizeText;
-            if (!info.IsDirectory)
-            {
-                sizeText = $"{info.Size} байт";
-            }
-            else
-            {
-                sizeText = $"{await _api().GetDirSizeAsync(_connectionId, selected.FullPath)} байт (с содержимым)";
-            }
-            var text =
-                $"Имя: {info.Name}\n" +
-                $"Тип: {(info.IsDirectory ? "папка" : "файл")}\n" +
-                $"Размер: {sizeText}\n" +
-                $"Изменён: {info.LastModified:yyyy-MM-dd HH:mm:ss}\n" +
-                $"Права: {info.Permissions}\n" +
-                $"Путь: {info.FullPath}";
-            await _dialogs.ShowMessageAsync("Свойства", text);
-        }
-        catch (Exception ex)
-        {
-            await _dialogs.ShowErrorAsync(
-                ErrorPresenter.Present(ex, new ErrorContext(ConnectionName, false, selected.FullPath)));
-        }
+        var id = _connectionId;
+        var vm = new PropertiesViewModel(selected, ConnectionName, BoundProtocol == Protocol.Sftp,
+            (path, ct) => _api().GetFileInfoAsync(id, path, ct),
+            (path, ct) => _api().GetDirSizeAsync(id, path, ct));
+        await _dialogs.ShowPropertiesAsync(vm);
     }
 
     /// <summary>Склеивает путь рабочей директории с именем (учитывает пустой текущий путь).</summary>
