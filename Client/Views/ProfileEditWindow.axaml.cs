@@ -1,6 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using FileManagerClient.Services;
 using FileManagerClient.ViewModels;
 using FileManagerClient.Views.Dialogs;
 
@@ -11,6 +13,32 @@ public partial class ProfileEditWindow : DialogWindowBase
     public ProfileEditWindow()
     {
         InitializeComponent();
+        AddHandler(TextBox.PastingFromClipboardEvent, OnPasting);
+    }
+
+    /// <summary>
+    /// Вставка в любое поле (Ctrl+V или контекстное меню): TextBox вставляет текст как обычно, а мы
+    /// параллельно разбираем буфер и, если там сервер (минимум два поля), раскладываем его по форме.
+    /// Поля паролей пропускаем: пароль, похожий на user@host, не должен переписывать форму.
+    /// </summary>
+    private async void OnPasting(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } vm || e.Source is not TextBox box || box.PasswordChar != default)
+            return;
+        vm.RememberForPaste();
+        string? text = null;
+        try
+        {
+            text = await ClipboardText.ReadAsync(this);
+        }
+        catch
+        {
+            // буфер недоступен — вставка прошла как обычная
+        }
+        if (ServerStringParser.Parse(text) is not { FieldCount: >= 2 } parsed)
+            return;
+        // даём самому TextBox дойти до вставки (она идёт сразу после этого обработчика), и только потом перекладываем форму
+        Dispatcher.UIThread.Post(() => vm.ApplyParsed(parsed), DispatcherPriority.Background);
     }
 
     private ProfileEditViewModel? ViewModel => DataContext as ProfileEditViewModel;

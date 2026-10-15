@@ -37,6 +37,9 @@ public partial class ProfileEditViewModel : ViewModelBase
     [ObservableProperty] private string _passphrase = string.Empty;
     [ObservableProperty] private string? _errorMessage;
 
+    /// <summary>Инлайн-заметка «Заполнили из буфера…»; null — не показываем.</summary>
+    [ObservableProperty] private string? _pasteNote;
+
     // Инлайн-ошибки полей (показываются после первой попытки сохранить/проверить)
     [ObservableProperty] private string? _hostError;
     [ObservableProperty] private string? _portError;
@@ -73,6 +76,8 @@ public partial class ProfileEditViewModel : ViewModelBase
     public bool NeedsLogin => NeedsAuth && AuthKind != AuthKind.Anonymous;
 
     public string PortPlaceholder => Protocol switch { Protocol.Ftp => "21", Protocol.Sftp => "22", _ => "" };
+
+    public bool HasPasteNote => !string.IsNullOrEmpty(PasteNote);
 
     public bool IsTestRunning => TestState == ConnectionTestState.Running;
     public bool IsTestSuccess => TestState == ConnectionTestState.Success;
@@ -123,6 +128,8 @@ public partial class ProfileEditViewModel : ViewModelBase
         Revalidate();
     }
 
+    partial void OnPasteNoteChanged(string? value) => OnPropertyChanged(nameof(HasPasteNote));
+
     partial void OnHostChanged(string value) { ResetTest(); Revalidate(); }
     partial void OnPortChanged(string value) { ResetTest(); Revalidate(); }
     partial void OnUsernameChanged(string value) { ResetTest(); Revalidate(); }
@@ -137,6 +144,83 @@ public partial class ProfileEditViewModel : ViewModelBase
     }
 
     partial void OnTestDetailsChanged(string? value) => OnPropertyChanged(nameof(HasTestDetails));
+
+    private (string Name, Protocol Protocol, string Host, string Port, AuthKind Auth, string User, string Password, string Key)? _beforePaste;
+
+    /// <summary>Запоминает текущие значения формы, чтобы «Отменить» вернул их после вставки из буфера.</summary>
+    public void RememberForPaste() =>
+        _beforePaste = (Name, Protocol, Host, Port, AuthKind, Username, Password, KeyPath);
+
+    /// <summary>
+    /// Раскладывает разобранный сервер по форме. Значения до вставки берутся из <see cref="RememberForPaste"/>
+    /// (если не вызывали — снимок делается здесь). Пароль попадает только в поле пароля и в заметку не пишется.
+    /// </summary>
+    public void ApplyParsed(ParsedServer p, bool fillName = false)
+    {
+        if (_beforePaste is null)
+            RememberForPaste();
+        var prev = _beforePaste!.Value;
+        RestoreFrom(prev);
+
+        var fields = new List<string>();
+        Protocol = p.Protocol;
+        Host = p.Host;
+        fields.Add("хост");
+        Port = p.PortExplicit && p.Port is { } port ? port.ToString() : string.Empty;
+        if (p.PortExplicit) fields.Add("порт");
+        if (p.User is not null) { Username = p.User; fields.Add("логин"); }
+        if (p.KeyPath is not null && CanKey)
+        {
+            AuthKind = AuthKind.Key;
+            KeyPath = p.KeyPath;
+            fields.Add("ключ");
+        }
+        else if (p.Password is not null)
+        {
+            AuthKind = AuthKind.Password;
+            Password = p.Password;
+            fields.Add("пароль");
+        }
+        else if (p.User is not null && !IsAuthPassword)
+        {
+            AuthKind = AuthKind.Password;
+        }
+        if (fillName && string.IsNullOrWhiteSpace(Name))
+            Name = p.Name ?? (p.User is not null ? $"{p.User}@{p.Host}" : p.Host);
+        else if (p.Name is not null && string.IsNullOrWhiteSpace(prev.Name))
+            Name = p.Name;
+
+        PasteNote = $"Заполнили из буфера: {string.Join(", ", fields)} — проверьте и сохраните";
+    }
+
+    private void RestoreFrom((string Name, Protocol Protocol, string Host, string Port, AuthKind Auth, string User, string Password, string Key) v)
+    {
+        Name = v.Name;
+        Protocol = v.Protocol;
+        Host = v.Host;
+        Port = v.Port;
+        AuthKind = v.Auth;
+        Username = v.User;
+        Password = v.Password;
+        KeyPath = v.Key;
+    }
+
+    /// <summary>Новый профиль, заполненный из буфера (имя — алиас или user@host).</summary>
+    public static ProfileEditViewModel FromParsed(ParsedServer p)
+    {
+        var vm = new ProfileEditViewModel(null);
+        vm.ApplyParsed(p, fillName: true);
+        return vm;
+    }
+
+    [RelayCommand]
+    private void UndoPaste()
+    {
+        if (_beforePaste is { } prev)
+            RestoreFrom(prev);
+        _beforePaste = null;
+        PasteNote = null;
+    }
 
     [RelayCommand]
     private void SelectProtocol(Protocol protocol) => Protocol = protocol;
