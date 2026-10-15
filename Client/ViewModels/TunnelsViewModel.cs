@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileManagerClient.Api;
+using FileManagerClient.Controls;
 using FileManagerClient.Models;
 using FileManagerClient.Services;
 
@@ -22,9 +23,60 @@ public class TunnelItemViewModel : ObservableObject
 
     public ForwardType Type => Status.Rule.Type;
 
+    private int EffectiveBindPort => Status.State == ForwardState.Active && Status.Rule.BindPort == 0
+        ? Status.ActualBindPort ?? 0
+        : Status.Rule.BindPort;
+
     public string Details => Status.Rule.Type == ForwardType.Dynamic
-        ? $"SOCKS — {Status.Rule.BindHost}:{Status.Rule.BindPort}"
-        : $"{Status.Rule.BindHost}:{Status.Rule.BindPort} → {Status.Rule.TargetHost}:{Status.Rule.TargetPort}";
+        ? $"SOCKS — {Status.Rule.BindHost}:{EffectiveBindPort}"
+        : $"{Status.Rule.BindHost}:{EffectiveBindPort} → {Status.Rule.TargetHost}:{Status.Rule.TargetPort}";
+
+    public PigIconKind TypeIcon => Status.Rule.Type switch
+    {
+        ForwardType.Remote => PigIconKind.ForwardRemote,
+        ForwardType.Dynamic => PigIconKind.ForwardDynamic,
+        _ => PigIconKind.ForwardLocal,
+    };
+
+    public string TypeText => Status.Rule.Type switch
+    {
+        ForwardType.Remote => "Обратный",
+        ForwardType.Dynamic => "SOCKS-прокси",
+        _ => "Локальный",
+    };
+
+    /// <summary>Короткий статус для чипа (рядом всегда текст, не только цвет).</summary>
+    public string StatusText => Status.State switch
+    {
+        ForwardState.Active => "работает",
+        ForwardState.Failed => "ошибка",
+        _ => "остановлен",
+    };
+
+    public bool IsActive => Status.State == ForwardState.Active;
+
+    public bool IsFailed => Status.State == ForwardState.Failed;
+
+    public string? ErrorDetail => IsFailed ? Status.Error : null;
+
+    public bool HasErrorDetail => !string.IsNullOrWhiteSpace(ErrorDetail);
+
+    private static readonly HashSet<int> HttpPorts = [80, 443, 3000, 4200, 5000, 5173, 8000, 8008, 8080, 8081, 8443, 8888, 9000];
+
+    /// <summary>Адрес для кнопки «Открыть в браузере»: только активный локальный проброс на http-подобный порт.</summary>
+    public string? BrowserUrl
+    {
+        get
+        {
+            var rule = Status.Rule;
+            if (rule.Type != ForwardType.Local || !IsActive || rule.TargetPort is not { } target || !HttpPorts.Contains(target))
+                return null;
+            var scheme = target is 443 or 8443 ? "https" : "http";
+            return $"{scheme}://localhost:{EffectiveBindPort}";
+        }
+    }
+
+    public bool CanOpenInBrowser => BrowserUrl is not null;
 
     public string StateText => Status.State switch
     {
@@ -60,12 +112,34 @@ public partial class TunnelsViewModel : ViewModelBase
 
     public ObservableCollection<TunnelItemViewModel> Items { get; } = new();
 
+    /// <summary>Список уже загружен хотя бы раз (чтобы пустое состояние не мигало до первого ответа).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEmpty))]
+    private bool _isLoaded;
+
+    public bool HasError => !string.IsNullOrEmpty(ErrorText);
+
+    public bool HasItems => Items.Count > 0;
+
+    public bool IsEmpty => IsLoaded && Items.Count == 0 && !HasError;
+
+    partial void OnErrorTextChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasError));
+        OnPropertyChanged(nameof(IsEmpty));
+    }
+
     public TunnelsViewModel(IForwardingApi api, Guid connectionId, string connectionName, IDialogService dialogs)
     {
         _api = api;
         ConnectionId = connectionId;
         ConnectionName = connectionName;
         _dialogs = dialogs;
+        Items.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasItems));
+            OnPropertyChanged(nameof(IsEmpty));
+        };
     }
 
     [RelayCommand]
@@ -80,17 +154,45 @@ public partial class TunnelsViewModel : ViewModelBase
             foreach (var status in statuses.OrderBy(s => s.Rule.Type).ThenBy(s => s.Rule.BindPort))
                 Items.Add(new TunnelItemViewModel(status));
             SelectedItem = Items.FirstOrDefault(i => i.RuleId == keep) ?? Items.FirstOrDefault();
+            IsLoaded = true;
         }
         catch (ApiException ex)
         {
             ErrorText = ex.StatusCode == 400
                 ? "Туннели доступны только для SFTP/SSH-подключений"
                 : ErrorPresenter.Present(ex).Text;
+            IsLoaded = true;
         }
         catch (Exception ex)
         {
             ErrorText = ErrorPresenter.Present(ex).Text;
+            IsLoaded = true;
         }
+    }
+
+    // Кнопки в строках списка: выбирают свою строку и вызывают общую команду
+    [RelayCommand]
+    private async Task StartItem(TunnelItemViewModel? item)
+    {
+        if (item is null) return;
+        SelectedItem = item;
+        await StartCommand.ExecuteAsync(null);
+    }
+
+    [RelayCommand]
+    private async Task StopItem(TunnelItemViewModel? item)
+    {
+        if (item is null) return;
+        SelectedItem = item;
+        await StopCommand.ExecuteAsync(null);
+    }
+
+    [RelayCommand]
+    private async Task DeleteItem(TunnelItemViewModel? item)
+    {
+        if (item is null) return;
+        SelectedItem = item;
+        await DeleteCommand.ExecuteAsync(null);
     }
 
     [RelayCommand]

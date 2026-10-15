@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using FileManagerClient.Api;
 using FileManagerClient.Models;
 using FileManagerClient.Services;
@@ -20,6 +21,38 @@ public partial class CreateForwardViewModel : ViewModelBase
     [ObservableProperty] private bool _isScanning;
 
     private readonly List<PortSuggestion> _suggestions = new();
+
+    /// <summary>Имя подключения для заголовка формы.</summary>
+    [ObservableProperty] private string _connectionName = string.Empty;
+
+    [ObservableProperty] private bool _bindPortInvalid;
+    [ObservableProperty] private bool _targetHostInvalid;
+    [ObservableProperty] private bool _targetPortInvalid;
+
+    public bool IsLocalType => Type == ForwardType.Local;
+    public bool IsRemoteType => Type == ForwardType.Remote;
+    public bool IsDynamicType => Type == ForwardType.Dynamic;
+
+    public string BindLabel => Type switch
+    {
+        ForwardType.Remote => "Порт на сервере (0 — любой)",
+        ForwardType.Dynamic => "Порт SOCKS у вас (0 — любой)",
+        _ => "Порт у вас (0 — любой)",
+    };
+
+    public string TargetHostLabel => Type == ForwardType.Remote
+        ? "Хост на этом компьютере"
+        : "Хост (как его видит сервер)";
+
+    public bool HasSuggestions => Suggestions.Count > 0;
+
+    public CreateForwardViewModel()
+    {
+        Suggestions.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSuggestions));
+    }
+
+    [RelayCommand]
+    private void SelectType(ForwardType type) => Type = type;
 
     public ObservableCollection<PortSuggestion> Suggestions { get; } = new();
 
@@ -58,7 +91,15 @@ public partial class CreateForwardViewModel : ViewModelBase
         }
     }
 
-    partial void OnTypeChanged(ForwardType value) => OnPropertyChanged(nameof(NeedsTarget));
+    partial void OnTypeChanged(ForwardType value)
+    {
+        OnPropertyChanged(nameof(NeedsTarget));
+        OnPropertyChanged(nameof(IsLocalType));
+        OnPropertyChanged(nameof(IsRemoteType));
+        OnPropertyChanged(nameof(IsDynamicType));
+        OnPropertyChanged(nameof(BindLabel));
+        OnPropertyChanged(nameof(TargetHostLabel));
+    }
 
     partial void OnSelectedSuggestionChanged(PortSuggestion? value)
     {
@@ -75,28 +116,31 @@ public partial class CreateForwardViewModel : ViewModelBase
 
     public bool Validate()
     {
+        BindPortInvalid = TargetHostInvalid = TargetPortInvalid = false;
+        string? error = null;
+
         if (!int.TryParse(BindPort, out var bind) || bind is < 0 or > 65535)
         {
-            ErrorMessage = "Локальный порт: число 0–65535 (0 — выбрать свободный автоматически).";
-            return false;
+            BindPortInvalid = true;
+            error = "Локальный порт: число 0–65535 (0 — выбрать свободный автоматически).";
         }
 
         if (Type != ForwardType.Dynamic)
         {
             if (string.IsNullOrWhiteSpace(TargetHost))
             {
-                ErrorMessage = "Укажите целевой хост.";
-                return false;
+                TargetHostInvalid = true;
+                error ??= "Укажите целевой хост.";
             }
 
             if (!int.TryParse(TargetPort, out var target) || target is < 1 or > 65535)
             {
-                ErrorMessage = "Целевой порт: число 1–65535.";
-                return false;
+                TargetPortInvalid = true;
+                error ??= "Целевой порт: число 1–65535.";
             }
         }
 
-        ErrorMessage = null;
-        return true;
+        ErrorMessage = error;
+        return error is null;
     }
 }

@@ -404,6 +404,7 @@ public class DialogService : IDialogService
         if (Owner is null)
             return false;
 
+        viewModel.ConnectionName = connectionName;
         var window = new Views.CreateForwardWindow(api, connectionId)
         {
             DataContext = viewModel,
