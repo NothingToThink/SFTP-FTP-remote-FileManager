@@ -65,6 +65,7 @@ try
             options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
             options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         });
+    builder.Services.AddSingleton<Core.Terminal.ITerminalSessionFactory, Core.Terminal.SshTerminalSessionFactory>();
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddSingleton<IUiSessionRegistry, UiSessionRegistry>();
     builder.Services.AddSingleton<IUiBridge, UiBridge>();
@@ -115,6 +116,7 @@ try
 
     app.UseCors(policy => policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
     app.UseMiddleware<ExceptionMiddleware>();
+    app.UseWebSockets();
     app.MapControllers();
     app.MapHub<UiHub>("/hubs/ui");
     app.MapPluginCommands();

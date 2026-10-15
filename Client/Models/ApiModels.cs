@@ -216,6 +216,8 @@ public class PortSuggestion
 
 // === Команды плагинов (GET /commands, POST /commands/{id}/execute) ===
 
+public record TerminalSize(int Columns, int Rows);
+
 public class PluginCommand
 {
     [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;

@@ -70,13 +70,16 @@ public interface IDialogService
     /// <summary>Немодальное окно туннелей (живёт рядом с главным окном).</summary>
     void ShowTunnelsWindow(TunnelsViewModel viewModel);
 
+    /// <summary>Немодальное окно SSH-терминала для активного SFTP-подключения.</summary>
+    void ShowTerminalWindow(FileManagerApiClient api, Guid connectionId, string name) { }
+
     /// <summary>Модальный диалог создания туннеля: true — подтверждено.</summary>
     Task<bool> ShowCreateForwardDialogAsync(CreateForwardViewModel viewModel, string connectionName,
         IForwardingApi api, Guid connectionId);
 }
 
 /// <summary>Реализация на настоящих окнах; владелец задаётся при открытии главного окна.</summary>
-public class DialogService : IDialogService
+public partial class DialogService : IDialogService
 {
     public Window? Owner { get; set; }
 

@@ -110,7 +110,10 @@ public partial class MainWindowViewModel : ViewModelBase
             if (e.PropertyName is nameof(FileBrowserViewModel.IsBound)
                 or nameof(FileBrowserViewModel.ConnectionName)
                 or nameof(FileBrowserViewModel.BoundProtocol))
+            {
                 OnPropertyChanged(nameof(IsTunnelsAvailable));
+                OnPropertyChanged(nameof(IsTerminalAvailable));
+            }
             if (e.PropertyName is nameof(FileBrowserViewModel.IsBound) or nameof(FileBrowserViewModel.ItemCount))
                 NotifyPanel();
             if (e.PropertyName == nameof(FileBrowserViewModel.IsBound) && !Browser.IsBound)

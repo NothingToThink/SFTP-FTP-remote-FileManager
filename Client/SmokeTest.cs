@@ -125,6 +125,16 @@ public static class SmokeTest
             connectionId = api.CreateConnectionAsync(tempProfile).Result);
         Step("POST /connections/{id}/connect", () => api.ConnectAsync(connectionId).Wait());
 
+        Step("GET /connections/{id}/terminal (Local: отказ)", () =>
+        {
+            try
+            {
+                api.CheckTerminalAsync(connectionId).GetAwaiter().GetResult();
+                throw new Exception("Терминал не должен открываться для Local");
+            }
+            catch (ApiException ex) when (ex.StatusCode == 400) { }
+        });
+
         // Файловые артефакты прошлого прогона в песочнице (best effort)
         foreach (var leftover in new[] { "ui-smoke.txt", "ui-smoke-renamed.txt", "ui-smoke-copy.txt", "ui-smoke-moved.txt", "ui-smoke-uploaded.txt" })
         {

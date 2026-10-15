@@ -39,6 +39,12 @@ public static partial class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "--terminal-only")
+        {
+            TerminalAudit.RunStandalone();
+            return;
+        }
+
         // Режим скриншотов без сервера: DevAudit --shots <папка> <префикс>
         if (args.Length >= 2 && args[0] == "--shots")
         {
@@ -319,6 +325,7 @@ public static partial class Program
             Report.AppendLine("  [SKIP] передачи на живом бэкенде: сервер недоступен");
         await ScenarioProfileValidation();
         await ScenarioTunnels();
+        _issuesTotal += TerminalAudit.Run(Report);
         await ScenarioServerDown();
 
         // Уборка тестовых профилей

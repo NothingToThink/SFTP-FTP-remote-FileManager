@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:terminal="using:SvcSystems.UI.Terminal"
+        x:Class="FileManagerClient.Terminal.TerminalWindow"
+        Title="Терминал" Width="1000" Height="640" MinWidth="600" MinHeight="360"
+        AutomationProperties.AutomationId="TerminalWindow">
+    <Window.Styles>
+        <StyleInclude Source="avares://SvcSystems.UI.Terminal/Styles/Colors.axaml"/>
+    </Window.Styles>
+    <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+        <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,10">
+            <TextBlock Name="Status" Text="Подключение…" VerticalAlignment="Center" TextWrapping="Wrap"
+                       AutomationProperties.AutomationId="TerminalStatus"/>
+            <Button Grid.Column="1" Content="Копировать" Click="CopyClick" Margin="6,0"
+                    AutomationProperties.AutomationId="TerminalCopy"/>
+            <Button Grid.Column="2" Content="Вставить" Click="PasteClick" Margin="0,0,6,0"
+                    AutomationProperties.AutomationId="TerminalPaste"/>
+            <Button Grid.Column="3" Name="Reconnect" Content="Новый сеанс" Click="ReconnectClick"
+                    IsEnabled="False" AutomationProperties.AutomationId="TerminalReconnect"/>
+        </Grid>
+        <terminal:TerminalControl Grid.Row="1" Name="Screen" FontSize="14"
+                                  FontFamily="avares://FileManagerClient/Assets/Fonts#IBM Plex Mono"
+                                  RightClickAction="CopyOrPaste"
+                                  AutomationProperties.AutomationId="TerminalScreen"/>
+        <TextBlock Grid.Row="2" Margin="0,8,0,0" FontSize="12" Opacity="0.7"
+                   TextWrapping="Wrap"
+                   Text="Ctrl+C — прервать · Ctrl+Shift+C/V — копировать/вставить · Tab — дополнить · ↑/↓ — история"
+                   AutomationProperties.AutomationId="TerminalHelp"/>
+    </Grid>
+</Window>

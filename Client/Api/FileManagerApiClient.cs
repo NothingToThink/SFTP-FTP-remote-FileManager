@@ -33,7 +33,7 @@ public interface IForwardingApi
 ///  - ответы — camelCase, кроме HostProfile внутри профиля (PascalCase + "$type");
 ///  - ошибки приходят как {"error": "..."} с кодами 400/404/500.
 /// </summary>
-public class FileManagerApiClient : IForwardingApi, IDisposable
+public partial class FileManagerApiClient : IForwardingApi, IDisposable
 {
     private readonly HttpClient _http;
 
