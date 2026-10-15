@@ -28,7 +28,9 @@ public class PluginHostCollection
 /// <summary>A temporary data folder that REMOTE_FILE_MANAGER_DATA_DIR points to while the object lives.</summary>
 public sealed class PluginDataDir : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("plugin-host-").FullName;
+    // Путь без символических ссылок: на macOS временная папка лежит в /var, а это ссылка на /private/var.
+    // Загрузчик зависимостей плагина отдаёт уже разрешённый путь, и без этого сравнения путей в тестах расходятся.
+    private readonly string _root = ResolveLinks(Directory.CreateTempSubdirectory("plugin-host-").FullName);
     private readonly string? _previous = Environment.GetEnvironmentVariable(AppPaths.DataDirEnvironmentVariable);
 
     public PluginDataDir()
@@ -38,6 +40,22 @@ public sealed class PluginDataDir : IDisposable
     }
 
     public string PluginsFolder { get; }
+
+    /// <summary>Разворачивает символические ссылки в каждом сегменте пути (аналог realpath).</summary>
+    private static string ResolveLinks(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(full)!;
+        var current = root;
+        foreach (var part in full[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, part);
+            var info = new DirectoryInfo(current);
+            if (info.LinkTarget is not null)
+                current = info.ResolveLinkTarget(returnFinalTarget: true)!.FullName;
+        }
+        return current;
+    }
 
     /// <summary>Copies a plugin published by the Tests build (testplugins/&lt;name&gt;) into the plugins folder.</summary>
     public string AddPlugin(string published, string folderName)

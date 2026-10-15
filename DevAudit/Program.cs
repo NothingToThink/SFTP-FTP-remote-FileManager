@@ -70,6 +70,12 @@ public static partial class Program
             return;
         }
 
+        if (args.Length >= 2 && args[0] is "--sync-shots" or "--sync-e2e")
+        {
+            SyncScenarios.Run(args);
+            return;
+        }
+
         if (args.Contains("--pig-gallery"))
         {
             PigGallery.Run(args.SkipWhile(a => a != "--out").Skip(1).FirstOrDefault());
@@ -316,6 +322,8 @@ public static partial class Program
             await ScenarioManyProfiles(api!);
         if (serverUp && localProfileId is not null)
             await ScenarioFullFunctional(api!, url, localProfileId.Value);
+        if (serverUp)
+            _issuesTotal += await PluginShots.ScenarioAsync(url, Report);
         ScenarioTransferTexts();
         await ScenarioKeyboard();
         await ScenarioConnectErrors();

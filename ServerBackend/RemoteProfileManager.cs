@@ -276,4 +276,5 @@ app.MapDelete("/profiles", async (ClaimsPrincipal user, Guid profileId, ServerDb
     return Results.Ok(profile);
 }).RequireAuthorization();
 
-app.Run("https://localhost:5227");
+// Address comes from configuration (appsettings "Urls", --urls or ASPNETCORE_URLS), not from code.
+app.Run();

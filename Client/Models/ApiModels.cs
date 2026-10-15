@@ -221,4 +221,19 @@ public class PluginCommand
     [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
     [JsonPropertyName("title")] public string Title { get; set; } = string.Empty;
     [JsonPropertyName("pluginId")] public string PluginId { get; set; } = string.Empty;
+    [JsonPropertyName("pluginName")] public string? PluginName { get; set; }
+}
+
+/// <summary>Сессия синхронизации на локальном Backend: адрес своего сервера и кто вошёл (токен наружу не отдаётся).</summary>
+public class CloudSession
+{
+    public string? ServerUrl { get; set; }
+    public bool LoggedIn { get; set; }
+    public string? Username { get; set; }
+}
+
+/// <summary>Ответ cloud/download: сколько профилей сохранено локально.</summary>
+public class CloudDownloadResult
+{
+    public int Count { get; set; }
 }

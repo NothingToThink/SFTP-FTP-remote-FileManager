@@ -22,6 +22,11 @@ public class ClientSettings
     /// <summary>«Уменьшить анимацию»: остаётся только смена позы свинки, без движения.</summary>
     public bool ReduceMotion { get; set; }
 
+    /// <summary>Адрес собственного сервера синхронизации (запоминаем только его и логин, пароль — никогда).</summary>
+    public string SyncServerUrl { get; set; } = "";
+
+    public string SyncLogin { get; set; } = "";
+
     /// <summary>Папка данных клиента (логи сервера и т.п.).</summary>
     public static string DataDirectory => SettingsDir;
 
@@ -77,6 +82,10 @@ public class ClientSettings
             {
                 settings.ReduceMotion = rm.GetBoolean();
             }
+            if (doc.RootElement.TryGetProperty("syncServerUrl", out var sync) && sync.GetString() is { } syncUrl)
+                settings.SyncServerUrl = syncUrl;
+            if (doc.RootElement.TryGetProperty("syncLogin", out var login) && login.GetString() is { } syncLogin)
+                settings.SyncLogin = syncLogin;
             return settings;
         }
         catch
@@ -94,6 +103,8 @@ public class ClientSettings
             theme = Theme,
             serverMode = ServerMode,
             reduceMotion = ReduceMotion,
+            syncServerUrl = SyncServerUrl,
+            syncLogin = SyncLogin,
         }));
     }
 }
