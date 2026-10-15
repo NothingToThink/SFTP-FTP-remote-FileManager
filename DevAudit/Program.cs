@@ -310,6 +310,8 @@ public static partial class Program
             await ScenarioManyProfiles(api!);
         if (serverUp && localProfileId is not null)
             await ScenarioFullFunctional(api!, url, localProfileId.Value);
+        if (serverUp)
+            _issuesTotal += await PluginShots.ScenarioAsync(url, Report);
         ScenarioTransferTexts();
         await ScenarioKeyboard();
         await ScenarioConnectErrors();
