@@ -75,6 +75,12 @@ public static partial class Program
             return;
         }
 
+        if (args.Length >= 2 && args[0] == "--paste-shots")
+        {
+            Environment.Exit(PasteShots.Run(args[1]));
+            return;
+        }
+
         if (args.Length >= 2 && args[0] is "--sync-shots" or "--sync-e2e")
         {
             SyncScenarios.Run(args);

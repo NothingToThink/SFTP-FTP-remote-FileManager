@@ -74,6 +74,18 @@
             <!-- Заголовок -->
             <StackPanel Grid.Row="0" Margin="28,22,28,8" Spacing="2">
                 <TextBlock Classes="h2" Text="Профиль подключения"/>
+            <!-- Заполнили из буфера -->
+            <Border Margin="0,8,0,0" IsVisible="{Binding HasPasteNote}" Background="{DynamicResource Brush.SurfaceAlt}"
+                    BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="1" CornerRadius="10"
+                    Padding="12,8" AutomationProperties.AutomationId="ProfilePasteNote">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock Text="{Binding PasteNote}" FontSize="14" TextWrapping="Wrap"
+                               VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Classes="tool" Content="Отменить"
+                            Command="{Binding UndoPasteCommand}"
+                            AutomationProperties.AutomationId="ProfilePasteUndoButton"/>
+                </Grid>
+            </Border>
             </StackPanel>
 
             <ScrollViewer Grid.Row="1" MaxHeight="470" VerticalScrollBarVisibility="Auto">

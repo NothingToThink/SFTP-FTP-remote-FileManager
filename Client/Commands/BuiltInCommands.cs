@@ -43,6 +43,8 @@ public static class BuiltInCommands
             _ => vm.ActiveProfile is null ? "Нет активного подключения" : null, "disconnect"));
         registry.Register(Make("server.add", "Добавить сервер", "Подключение",
             _ => Run(vm.AddProfileCommand), "Line.Plus", null, null, "новый", "профиль", "add"));
+        registry.Register(Make("server.add.clipboard", "Добавить сервер из буфера", "Подключение",
+            _ => Run(vm.AddServerFromClipboardCommand), "Line.Plus", null, null, "вставить", "буфер", "paste", "clipboard", "ssh"));
         registry.Register(Make("server.edit", "Изменить профиль", "Подключение",
             _ => Run(vm.EditProfileCommand), "Line.FileText", null,
             _ => vm.SelectedProfile is null ? "Выберите сервер в списке" : null, "редактировать", "edit"));

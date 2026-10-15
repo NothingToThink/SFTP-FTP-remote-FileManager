@@ -33,7 +33,24 @@ public partial class MainWindow : Window
         // Горячие клавиши таблицы: перехватываем на туннеле, до обработки самим DataGrid
         FilesGrid.AddHandler(KeyDownEvent, FilesGridKeyDown, RoutingStrategies.Tunnel);
 
+        // Ctrl+V вне полей ввода и таблицы файлов: сервер из буфера -> редактор профиля
+        AddHandler(KeyDownEvent, RootPasteKeyDown, RoutingStrategies.Bubble);
+
         DataContextChanged += (_, _) => HookViewModel();
+    }
+
+    private void RootPasteKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.V || e.Handled || DataContext is not MainWindowViewModel vm
+            || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0
+            || (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Alt)) != 0)
+            return;
+        // файловая таблица сама вставляет файлы; в текстовых полях Ctrl+V — обычная вставка
+        if (FocusManager?.GetFocusedElement() is Visual focused
+            && (focused is TextBox || focused.FindAncestorOfType<TextBox>() is not null
+                || focused == FilesGrid || focused.FindAncestorOfType<DataGrid>() is not null))
+            return;
+        _ = vm.TryAddServerFromClipboardAsync(quiet: true);
     }
 
     private MainWindowViewModel? _hooked;
@@ -46,6 +63,7 @@ public partial class MainWindow : Window
         if (_hooked is null)
             return;
         _hooked.Browser.PropertyChanged += OnBrowserChanged;
+        _hooked.ReadClipboardText = () => ClipboardText.ReadAsync(this);
         UpdatePermissionsColumn();
     }
 

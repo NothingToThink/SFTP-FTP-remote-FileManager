@@ -472,9 +472,40 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task AddProfile()
+    private Task AddProfile() => AddProfileCore(new ProfileEditViewModel(null));
+
+    /// <summary>Читает текст из буфера обмена ОС; задаёт окно (у VM нет доступа к TopLevel).</summary>
+    public Func<Task<string?>>? ReadClipboardText { get; set; }
+
+    /// <summary>Сервер из буфера: если там строка вида «ssh root@host», открывает редактор уже заполненным.</summary>
+    [RelayCommand]
+    private async Task AddServerFromClipboard() => await TryAddServerFromClipboardAsync(quiet: false);
+
+    /// <summary>true — буфер распознан и редактор открыт. При quiet=false нераспознанный буфер отмечается в строке состояния.</summary>
+    public async Task<bool> TryAddServerFromClipboardAsync(bool quiet)
     {
-        var editor = new ProfileEditViewModel(null);
+        string? text = null;
+        try
+        {
+            if (ReadClipboardText is { } read)
+                text = await read();
+        }
+        catch
+        {
+            // буфер недоступен — как будто он пуст
+        }
+        if (ServerStringParser.Parse(text) is not { IsConfident: true } parsed)
+        {
+            if (!quiet)
+                StatusText = "В буфере нет адреса сервера";
+            return false;
+        }
+        await AddProfileCore(ProfileEditViewModel.FromParsed(parsed));
+        return true;
+    }
+
+    private async Task AddProfileCore(ProfileEditViewModel editor)
+    {
         if (!await _dialogs.ShowProfileEditorAsync(editor))
             return;
         await RunBusyAsync(async () =>

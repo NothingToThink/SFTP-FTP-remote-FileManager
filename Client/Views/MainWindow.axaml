@@ -523,6 +523,10 @@
                         <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
                                    TextWrapping="Wrap"
                                    Text="Положите в неё первый сервер: SFTP, FTP или локальную папку."/>
+                        <TextBlock Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"
+                                   TextWrapping="Wrap" FontSize="13"
+                                   AutomationProperties.AutomationId="EmptyPasteHint"
+                                   Text="Скопируйте строку вида ssh root@1.2.3.4 и нажмите Ctrl+V"/>
                         <Button Name="EmptyAddProfileButton" Classes="primary" Content="Добавить сервер"
                                 HorizontalAlignment="Center" Margin="0,6,0,0"
                                 AutomationProperties.AutomationId="EmptyAddProfileButton"
