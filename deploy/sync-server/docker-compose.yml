@@ -1,0 +1,32 @@
+# Нужен SWINE_DOMAIN (домен, A-запись которого указывает на этот сервер) - в .env или в окружении.
+# Для проверки без HTTPS: SWINE_DOMAIN=http://localhost
+services:
+  server:
+    build:
+      context: ../..
+      dockerfile: deploy/sync-server/Dockerfile
+    restart: unless-stopped
+    environment:
+      # необязательно: иначе ключ создаётся при первом старте и хранится в томе
+      Jwt__Key: ${Jwt__Key:-}
+    volumes:
+      - swine-data:/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [server]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SWINE_DOMAIN: ${SWINE_DOMAIN:?Укажите SWINE_DOMAIN, например sync.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  swine-data:
+  caddy-data:
+  caddy-config:
