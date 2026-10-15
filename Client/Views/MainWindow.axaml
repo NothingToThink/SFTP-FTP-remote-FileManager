@@ -381,11 +381,18 @@
                             <ctl:LineIcon Data="{StaticResource Line.Trash}" Size="20"/>
                         </Button>
                     </StackPanel>
-                    <Button Grid.Column="2" Name="OpenTunnelsButton" Classes="tool" Content="Туннели"
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                    <Button Name="OpenTerminalButton" Classes="tool" Content="Терминал"
+                            VerticalAlignment="Center" ToolTip.Tip="Открыть SSH-терминал"
+                            AutomationProperties.AutomationId="OpenTerminalButton"
+                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).OpenTerminalCommand}"
+                            IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsTerminalAvailable}"/>
+                    <Button Name="OpenTunnelsButton" Classes="tool" Content="Туннели"
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="OpenTunnelsButton"
                             Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).OpenTunnelsCommand}"
                             IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsTunnelsAvailable}"/>
+                    </StackPanel>
                 </Grid>
 
                 <Border Grid.Row="1" Height="1" VerticalAlignment="Bottom" Background="{DynamicResource Brush.Border}"
